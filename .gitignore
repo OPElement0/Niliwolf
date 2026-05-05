@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Claude Code session storage
+.claude/
+
+# Auto-generated transient outputs
+audit_summary.txt
+
+# OS junk
+.DS_Store
+Thumbs.db

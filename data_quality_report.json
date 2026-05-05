@@ -1,0 +1,1232 @@
+{
+  "summary": {
+    "n_errors_categories": 3,
+    "n_warnings_categories": 5,
+    "n_info_categories": 6,
+    "n_error_rows": 30,
+    "n_warning_rows": 66,
+    "n_info_rows": 99,
+    "source_rows": 104,
+    "source_cols": 28
+  },
+  "errors": [
+    {
+      "category": "code present but #pictures = 0",
+      "category_id": "code_present_but_pictures_0",
+      "severity": "errors",
+      "description": "1 wolf(ves): code exists but pictures=0 — likely typo, fix #pictures",
+      "rows": [
+        {
+          "serial": "O80",
+          "code": "b3k_a1k_b_d_a1a_b1j_c_a5b5_a1",
+          "_id": "code_present_but_pictures_0__O80__"
+        }
+      ]
+    },
+    {
+      "category": "time on camera unparseable",
+      "category_id": "time_on_camera_unparseable",
+      "severity": "errors",
+      "description": "2 entry(ies) don't match any accepted format (dd.mm.yy / d-d.mm.yy / d.m-d.m.yy / dd.mm.yy-dd.mm.yy / m.yyyy / m.yyyy-m.yyyy)",
+      "rows": [
+        {
+          "serial": "Y42",
+          "value": "30.9.20-27.10",
+          "reason": "unparseable",
+          "_id": "time_on_camera_unparseable__Y42__"
+        },
+        {
+          "serial": "O68",
+          "value": "29.8-29",
+          "reason": "unparseable",
+          "_id": "time_on_camera_unparseable__O68__"
+        }
+      ]
+    },
+    {
+      "category": "seen with references unknown wolf",
+      "category_id": "seen_with_references_unknown_wolf",
+      "severity": "errors",
+      "description": "27 reference(s) point to a serial not present in the table",
+      "rows": [
+        {
+          "from_serial": "F23",
+          "seen_with": "F21s, F24",
+          "missing_reference": "F21s",
+          "_id": "seen_with_references_unknown_wolf__F23__F21s"
+        },
+        {
+          "from_serial": "F24",
+          "seen_with": "F23, F21s",
+          "missing_reference": "F21s",
+          "_id": "seen_with_references_unknown_wolf__F24__F21s"
+        },
+        {
+          "from_serial": "Y27",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y27__seen_together"
+        },
+        {
+          "from_serial": "Y29",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y29__seen_together"
+        },
+        {
+          "from_serial": "Y30",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y30__seen_together"
+        },
+        {
+          "from_serial": "Y31",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y31__seen_together"
+        },
+        {
+          "from_serial": "Y107",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y107__seen_together"
+        },
+        {
+          "from_serial": "Y33",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y33__seen_together"
+        },
+        {
+          "from_serial": "Y34",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y34__seen_together"
+        },
+        {
+          "from_serial": "Y35",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y35__seen_together"
+        },
+        {
+          "from_serial": "Y38",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y38__seen_together"
+        },
+        {
+          "from_serial": "Y39",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y39__seen_together"
+        },
+        {
+          "from_serial": "Y40",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y40__seen_together"
+        },
+        {
+          "from_serial": "Y41",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y41__seen_together"
+        },
+        {
+          "from_serial": "Y42",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y42__seen_together"
+        },
+        {
+          "from_serial": "Y43",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y43__seen_together"
+        },
+        {
+          "from_serial": "Y44",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y44__seen_together"
+        },
+        {
+          "from_serial": "Y45",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Y45__seen_together"
+        },
+        {
+          "from_serial": "Sh49",
+          "seen_with": "Sh37y",
+          "missing_reference": "Sh37y",
+          "_id": "seen_with_references_unknown_wolf__Sh49__Sh37y"
+        },
+        {
+          "from_serial": "Sh50",
+          "seen_with": "7 min after Sh49+Sh37y",
+          "missing_reference": "7 min after Sh49+Sh37y",
+          "_id": "seen_with_references_unknown_wolf__Sh50__7_min_after_Sh49+Sh37y"
+        },
+        {
+          "from_serial": "Sh52",
+          "seen_with": "Sh53+1 unrecognized",
+          "missing_reference": "Sh53+1 unrecognized",
+          "_id": "seen_with_references_unknown_wolf__Sh52__Sh53+1_unrecognized"
+        },
+        {
+          "from_serial": "Sh53",
+          "seen_with": "Sh52+1 unrecognized",
+          "missing_reference": "Sh52+1 unrecognized",
+          "_id": "seen_with_references_unknown_wolf__Sh53__Sh52+1_unrecognized"
+        },
+        {
+          "from_serial": "Sh55",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Sh55__seen_together"
+        },
+        {
+          "from_serial": "Sh57",
+          "seen_with": "seen together?",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Sh57__seen_together"
+        },
+        {
+          "from_serial": "Sn85",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__Sn85__seen_together"
+        },
+        {
+          "from_serial": "In92",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__In92__seen_together"
+        },
+        {
+          "from_serial": "In93",
+          "seen_with": "seen together",
+          "missing_reference": "seen together",
+          "_id": "seen_with_references_unknown_wolf__In93__seen_together"
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    {
+      "category": "code != concat(A1, A2, B3, B4, B5, C6, C7, D8, D9)",
+      "category_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9",
+      "severity": "warnings",
+      "description": "26 wolf(ves): the 'code' string doesn't match the joined region cells",
+      "rows": [
+        {
+          "serial": "M4",
+          "code (actual)": "d2k_a7kl_b_b_b_c2j_b2_a5_a2",
+          "concat A1..D9": "d2k_a7k_b_b_b_c2j_b2_a5_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__M4__"
+        },
+        {
+          "serial": "M6H",
+          "code (actual)": "b1k_a1i_a3_c1_c1_c3i_a2_a3b5_b2",
+          "concat A1..D9": "b1k_a1i_a3_c1_c1_c3i_a2_a3b5_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__M6H__"
+        },
+        {
+          "serial": "H12",
+          "code (actual)": "d2l_a1kl_N_N_N_P_a1_a5b5_a1",
+          "concat A1..D9": "d2l_a1k_N_N_N_P_a1_a5b5_a1",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__H12__"
+        },
+        {
+          "serial": "H13S",
+          "code (actual)": "a1txi_a3i_b_c1a_c1a_c1g_b2_a4b5_a4",
+          "concat A1..D9": "a1txi_a3i_b_c1a_a1a_c1g_b2_a4b5_a4",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__H13S__"
+        },
+        {
+          "serial": "H14",
+          "code (actual)": "a4vyf_a3f_a2_c1_c1_c3g_c3_a3_N",
+          "concat A1..D9": "a4vyf_a3f_a2_c1_c1_c3g_a3_a3_N",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__H14__"
+        },
+        {
+          "serial": "K16",
+          "code (actual)": "b1i_a3i_N_N_N_b1ic7c_a4b5_a2",
+          "concat A1..D9": "b1i_a3i_N_N_N_b1i_c_a4b5_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__K16__"
+        },
+        {
+          "serial": "F104",
+          "code (actual)": "a2wzf_a11e_a2b_b1b_Ra1bLa2b_c3g_c_a4b5_a1",
+          "concat A1..D9": "a2wf_a11e_a2b_b1b_Ra1bLa2b_c3g_c_a4b5_a1",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__F104__"
+        },
+        {
+          "serial": "F23",
+          "code (actual)": "z1i_a5i_P_Pb5N_N_N_N_N",
+          "concat A1..D9": "z1i_a5i_P_P_N_N_N_N_N",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__F23__"
+        },
+        {
+          "serial": "Y27",
+          "code (actual)": "a3vze_a4e_a2a_d_a1b_c1e_a1_a1b1d9a2",
+          "concat A1..D9": "a3vze_a4e_a2a_d_a1b_c1e_a1_a1b1_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y27__"
+        },
+        {
+          "serial": "Y101",
+          "code (actual)": "a4uze_a4e_a2b_c2b_c2b_c1e_a3d8a3b5_a2",
+          "concat A1..D9": "a4uze_a4e_a2b_c2b_c2b_c1e_a3_a3b5_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y101__"
+        },
+        {
+          "serial": "Y28",
+          "code (actual)": "N_a1k_PP_PP_P_ci_N_a6b5_a1",
+          "concat A1..D9": "N_a1k_P_P_P_ci_N_a6b5_a1",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y28__"
+        },
+        {
+          "serial": "Y29",
+          "code (actual)": "c1zf_a5f_a3a_c2a_c2a_c1f_a1D_a3b4_a3",
+          "concat A1..D9": "c1zf_a5f_a3a_c2a_c2a_c1f_a1_a3b4_a3",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y29__"
+        },
+        {
+          "serial": "Y31",
+          "code (actual)": "f_N_b_Rb1aLc2a_Ra1aLc2a_f_p_a3_N",
+          "concat A1..D9": "f_N_b_Rb1aLc2a_Ra1aLc2a_f_P_a3_N",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y31__"
+        },
+        {
+          "serial": "Y33",
+          "code (actual)": "a1tze_a4e_b_b1b_a1b_c1e_c1e_a3_a3_a2",
+          "concat A1..D9": "a1tze_a4e_b_b1b_a1b_c1e_a3_a3_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y33__"
+        },
+        {
+          "serial": "Y39",
+          "code (actual)": "b3j_a9j_b_Rb1aLd_Ra2bLd6_N_N_a6_N",
+          "concat A1..D9": "b3j_a9j_Rb1aLd_Rb1aLd_Ra2bLd_N_N_a6_N",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y39__"
+        },
+        {
+          "serial": "Y43",
+          "code (actual)": "a1txj_a4_b_d_a1a_c3g_b2_a4_a2",
+          "concat A1..D9": "a1txj_a4j_b_d_a1a_c3g_b2_a4_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y43__"
+        },
+        {
+          "serial": "Y44",
+          "code (actual)": "a5uyf_a1i_b_b2b_a1b_a4g_c_a4b5_a2",
+          "concat A1..D9": "a5uyf_a1u_b_b2b_a1b_a4g_c_a4b5_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y44__"
+        },
+        {
+          "serial": "Y37",
+          "code (actual)": "a3uzf_a4f_N_b1a_b1a_c3f_a1_a4b1_a2",
+          "concat A1..D9": "a3uzf_a4f_N_b1a_b1a_c3f_a1_a4b1_a3",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y37__"
+        },
+        {
+          "serial": "Sh109",
+          "code (actual)": "a3vzf-a4f-N-b2a-a2a-a4h-a1-a3-a4",
+          "concat A1..D9": "a3zf_a4f_N_b2a_a2a_a3h_a1_a3_a4",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Sh109__"
+        },
+        {
+          "serial": "Sh54",
+          "code (actual)": "c1yi_a5i_b_d_d_c3g_b1_a3b5_a4",
+          "concat A1..D9": "c1yi_a5i_b_d_d_c3g_b2_a3b5_a4",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Sh54__"
+        },
+        {
+          "serial": "O71",
+          "code (actual)": "b4i_a8i_b_b2b_a1b_c1g_a1_a4b5_a2",
+          "concat A1..D9": "b4f_a8i_b_b2b_a1b_c1g_a1_a4b5_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O71__"
+        },
+        {
+          "serial": "O72",
+          "code (actual)": "a1wyi_a4i_b_d_N_c3i_b1_a3b5_a2",
+          "concat A1..D9": "a1wyi_a4i_b_d_N_c3i_b2_a3b5_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O72__"
+        },
+        {
+          "serial": "O77",
+          "code (actual)": "Ra3vzfLb1f_a2f_a2b_b2b_a1b_b1g_c_a4_a2",
+          "concat A1..D9": "Ra3vzfLb1f_a2f_a2b_b2b_a1b_b1g_c_a1_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O77__"
+        },
+        {
+          "serial": "O82",
+          "code (actual)": "b2l_N_N_Pa_N_dl_c_a8_a1",
+          "concat A1..D9": "b2l_N_Pa_N_dl_c_c_a8_a1",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O82__"
+        },
+        {
+          "serial": "Sn84",
+          "code (actual)": "a1txg_a1g_N_N_b1h_c_a4_a2",
+          "concat A1..D9": "a1txg_a1g_N_N_N_b1h_c_a4_a2",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Sn84__"
+        },
+        {
+          "serial": "In92",
+          "code (actual)": "a2ze_e_a2a_b1b_a2b_e_P_N_N",
+          "concat A1..D9": "a2ze_e_a2a_b1b_a2b_c1f_P_N_N",
+          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__In92__"
+        }
+      ]
+    },
+    {
+      "category": "gender not in {m, f, blank}",
+      "category_id": "gender_not_in_m_f_blank",
+      "severity": "warnings",
+      "description": "2 row(s): unexpected gender value (case, whitespace, or other)",
+      "rows": [
+        {
+          "serial": "S19",
+          "value": "'?'",
+          "_id": "gender_not_in_m_f_blank__S19__"
+        },
+        {
+          "serial": "F21",
+          "value": "'?'",
+          "_id": "gender_not_in_m_f_blank__F21__"
+        }
+      ]
+    },
+    {
+      "category": "social dynamic out of {pack, group, unknown}",
+      "category_id": "social_dynamic_out_of_pack_group_unknown",
+      "severity": "warnings",
+      "description": "24 row(s): unexpected value",
+      "rows": [
+        {
+          "serial": "H12",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__H12__"
+        },
+        {
+          "serial": "H13S",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__H13S__"
+        },
+        {
+          "serial": "H99",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__H99__"
+        },
+        {
+          "serial": "H14",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__H14__"
+        },
+        {
+          "serial": "H15m",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__H15m__"
+        },
+        {
+          "serial": "K16",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__K16__"
+        },
+        {
+          "serial": "K106",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__K106__"
+        },
+        {
+          "serial": "K17f",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__K17f__"
+        },
+        {
+          "serial": "S18",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__S18__"
+        },
+        {
+          "serial": "S100",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__S100__"
+        },
+        {
+          "serial": "S19",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__S19__"
+        },
+        {
+          "serial": "S20",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__S20__"
+        },
+        {
+          "serial": "F26",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__F26__"
+        },
+        {
+          "serial": "Y101",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Y101__"
+        },
+        {
+          "serial": "Y28",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Y28__"
+        },
+        {
+          "serial": "Y102",
+          "value": "'pack*'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Y102__"
+        },
+        {
+          "serial": "Y46",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Y46__"
+        },
+        {
+          "serial": "Sh59",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Sh59__"
+        },
+        {
+          "serial": "Sl65",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Sl65__"
+        },
+        {
+          "serial": "O66",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__O66__"
+        },
+        {
+          "serial": "Sn83",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Sn83__"
+        },
+        {
+          "serial": "Sn84",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Sn84__"
+        },
+        {
+          "serial": "Ma87sn",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Ma87sn__"
+        },
+        {
+          "serial": "Ma88",
+          "value": "'lone'",
+          "_id": "social_dynamic_out_of_pack_group_unknown__Ma88__"
+        }
+      ]
+    },
+    {
+      "category": "cams_spotted: non-numeric token",
+      "category_id": "cams_spotted_non_numeric_token",
+      "severity": "warnings",
+      "description": "12 entry(ies) contain a token that is not a camera ID",
+      "rows": [
+        {
+          "serial": "O66",
+          "value": "31, omer weiner",
+          "non_numeric_token": "omer weiner",
+          "_id": "cams_spotted_non_numeric_token__O66__"
+        },
+        {
+          "serial": "In89",
+          "value": "omer weiner",
+          "non_numeric_token": "omer weiner",
+          "_id": "cams_spotted_non_numeric_token__In89__"
+        },
+        {
+          "serial": "Mg90",
+          "value": "omer weiner",
+          "non_numeric_token": "omer weiner",
+          "_id": "cams_spotted_non_numeric_token__Mg90__"
+        },
+        {
+          "serial": "In91",
+          "value": "ariel shamir",
+          "non_numeric_token": "ariel shamir",
+          "_id": "cams_spotted_non_numeric_token__In91__"
+        },
+        {
+          "serial": "In92",
+          "value": "ariel shamir",
+          "non_numeric_token": "ariel shamir",
+          "_id": "cams_spotted_non_numeric_token__In92__"
+        },
+        {
+          "serial": "In93",
+          "value": "ariel shamir",
+          "non_numeric_token": "ariel shamir",
+          "_id": "cams_spotted_non_numeric_token__In93__"
+        },
+        {
+          "serial": "In94",
+          "value": "ariel shamir",
+          "non_numeric_token": "ariel shamir",
+          "_id": "cams_spotted_non_numeric_token__In94__"
+        },
+        {
+          "serial": "In95",
+          "value": "omer weiner",
+          "non_numeric_token": "omer weiner",
+          "_id": "cams_spotted_non_numeric_token__In95__"
+        },
+        {
+          "serial": "In96",
+          "value": "omer weiner",
+          "non_numeric_token": "omer weiner",
+          "_id": "cams_spotted_non_numeric_token__In96__"
+        },
+        {
+          "serial": "In97",
+          "value": "elimelech",
+          "non_numeric_token": "elimelech",
+          "_id": "cams_spotted_non_numeric_token__In97__"
+        },
+        {
+          "serial": "In98",
+          "value": "moshe_neeman",
+          "non_numeric_token": "moshe_neeman",
+          "_id": "cams_spotted_non_numeric_token__In98__"
+        },
+        {
+          "serial": "In105",
+          "value": "nevo_",
+          "non_numeric_token": "nevo_",
+          "_id": "cams_spotted_non_numeric_token__In105__"
+        }
+      ]
+    },
+    {
+      "category": "polygon name casing inconsistency",
+      "category_id": "polygon_name_casing_inconsistency",
+      "severity": "warnings",
+      "description": "2 polygon(s) appear with multiple capitalisations",
+      "rows": [
+        {
+          "canonical_lower": "hazeka",
+          "forms": [
+            "Hazeka",
+            "hazeka"
+          ],
+          "_id": "polygon_name_casing_inconsistency__item0__"
+        },
+        {
+          "canonical_lower": "saki",
+          "forms": [
+            "Saki",
+            "saki"
+          ],
+          "_id": "polygon_name_casing_inconsistency__item1__"
+        }
+      ]
+    }
+  ],
+  "info": [
+    {
+      "category": "rows with empty 'serial number'",
+      "category_id": "rows_with_empty_serial_number",
+      "severity": "info",
+      "description": "1 row(s) lack a serial number — only the trailing blank row is expected",
+      "rows": [
+        {
+          "row_index": 103,
+          "code": "(empty)",
+          "area": "(empty)",
+          "#pictures": 0,
+          "_id": "rows_with_empty_serial_number__row103__"
+        }
+      ]
+    },
+    {
+      "category": "'pack name' vs 'שיוך' diverge",
+      "category_id": "pack_name_vs_diverge",
+      "severity": "info",
+      "description": "66 row(s) differ between the two columns — for user's manual cleanup",
+      "rows": [
+        {
+          "serial": "M3",
+          "pack name": "(blank)",
+          "שיוך": "makhfi unknown",
+          "_id": "pack_name_vs_diverge__M3__"
+        },
+        {
+          "serial": "M6H",
+          "pack name": "(blank)",
+          "שיוך": "makhfi unknown",
+          "_id": "pack_name_vs_diverge__M6H__"
+        },
+        {
+          "serial": "M10",
+          "pack name": "(blank)",
+          "שיוך": "makhfi unknown",
+          "_id": "pack_name_vs_diverge__M10__"
+        },
+        {
+          "serial": "F22",
+          "pack name": "?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__F22__"
+        },
+        {
+          "serial": "F25",
+          "pack name": "?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__F25__"
+        },
+        {
+          "serial": "F26",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__F26__"
+        },
+        {
+          "serial": "Y27",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y27__"
+        },
+        {
+          "serial": "Y101",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y101__"
+        },
+        {
+          "serial": "Y28",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y28__"
+        },
+        {
+          "serial": "Y29",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y29__"
+        },
+        {
+          "serial": "Y30",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y30__"
+        },
+        {
+          "serial": "Y31",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y31__"
+        },
+        {
+          "serial": "Y107",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y107__"
+        },
+        {
+          "serial": "Y32",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y32__"
+        },
+        {
+          "serial": "Y102",
+          "pack name": "dark pack*",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y102__"
+        },
+        {
+          "serial": "Y33",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y33__"
+        },
+        {
+          "serial": "Y34",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y34__"
+        },
+        {
+          "serial": "Y35",
+          "pack name": "dark pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y35__"
+        },
+        {
+          "serial": "Y36",
+          "pack name": "yehodiya trio",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y36__"
+        },
+        {
+          "serial": "Y38",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y38__"
+        },
+        {
+          "serial": "Y39",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y39__"
+        },
+        {
+          "serial": "Y40",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y40__"
+        },
+        {
+          "serial": "Y41",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y41__"
+        },
+        {
+          "serial": "Y42",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y42__"
+        },
+        {
+          "serial": "Y43",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y43__"
+        },
+        {
+          "serial": "Y44",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y44__"
+        },
+        {
+          "serial": "Y45",
+          "pack name": "golden pack",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y45__"
+        },
+        {
+          "serial": "Y46",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y46__"
+        },
+        {
+          "serial": "Y47",
+          "pack name": "yehodiya trio",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y47__"
+        },
+        {
+          "serial": "Y48",
+          "pack name": "yehodiya trio",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y48__"
+        },
+        {
+          "serial": "Sh109",
+          "pack name": "shaal east",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh109__"
+        },
+        {
+          "serial": "Sh49",
+          "pack name": "shaal east",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh49__"
+        },
+        {
+          "serial": "Sh50",
+          "pack name": "shaal east",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh50__"
+        },
+        {
+          "serial": "Sh51",
+          "pack name": "?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh51__"
+        },
+        {
+          "serial": "Sh52",
+          "pack name": "shaal east",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh52__"
+        },
+        {
+          "serial": "Sh53",
+          "pack name": "shaal east",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh53__"
+        },
+        {
+          "serial": "Sh54",
+          "pack name": "?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh54__"
+        },
+        {
+          "serial": "Sh55",
+          "pack name": "Shaal west",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh55__"
+        },
+        {
+          "serial": "Sh57",
+          "pack name": "Shaal west?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh57__"
+        },
+        {
+          "serial": "Sh59",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sh59__"
+        },
+        {
+          "serial": "Sl60",
+          "pack name": "slopes?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sl60__"
+        },
+        {
+          "serial": "Sl61",
+          "pack name": "slopes?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sl61__"
+        },
+        {
+          "serial": "Sl62",
+          "pack name": "slopes?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sl62__"
+        },
+        {
+          "serial": "Sl64",
+          "pack name": "slopes?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sl64__"
+        },
+        {
+          "serial": "Sl65",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sl65__"
+        },
+        {
+          "serial": "O66",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O66__"
+        },
+        {
+          "serial": "O67",
+          "pack name": "Odem west",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O67__"
+        },
+        {
+          "serial": "O68",
+          "pack name": "Odem west",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O68__"
+        },
+        {
+          "serial": "O69",
+          "pack name": "Odem west",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O69__"
+        },
+        {
+          "serial": "O70",
+          "pack name": "Odem west",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O70__"
+        },
+        {
+          "serial": "O71",
+          "pack name": "Odem west",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O71__"
+        },
+        {
+          "serial": "O72",
+          "pack name": "Odem west",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O72__"
+        },
+        {
+          "serial": "O73",
+          "pack name": "?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O73__"
+        },
+        {
+          "serial": "O74",
+          "pack name": "Odem South",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O74__"
+        },
+        {
+          "serial": "O75",
+          "pack name": "Odem South",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O75__"
+        },
+        {
+          "serial": "O76",
+          "pack name": "Odem East",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O76__"
+        },
+        {
+          "serial": "O77",
+          "pack name": "?",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O77__"
+        },
+        {
+          "serial": "O78",
+          "pack name": "Odem East",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O78__"
+        },
+        {
+          "serial": "O80",
+          "pack name": "Odem East",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O80__"
+        },
+        {
+          "serial": "O81",
+          "pack name": "Odem East",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O81__"
+        },
+        {
+          "serial": "O82",
+          "pack name": "Odem East",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__O82__"
+        },
+        {
+          "serial": "Sn83",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sn83__"
+        },
+        {
+          "serial": "Sn84",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sn84__"
+        },
+        {
+          "serial": "Ma87sn",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Ma87sn__"
+        },
+        {
+          "serial": "Ma88",
+          "pack name": "lone",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Ma88__"
+        },
+        {
+          "serial": "Mg90",
+          "pack name": "marom golan",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Mg90__"
+        }
+      ]
+    },
+    {
+      "category": "missing 'main poligon' (in analysis pool)",
+      "category_id": "missing_main_poligon_in_analysis_pool",
+      "severity": "info",
+      "description": "11 analysed wolf(ves) have empty 'main poligon'",
+      "rows": [
+        {
+          "serial": "In89",
+          "_id": "missing_main_poligon_in_analysis_pool__In89__"
+        },
+        {
+          "serial": "Mg90",
+          "_id": "missing_main_poligon_in_analysis_pool__Mg90__"
+        },
+        {
+          "serial": "In91",
+          "_id": "missing_main_poligon_in_analysis_pool__In91__"
+        },
+        {
+          "serial": "In92",
+          "_id": "missing_main_poligon_in_analysis_pool__In92__"
+        },
+        {
+          "serial": "In93",
+          "_id": "missing_main_poligon_in_analysis_pool__In93__"
+        },
+        {
+          "serial": "In94",
+          "_id": "missing_main_poligon_in_analysis_pool__In94__"
+        },
+        {
+          "serial": "In95",
+          "_id": "missing_main_poligon_in_analysis_pool__In95__"
+        },
+        {
+          "serial": "In96",
+          "_id": "missing_main_poligon_in_analysis_pool__In96__"
+        },
+        {
+          "serial": "In97",
+          "_id": "missing_main_poligon_in_analysis_pool__In97__"
+        },
+        {
+          "serial": "In98",
+          "_id": "missing_main_poligon_in_analysis_pool__In98__"
+        },
+        {
+          "serial": "In105",
+          "_id": "missing_main_poligon_in_analysis_pool__In105__"
+        }
+      ]
+    },
+    {
+      "category": "missing 'social dynamic' (in analysis pool)",
+      "category_id": "missing_social_dynamic_in_analysis_pool",
+      "severity": "info",
+      "description": "12 analysed wolf(ves) have empty 'social dynamic'",
+      "rows": [
+        {
+          "serial": "Y37",
+          "_id": "missing_social_dynamic_in_analysis_pool__Y37__"
+        },
+        {
+          "serial": "In89",
+          "_id": "missing_social_dynamic_in_analysis_pool__In89__"
+        },
+        {
+          "serial": "Mg90",
+          "_id": "missing_social_dynamic_in_analysis_pool__Mg90__"
+        },
+        {
+          "serial": "In91",
+          "_id": "missing_social_dynamic_in_analysis_pool__In91__"
+        },
+        {
+          "serial": "In92",
+          "_id": "missing_social_dynamic_in_analysis_pool__In92__"
+        },
+        {
+          "serial": "In93",
+          "_id": "missing_social_dynamic_in_analysis_pool__In93__"
+        },
+        {
+          "serial": "In94",
+          "_id": "missing_social_dynamic_in_analysis_pool__In94__"
+        },
+        {
+          "serial": "In95",
+          "_id": "missing_social_dynamic_in_analysis_pool__In95__"
+        },
+        {
+          "serial": "In96",
+          "_id": "missing_social_dynamic_in_analysis_pool__In96__"
+        },
+        {
+          "serial": "In97",
+          "_id": "missing_social_dynamic_in_analysis_pool__In97__"
+        },
+        {
+          "serial": "In98",
+          "_id": "missing_social_dynamic_in_analysis_pool__In98__"
+        },
+        {
+          "serial": "In105",
+          "_id": "missing_social_dynamic_in_analysis_pool__In105__"
+        }
+      ]
+    },
+    {
+      "category": "more cameras than pictures",
+      "category_id": "more_cameras_than_pictures",
+      "severity": "info",
+      "description": "1 wolf(ves): listed in more cameras than #pictures (worth a sanity check)",
+      "rows": [
+        {
+          "serial": "Sl60",
+          "n_cameras": 2,
+          "#pictures": 1,
+          "_id": "more_cameras_than_pictures__Sl60__"
+        }
+      ]
+    },
+    {
+      "category": "string hygiene (whitespace / tabs)",
+      "category_id": "string_hygiene_whitespace_tabs",
+      "severity": "info",
+      "description": "8 cell(s) have leading/trailing whitespace, tabs or newlines",
+      "rows": [
+        {
+          "col": "cams_spotted",
+          "serial": "H13S",
+          "value": "' 21, 11'",
+          "_id": "string_hygiene_whitespace_tabs__H13S__cams_spotted"
+        },
+        {
+          "col": "notes",
+          "serial": "Y28",
+          "value": "'mostly honey '",
+          "_id": "string_hygiene_whitespace_tabs__Y28__notes"
+        },
+        {
+          "col": "notes",
+          "serial": "Y39",
+          "value": "'golden fur, dark tail '",
+          "_id": "string_hygiene_whitespace_tabs__Y39__notes"
+        },
+        {
+          "col": "notes",
+          "serial": "Y43",
+          "value": "'golden fur, dark tail '",
+          "_id": "string_hygiene_whitespace_tabs__Y43__notes"
+        },
+        {
+          "col": "notes",
+          "serial": "Y44",
+          "value": "'golden fur, dark tail, dark-grey face, ‘wave’ pattern on the face '",
+          "_id": "string_hygiene_whitespace_tabs__Y44__notes"
+        },
+        {
+          "col": "notes",
+          "serial": "Sh52",
+          "value": "'loves mud '",
+          "_id": "string_hygiene_whitespace_tabs__Sh52__notes"
+        },
+        {
+          "col": "notes",
+          "serial": "Sh54",
+          "value": "'”tringle” shape on the cheek '",
+          "_id": "string_hygiene_whitespace_tabs__Sh54__notes"
+        },
+        {
+          "col": "notes",
+          "serial": "In95",
+          "value": "'dark orange fur '",
+          "_id": "string_hygiene_whitespace_tabs__In95__notes"
+        }
+      ]
+    }
+  ]
+}

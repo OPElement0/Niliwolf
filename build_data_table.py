@@ -1,0 +1,1397 @@
+"""Build a self-contained interactive HTML table (admin + viewer) for the
+wolves dataset.
+
+Reads:    wolves_data.xlsx  (sheet 'נתוני זיהוי זאבים (2)')
+Writes:   data_table.html
+
+The page has two modes:
+    - Viewer (default)  : read-only table, search/filter/sort, CSV/XLSX export.
+    - Admin (password)  : click-to-edit cells, add/delete rows, save back to
+                          a downloaded wolves_data.xlsx.
+
+The admin password is a soft client-side gate (SHA-256 hashed in the page).
+It prevents accidental edits, not determined attackers.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+from wolf_lib import INPUT_FILE, OUTPUT_DIR, SHEET_NAME
+from step1d_dataqc import run_checks
+
+OUT_PATH = OUTPUT_DIR / "data_table.html"
+PASSWORD = "112358"
+
+# ---------------------------------------------------------------------------
+# Category metadata for the issue-review UI.
+#
+# Each category_id (the slug used by step1d_dataqc.Findings) is mapped to a
+# small spec the JS uses to render appropriate action buttons.
+#
+# action_kinds:
+#   "edit_cell"      — instruct the user to click a target cell and edit
+#   "auto_set"       — one-click button to set a target column to a fixed value
+#                      (e.g. trim whitespace, set gender '?' to blank)
+#   "bulk_replace"   — replace one value with another in a column across rows
+#   "add_to_allowed" — extend an enumeration to include a new value
+# ---------------------------------------------------------------------------
+
+CATEGORY_META = {
+    "code_present_but_pictures_0": {
+        "title": "code present but #pictures = 0",
+        "kind": "row",
+        "target_column": "#pictures",
+        "hint": "This wolf has a code but #pictures = 0 — likely a typo. Edit #pictures to the real count.",
+    },
+    "code_is_empty_but_pictures_0": {
+        "title": "code empty but #pictures > 0",
+        "kind": "row",
+        "target_column": "code",
+        "hint": "Pictures exist but code is blank. Either fill in the code or set #pictures back to 0.",
+    },
+    "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9": {
+        "title": "code ≠ A1_A2_…_D9",
+        "kind": "row",
+        "target_column": "code",
+        "hint": "The 'code' string doesn't match A1..D9 joined with '_'. Decide which is canonical.",
+        "row_actions": [
+            {"id": "set_code_from_regions", "label": "Replace code with concatenated regions"},
+        ],
+    },
+    "time_on_camera_unparseable": {
+        "title": "time on camera unparseable",
+        "kind": "row",
+        "target_column": "time on camera",
+        "hint": "Doesn't match dd.mm.yy / d-d.mm.yy / d.m-d.m.yy / dd.mm.yy-dd.mm.yy / m.yyyy. Edit to a recognised format.",
+    },
+    "seen_with_references_unknown_wolf": {
+        "title": "seen with references unknown wolf",
+        "kind": "row",
+        "target_column": "seen with",
+        "hint": "Token doesn't match a serial in this sheet. Either fix the reference or add the missing wolf as a new row.",
+    },
+    "seen_with_non_comma_separator": {
+        "title": "seen with: non-comma separator",
+        "kind": "row",
+        "target_column": "seen with",
+        "hint": "The separator should be ','. Replace '/', '+', '|', etc. with commas.",
+    },
+    "duplicate_serial_number": {
+        "title": "duplicate serial number",
+        "kind": "row",
+        "target_column": "serial number",
+        "hint": "This serial appears more than once. Rename one or merge.",
+    },
+    "whitespace_in_serial_number": {
+        "title": "whitespace in serial",
+        "kind": "row",
+        "target_column": "serial number",
+        "hint": "Leading/trailing whitespace will silently break matches. Trim it.",
+        "row_actions": [
+            {"id": "trim_cell", "label": "Auto-trim this cell"},
+        ],
+    },
+    "string_hygiene_whitespace_tabs": {
+        "title": "trailing whitespace / tabs",
+        "kind": "bulk",
+        "bulk_label": "Trim all flagged cells",
+        "hint": "All cells listed have leading/trailing whitespace, tabs or newlines. Safe to trim in bulk.",
+    },
+    "polygon_name_casing_inconsistency": {
+        "title": "polygon name casing",
+        "kind": "bulk",
+        "bulk_label": "Apply chosen casing to all rows",
+        "hint": "Same polygon spelled with different cases. Pick the canonical spelling per polygon.",
+    },
+    "gender_not_in_m_f_blank": {
+        "title": "gender not in {m, f, blank}",
+        "kind": "row",
+        "target_column": "gender",
+        "hint": "You said: blank when uncertain. '?' looks like 'uncertain'. One-click sets to blank.",
+        "row_actions": [
+            {"id": "set_cell_blank", "label": "Set to blank"},
+        ],
+    },
+    "social_dynamic_out_of_pack_group_unknown": {
+        "title": "social dynamic outside {pack, group, unknown}",
+        "kind": "policy",
+        "hint": "23 rows say 'lone' (and 1 'pack*'). Decide once: accept as new categories or rename.",
+        "policy_actions": [
+            {"id": "accept_lone", "label": "Accept 'lone' as a 4th allowed value"},
+            {"id": "accept_packstar", "label": "Accept 'pack*' as a 5th allowed value"},
+            {"id": "rename_lone_to_unknown", "label": "Rename all 'lone' → 'unknown'"},
+            {"id": "rename_packstar_to_pack", "label": "Rename 'pack*' → 'pack'"},
+        ],
+    },
+    "cams_spotted_camera_id_outside_1_60": {
+        "title": "camera ID out of range",
+        "kind": "row",
+        "target_column": "cams_spotted",
+        "hint": "Cameras must be 1-60. Check what was meant.",
+    },
+    "cams_spotted_non_comma_separator": {
+        "title": "cams_spotted non-comma separator",
+        "kind": "row",
+        "target_column": "cams_spotted",
+        "hint": "Use commas only.",
+    },
+    "cams_spotted_non_numeric_token": {
+        "title": "cams_spotted contains non-numeric token (likely an observer name)",
+        "kind": "policy",
+        "hint": "12 rows have observer names ('omer weiner', 'ariel shamir', …) instead of camera IDs — these wolves were reported without camera traps.",
+        "policy_actions": [
+            {"id": "move_observers_to_new_column", "label": "Add a 'reporter' column and move observer names there"},
+            {"id": "keep_as_is", "label": "Keep names mixed in cams_spotted (no separation)"},
+        ],
+    },
+    "main_poligon_not_in_area": {
+        "title": "main poligon not listed in area",
+        "kind": "row",
+        "target_column": "area",
+        "hint": "Add the main polygon to 'area' or correct one of them.",
+    },
+    "non_numeric_in_picture_count_column": {
+        "title": "non-numeric in count column",
+        "kind": "row",
+        "target_column": "#pictures",
+        "hint": "Picture count columns must be integers.",
+    },
+    "picture_count_sum_mismatch": {
+        "title": "picture count sum mismatch",
+        "kind": "row",
+        "target_column": "#pictures",
+        "hint": "#right + #left + #front + #no good ≠ #pictures. Fix one to make them agree.",
+    },
+    "rows_with_empty_serial_number": {
+        "title": "row with empty serial",
+        "kind": "row",
+        "target_column": "serial number",
+        "hint": "Trailing empty row at the end of the sheet — usually safe to keep, you can also delete it.",
+    },
+    "pack_name_vs_diverge": {
+        "title": "'pack name' ≠ 'שיוך'",
+        "kind": "info_only",
+        "hint": "You asked to ignore both columns for now — listed here only for visibility.",
+    },
+    "missing_main_poligon_in_analysis_pool": {
+        "title": "missing main poligon (analysis pool)",
+        "kind": "row",
+        "target_column": "main poligon",
+        "hint": "Wolf is in the analysis pool but has no main polygon (likely an observer-reported wolf without GPS).",
+    },
+    "missing_social_dynamic_in_analysis_pool": {
+        "title": "missing social dynamic",
+        "kind": "row",
+        "target_column": "social dynamic",
+        "hint": "Wolf is analysed but has no social dynamic value.",
+    },
+    "missing_area_in_analysis_pool": {
+        "title": "missing area",
+        "kind": "row",
+        "target_column": "area",
+        "hint": "Wolf is analysed but has no area value.",
+    },
+    "missing_cams_spotted_in_analysis_pool": {
+        "title": "missing cams_spotted",
+        "kind": "row",
+        "target_column": "cams_spotted",
+        "hint": "Wolf is analysed but has no cams_spotted value.",
+    },
+    "missing_time_on_camera_in_analysis_pool": {
+        "title": "missing time on camera",
+        "kind": "row",
+        "target_column": "time on camera",
+        "hint": "Wolf is analysed but has no time on camera value.",
+    },
+    "more_cameras_than_pictures": {
+        "title": "more cameras than pictures",
+        "kind": "row",
+        "target_column": "#pictures",
+        "hint": "More distinct cameras listed than #pictures — sanity check.",
+    },
+    "unusual_character_in_region_cell": {
+        "title": "unusual character in region cell",
+        "kind": "row",
+        "target_column": None,  # The 'region' field tells us which one
+        "hint": "Region cell contains a character outside [a-z0-9NPRL].",
+    },
+}
+
+
+def build_issues_payload(findings, df) -> dict:
+    """Convert Findings into a UI-ready issue tree."""
+    serial_to_idx = {}
+    for idx, val in df["serial number"].items():
+        if pd.notna(val):
+            serial_to_idx[str(val).strip()] = int(idx)
+
+    categories = []
+    for severity in ("errors", "warnings", "info"):
+        for item in getattr(findings, severity):
+            cat_id = item["category_id"]
+            meta = CATEGORY_META.get(cat_id, {
+                "title": item["category"],
+                "kind": "row",
+                "target_column": None,
+                "hint": "",
+            })
+            issues = []
+            for r in item["rows"]:
+                # Resolve row index (admin UI uses original sheet row index)
+                anchor_serial = r.get("serial") or r.get("from_serial")
+                if isinstance(anchor_serial, str):
+                    anchor_serial = anchor_serial.strip()
+                row_index = r.get("row_index")
+                if row_index is None and anchor_serial in serial_to_idx:
+                    row_index = serial_to_idx[anchor_serial]
+
+                target_col = meta.get("target_column") or r.get("region") or r.get("col")
+
+                issues.append({
+                    "id": r["_id"],
+                    "row_index": row_index,
+                    "serial": str(anchor_serial) if anchor_serial else "",
+                    "target_column": target_col,
+                    "details": {k: v for k, v in r.items() if k != "_id"},
+                })
+            categories.append({
+                "category_id": cat_id,
+                "title": meta.get("title", item["category"]),
+                "severity": severity,
+                "kind": meta.get("kind", "row"),
+                "hint": meta.get("hint", ""),
+                "description": item["description"],
+                "row_actions": meta.get("row_actions", []),
+                "policy_actions": meta.get("policy_actions", []),
+                "bulk_label": meta.get("bulk_label"),
+                "issues": issues,
+            })
+    return {
+        "categories": categories,
+        "totals": {
+            "errors_categories": len(findings.errors),
+            "warnings_categories": len(findings.warnings),
+            "info_categories": len(findings.info),
+            "total_rows": sum(len(it["rows"]) for it in findings.errors + findings.warnings + findings.info),
+        },
+    }
+
+
+def main() -> None:
+    if not INPUT_FILE.exists():
+        raise SystemExit(f"Source not found: {INPUT_FILE}")
+
+    df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME)
+    df.columns = [str(c).strip() for c in df.columns]
+
+    rows: list[dict] = []
+    for idx, row in df.iterrows():
+        record = {"_row_index": int(idx)}
+        for col, val in row.items():
+            if pd.isna(val):
+                record[col] = ""
+            elif isinstance(val, (int, float)):
+                record[col] = (
+                    int(val) if isinstance(val, (int, float)) and float(val).is_integer()
+                    else float(val)
+                )
+            else:
+                record[col] = str(val)
+        rows.append(record)
+
+    columns = list(df.columns)
+    n_visible = int(df["code"].notna().sum()) if "code" in df.columns else len(df)
+
+    pwd_hash = hashlib.sha256(PASSWORD.encode("utf-8")).hexdigest()
+    xlsx_b64 = base64.b64encode(INPUT_FILE.read_bytes()).decode("ascii")
+
+    findings = run_checks(df)
+    issues_payload = build_issues_payload(findings, df)
+
+    payload = {
+        "rows": rows,
+        "columns": columns,
+        "sheet_name": SHEET_NAME,
+        "n_total_rows": len(df),
+        "n_visible_default": n_visible,
+        "build_iso": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
+        "issues": issues_payload,
+    }
+
+    payload_json = json.dumps(payload, ensure_ascii=False, default=str)
+    payload_json = payload_json.replace("</", "<\\/")
+
+    html = HTML_TEMPLATE
+    html = html.replace("__PWD_HASH__", pwd_hash)
+    html = html.replace("__XLSX_BASE64__", xlsx_b64)
+    html = html.replace("__PAYLOAD_JSON__", payload_json)
+
+    OUT_PATH.write_text(html, encoding="utf-8")
+    size_kb = len(html.encode("utf-8")) / 1024
+    print(f"  wrote: {OUT_PATH}")
+    print(f"  size : {size_kb:.1f} KB  ({len(rows)} rows × {len(columns)} cols)")
+    print(f"  issues: {issues_payload['totals']['errors_categories']}E / "
+          f"{issues_payload['totals']['warnings_categories']}W / "
+          f"{issues_payload['totals']['info_categories']}I categories, "
+          f"{issues_payload['totals']['total_rows']} flagged")
+
+
+HTML_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wolves Data — Interactive Table</title>
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_simple.min.css" rel="stylesheet">
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+         margin: 0; padding: 14px; background: #f3f5f8; color: #2c3e50; }
+  header { background: #fff; padding: 14px 18px; border-radius: 10px;
+           box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 10px; }
+  .topline { display: flex; justify-content: space-between; align-items: flex-start;
+             gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+  h1 .mode-badge { font-size: 12px; padding: 2px 8px; border-radius: 5px;
+                   margin-left: 8px; font-weight: 600; }
+  .mode-viewer { background: #e3f2fd; color: #1565c0; }
+  .mode-admin  { background: #fff3e0; color: #e65100; }
+  .stats { display: flex; gap: 8px; font-size: 12px; color: #555; flex-wrap: wrap; }
+  .stat { background: #eef2f6; padding: 3px 9px; border-radius: 5px; }
+  .stat strong { color: #111; }
+  .legend { display: flex; gap: 6px; font-size: 11px; flex-wrap: wrap;
+            align-items: center; margin-top: 8px; }
+  .legend strong { font-size: 11px; color: #444; margin-right: 4px; }
+  .legend span { padding: 2px 8px; border-radius: 4px; color: white; font-weight: 600; font-size: 11px; }
+  .controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .controls input[type="text"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;
+                                 font-size: 13px; min-width: 220px; }
+  .controls label { font-size: 12px; color: #555; display: inline-flex; align-items: center;
+                    gap: 4px; padding: 4px 8px; background: #f5f5f5; border-radius: 5px; }
+  .controls button { padding: 6px 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px;
+                     cursor: pointer; font-size: 12px; font-weight: 500; }
+  .controls button:hover { background: #eef; }
+  .btn-primary { background: #2563eb !important; color: #fff !important; border-color: #2563eb !important; }
+  .btn-primary:hover { background: #1d4ed8 !important; }
+  .btn-warn { background: #ef6c00 !important; color: #fff !important; border-color: #ef6c00 !important; }
+  .btn-danger { background: #dc2626 !important; color: #fff !important; border-color: #dc2626 !important; }
+  .admin-bar, .save-bar { padding: 9px 14px; border-radius: 8px; margin-bottom: 8px;
+                          display: none; align-items: center; justify-content: space-between;
+                          font-size: 13px; gap: 10px; flex-wrap: wrap; }
+  .admin-bar.show, .save-bar.show { display: flex; }
+  .admin-bar { background: #fff8e1; border: 1px solid #fbc02d; }
+  .save-bar  { background: #e8f5e9; border: 1px solid #43a047; }
+
+  #data-table { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .footer { font-size: 11.5px; color: #777; margin-top: 10px; padding: 8px 14px;
+            background: #fff; border-radius: 6px; line-height: 1.5; }
+
+  /* Anatomical region tinting */
+  .tabulator .tabulator-cell.cell-A { background: rgba(233,30,99,0.08) !important; }
+  .tabulator .tabulator-cell.cell-B { background: rgba(66,165,245,0.08) !important; }
+  .tabulator .tabulator-cell.cell-C { background: rgba(255,112,67,0.08) !important; }
+  .tabulator .tabulator-cell.cell-D { background: rgba(156,39,176,0.08) !important; }
+  .tabulator .tabulator-col.col-A { background: rgba(233,30,99,0.18) !important; }
+  .tabulator .tabulator-col.col-B { background: rgba(66,165,245,0.18) !important; }
+  .tabulator .tabulator-col.col-C { background: rgba(255,112,67,0.18) !important; }
+  .tabulator .tabulator-col.col-D { background: rgba(156,39,176,0.18) !important; }
+
+  .tabulator { font-size: 12.5px; }
+  .tabulator-row.row-empty-code { background: #fffde7 !important; }
+
+  /* Issue review panel (admin-only) */
+  body.with-issue-panel { padding-right: 380px; transition: padding-right 0.2s; }
+  .issue-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 364px;
+                 background: #fff; box-shadow: -4px 0 14px rgba(0,0,0,0.10);
+                 z-index: 50; display: none; flex-direction: column; overflow: hidden;
+                 font-size: 13px; }
+  .issue-panel.show { display: flex; }
+  .ip-header { padding: 12px 14px; background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+               border-bottom: 1px solid #ddd; display: flex; align-items: center;
+               justify-content: space-between; }
+  .ip-header h3 { margin: 0; font-size: 14px; font-weight: 700; }
+  .ip-header .close-btn { background: none; border: none; font-size: 18px; cursor: pointer;
+                          padding: 2px 6px; color: #555; }
+  .ip-progress { padding: 6px 14px; font-size: 11.5px; color: #555;
+                 background: #fafbfc; border-bottom: 1px solid #eee; display: flex; gap: 10px; }
+  .ip-progress strong { color: #111; }
+  .ip-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .ip-cat { border-bottom: 1px solid #eee; }
+  .ip-cat-header { padding: 8px 14px; cursor: pointer; display: flex; align-items: center;
+                   gap: 6px; user-select: none; font-weight: 600; font-size: 12.5px;
+                   background: #fafbfc; }
+  .ip-cat-header:hover { background: #f0f4f8; }
+  .ip-cat-header .arrow { display: inline-block; width: 12px; transition: transform 0.15s; }
+  .ip-cat.open .ip-cat-header .arrow { transform: rotate(90deg); }
+  .ip-cat-header .count { margin-left: auto; padding: 1px 8px; border-radius: 10px;
+                          font-size: 11px; background: #e0e0e0; color: #444; font-weight: 600; }
+  .ip-cat.sev-errors .ip-cat-header .count { background: #ef9a9a; color: #b71c1c; }
+  .ip-cat.sev-warnings .ip-cat-header .count { background: #ffe082; color: #e65100; }
+  .ip-cat.sev-info .ip-cat-header .count { background: #e0e0e0; color: #555; }
+  .ip-cat-body { display: none; padding: 4px 0 8px; }
+  .ip-cat.open .ip-cat-body { display: block; }
+  .ip-hint { padding: 4px 14px 8px; font-size: 11.5px; color: #666; line-height: 1.45; }
+  .ip-actions { padding: 4px 14px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .ip-actions button { padding: 4px 8px; border: 1px solid #aaa; background: #fff;
+                       border-radius: 5px; cursor: pointer; font-size: 11.5px; }
+  .ip-actions button:hover { background: #f0f4f8; }
+  .ip-actions button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .ip-actions button.primary:hover { background: #1d4ed8; }
+  .ip-issue { padding: 4px 14px 4px 28px; cursor: pointer; display: flex;
+              justify-content: space-between; align-items: center; font-size: 12px;
+              border-left: 3px solid transparent; }
+  .ip-issue:hover { background: #f5f7fa; }
+  .ip-issue.active { background: #fff8e1; border-left-color: #f57c00; font-weight: 600; }
+  .ip-issue.resolved { color: #999; text-decoration: line-through; }
+  .ip-issue .ip-issue-key { font-family: monospace; }
+  .ip-issue .ip-issue-state { font-size: 10px; color: #888; }
+  .ip-active-card { padding: 12px 14px; background: #fff8e1; border-top: 2px solid #f57c00;
+                    display: none; }
+  .ip-active-card.show { display: block; }
+  .ip-active-card .ip-active-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+  .ip-active-card .ip-active-detail { font-size: 11.5px; color: #555; line-height: 1.45;
+                                       margin-bottom: 8px; }
+  .ip-active-card .ip-active-detail code { background: #fffde7; padding: 1px 4px;
+                                            border-radius: 3px; font-size: 11px; }
+  .ip-nav { display: flex; gap: 6px; padding: 6px 14px; border-top: 1px solid #eee;
+            background: #fafbfc; }
+  .ip-nav button { flex: 1; padding: 5px; font-size: 11.5px; cursor: pointer;
+                   border: 1px solid #aaa; background: #fff; border-radius: 5px; }
+
+  /* Cell decoration for flagged cells */
+  .tabulator .tabulator-cell.cell-issue-error { box-shadow: inset 0 0 0 2px #d32f2f; }
+  .tabulator .tabulator-cell.cell-issue-warning { box-shadow: inset 0 0 0 2px #f9a825; }
+  .tabulator .tabulator-cell.cell-issue-info { box-shadow: inset 0 0 0 2px #90a4ae; }
+  .tabulator .tabulator-cell.cell-issue-active { box-shadow: inset 0 0 0 3px #f57c00, 0 0 0 2px #f57c00; }
+  .tabulator-row.row-issue-active { background: #fff8e1 !important; }
+
+  /* Login modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none;
+              align-items: center; justify-content: center; z-index: 1000; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #fff; padding: 22px 26px; border-radius: 10px; min-width: 320px;
+           box-shadow: 0 10px 28px rgba(0,0,0,0.22); }
+  .modal h2 { margin: 0 0 12px; font-size: 16px; }
+  .modal input { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid #ccc;
+                 border-radius: 6px; margin-bottom: 6px; }
+  .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+  #pwd-error { color: #dc2626; font-size: 12px; min-height: 16px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="topline">
+    <div>
+      <h1>Wolves Data — Interactive Table <span id="mode-badge" class="mode-badge mode-viewer">VIEWER</span></h1>
+      <div class="stats">
+        <div class="stat">total rows: <strong id="stat-total">0</strong></div>
+        <div class="stat">visible: <strong id="stat-visible">0</strong></div>
+        <div class="stat">last refresh: <strong id="stat-build">—</strong></div>
+      </div>
+      <div class="legend">
+        <strong>Region groups:</strong>
+        <span style="background:#E91E63;">A — muzzle (A1, A2)</span>
+        <span style="background:#42A5F5;">B — eye (B3, B4, B5)</span>
+        <span style="background:#FF7043;">C — nose/chin (C6, C7)</span>
+        <span style="background:#9C27B0;">D — head side (D8, D9)</span>
+      </div>
+    </div>
+    <div>
+      <button id="admin-login-btn" class="btn-warn" style="padding: 8px 14px; font-size: 13px;">
+        🔒 Admin login
+      </button>
+    </div>
+  </div>
+  <div class="controls">
+    <input type="text" id="search-input" placeholder="Search across all columns…" />
+    <label><input type="checkbox" id="show-empty-code" /> show wolves with no code</label>
+    <div id="col-toggle-wrap" style="position:relative; display:inline-block;">
+      <button id="col-toggle-btn" type="button">Columns ▼</button>
+      <div id="col-toggle-menu" style="display:none; position:absolute; top:100%; left:0; margin-top:4px;
+            background:#fff; border:1px solid #ccc; border-radius:6px; padding:8px;
+            box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:200; min-width:220px; max-height:60vh; overflow:auto;">
+        <div style="display:flex; gap:6px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid #eee;">
+          <button type="button" id="col-show-all" style="font-size:11px; padding:3px 8px;">Show all</button>
+          <button type="button" id="col-hide-all" style="font-size:11px; padding:3px 8px;">Hide all</button>
+        </div>
+        <div id="col-toggle-list"></div>
+      </div>
+    </div>
+    <button id="export-csv">⬇ CSV</button>
+    <button id="export-xlsx">⬇ XLSX (data only)</button>
+    <button id="reset-filters">Reset filters</button>
+  </div>
+</header>
+
+<div id="admin-bar" class="admin-bar">
+  <div><strong>Admin mode active</strong> — click any cell to edit. Empty-code rows now visible. Edits stay in your browser until you save.</div>
+  <div style="display:flex; gap:6px;">
+    <button id="review-issues-btn">⚠ Review issues (<span id="review-count">0</span>)</button>
+    <button id="add-row-btn">＋ Add row</button>
+    <button id="logout-btn">Logout</button>
+  </div>
+</div>
+
+<aside id="issue-panel" class="issue-panel">
+  <div class="ip-header">
+    <h3>Data Quality — Review</h3>
+    <button class="close-btn" id="ip-close" title="Close">×</button>
+  </div>
+  <div class="ip-progress">
+    <span><strong id="ip-remaining">0</strong> remaining</span>
+    <span><strong id="ip-resolved">0</strong> resolved</span>
+    <span><strong id="ip-total">0</strong> total</span>
+  </div>
+  <div class="ip-list" id="ip-list"></div>
+  <div class="ip-active-card" id="ip-active-card">
+    <div class="ip-active-title" id="ip-active-title">—</div>
+    <div class="ip-active-detail" id="ip-active-detail">—</div>
+    <div class="ip-actions" id="ip-active-actions"></div>
+  </div>
+  <div class="ip-nav">
+    <button id="ip-prev">◀ Prev</button>
+    <button id="ip-next">Next ▶</button>
+  </div>
+</aside>
+
+<div id="save-bar" class="save-bar">
+  <div><span id="dirty-summary">No unsaved changes</span></div>
+  <div style="display:flex; gap:6px;">
+    <button id="discard-btn" class="btn-danger">Discard</button>
+    <button id="save-btn" class="btn-primary">💾 Save → download wolves_data.xlsx</button>
+  </div>
+</div>
+
+<div id="data-table"></div>
+
+<div class="footer">
+  <strong>About this page:</strong>
+  Read-only by default. The Admin login (password protected) lets the data owner edit cells in the browser.
+  Edits don't change the file on the server — clicking <em>Save</em> downloads an updated <code>wolves_data.xlsx</code>
+  which the owner places back in the project folder. Running <code>update.bat</code> then refreshes all
+  analyses and rebuilds this page.
+  <br>
+  <em>Security note:</em> the admin password is a soft client-side gate. It prevents accidental edits, not determined viewers.
+  All data on this page is visible to anyone who can open it (this is by design — the table is meant to be shared).
+</div>
+
+<div id="pwd-modal" class="modal-bg">
+  <div class="modal">
+    <h2>Admin login</h2>
+    <input type="password" id="pwd-input" placeholder="Password" autocomplete="off" />
+    <div id="pwd-error">&nbsp;</div>
+    <div class="modal-buttons">
+      <button id="pwd-cancel">Cancel</button>
+      <button id="pwd-submit" class="btn-primary">Login</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PAYLOAD = __PAYLOAD_JSON__;
+const PWD_HASH = "__PWD_HASH__";
+const XLSX_BASE64 = "__XLSX_BASE64__";
+const STORAGE_KEY = "wolves_data_table_edits_v1";
+
+const REGION_GROUP = {
+  "A1": "A", "A2": "A",
+  "B3": "B", "B4": "B", "B5": "B",
+  "C6": "C", "C7": "C",
+  "D8": "D", "D9": "D",
+};
+const NUMERIC_COLS = new Set(["#sights", "#right", "#left", "#front", "#no good", "#pictures"]);
+
+let table = null;
+let isAdmin = false;
+let baselineRows = [];
+
+const $ = (id) => document.getElementById(id);
+
+async function sha256Hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function rowKey(r, idx) { return r._id ?? `${r["serial number"] ?? ""}#${idx}`; }
+
+function buildColumns() {
+  return PAYLOAD.columns.map((name, i) => {
+    const grp = REGION_GROUP[name];
+    const col = {
+      title: name,
+      field: name,
+      // Per-column header filter on every column except 'code' (per user request).
+      headerFilter: name === "code" ? false : "input",
+      headerSort: true,
+      resizable: true,
+      editor: isAdmin ? (NUMERIC_COLS.has(name) ? "number" : "input") : false,
+    };
+    if (i === 0) {
+      col.frozen = true;
+      col.width = 110;
+    }
+    if (grp) {
+      col.cssClass = `cell-${grp}`;
+      col.headerCssClass = `col-${grp}`;
+      col.width = 84;
+    } else if (name === "notes") {
+      col.formatter = "textarea";
+      col.width = 240;
+    } else if (name === "code") {
+      col.width = 240;
+      col.tooltip = (e, cell) => String(cell.getValue() ?? "");
+    } else if (NUMERIC_COLS.has(name)) {
+      col.width = 80;
+      col.hozAlign = "right";
+    }
+    return col;
+  });
+}
+
+function rowFormatter(row) {
+  const data = row.getData();
+  if (!data["code"] || data["code"] === "") row.getElement().classList.add("row-empty-code");
+  else row.getElement().classList.remove("row-empty-code");
+}
+
+function applyFilters() {
+  if (!table) return;
+  const showEmpty = isAdmin || $("show-empty-code").checked;
+  const q = ($("search-input").value || "").trim().toLowerCase();
+  table.setFilter(row => {
+    if (!showEmpty) {
+      const code = row["code"];
+      if (code === undefined || code === null || code === "") return false;
+    }
+    if (q) {
+      for (const c of PAYLOAD.columns) {
+        const v = row[c];
+        if (v != null && String(v).toLowerCase().includes(q)) return true;
+      }
+      return false;
+    }
+    return true;
+  });
+}
+
+function refreshStats() {
+  if (!table) return;
+  $("stat-visible").textContent = table.getDataCount("active");
+}
+
+function setMode(adminOn) {
+  isAdmin = adminOn;
+  $("mode-badge").textContent = adminOn ? "ADMIN" : "VIEWER";
+  $("mode-badge").className = "mode-badge " + (adminOn ? "mode-admin" : "mode-viewer");
+  $("admin-bar").classList.toggle("show", adminOn);
+  $("admin-login-btn").style.display = adminOn ? "none" : "";
+  if (!adminOn) toggleIssuePanel(false);
+  // Rebuild table to swap editor states
+  rebuildTable();
+}
+
+function rebuildTable() {
+  const currentData = table ? table.getData() : JSON.parse(JSON.stringify(PAYLOAD.rows));
+  if (table) table.destroy();
+  table = new Tabulator("#data-table", {
+    data: currentData,
+    columns: buildColumns(),
+    layout: "fitDataStretch",
+    height: "calc(100vh - 280px)",
+    movableColumns: true,
+    rowFormatter: rowFormatter,
+    cellEdited: () => onChange(),
+    rowAdded: () => onChange(),
+    rowDeleted: () => onChange(),
+    dataFiltered: () => { refreshStats(); if (isAdmin) applyCellBadges(); },
+  });
+  table.on("tableBuilt", () => {
+    applyFilters();
+    refreshStats();
+    if (isAdmin && typeof applyCellBadges === "function") applyCellBadges();
+  });
+}
+
+function onChange() {
+  const data = table.getData();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+  const diffs = countDiffs(data);
+  $("save-bar").classList.toggle("show", diffs > 0);
+  $("dirty-summary").textContent = diffs === 0 ? "No unsaved changes" :
+        `${diffs} unsaved change${diffs === 1 ? "" : "s"}`;
+  // Re-validate issues against current data
+  if (typeof renderIssuePanel === "function" && isAdmin) renderIssuePanel();
+}
+
+function countDiffs(currentData) {
+  if (currentData.length !== baselineRows.length) {
+    return Math.abs(currentData.length - baselineRows.length) + countCellDiffs(currentData);
+  }
+  return countCellDiffs(currentData);
+}
+
+function countCellDiffs(currentData) {
+  let n = 0;
+  const minLen = Math.min(currentData.length, baselineRows.length);
+  for (let i = 0; i < minLen; i++) {
+    const a = currentData[i], b = baselineRows[i];
+    for (const c of PAYLOAD.columns) {
+      if (String(a[c] ?? "") !== String(b[c] ?? "")) { n++; break; }
+    }
+  }
+  return n;
+}
+
+function discardChanges() {
+  if (!confirm("Discard all unsaved edits? This cannot be undone.")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  table.replaceData(JSON.parse(JSON.stringify(PAYLOAD.rows)));
+  $("save-bar").classList.remove("show");
+}
+
+async function saveAsXlsx() {
+  // Decode the original embedded XLSX so we preserve the other sheets
+  const binStr = atob(XLSX_BASE64);
+  const bytes = new Uint8Array(binStr.length);
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  const wb = XLSX.read(bytes, { type: "array" });
+
+  // Replace sheet (2) with current edited data
+  const data = table.getData();
+  const sheetRows = data.map(r => {
+    const out = {};
+    for (const col of PAYLOAD.columns) {
+      const v = r[col];
+      if (v === "" || v === null || v === undefined) out[col] = null;
+      else out[col] = v;
+    }
+    return out;
+  });
+  const newSheet = XLSX.utils.json_to_sheet(sheetRows, { header: PAYLOAD.columns });
+  wb.Sheets[PAYLOAD.sheet_name] = newSheet;
+
+  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbout], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "wolves_data.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  alert("File downloaded as wolves_data.xlsx.\n\nNext steps:\n1. Move the file into the project folder (replacing the current one).\n2. Run update.bat to refresh the analyses.\n3. The dashboard and this table will both rebuild.");
+}
+
+// ============================================================================
+// Issue review (admin-only). Decisions persist to localStorage on the admin's
+// browser. Viewers never see issue indicators or decisions.
+// ============================================================================
+
+const ISSUES = (PAYLOAD.issues && PAYLOAD.issues.categories) ? PAYLOAD.issues.categories : [];
+const ISSUE_DECISIONS_KEY = "wolves_issue_decisions_v1";
+const ISSUE_POLICY_KEY = "wolves_issue_policy_v1";
+
+let ALLOWED_SET_SOCIAL = new Set(["pack", "group", "unknown"]);
+let issueDecisions = {};
+let policyState = {};
+let activeIssueId = null;
+let issueOpenCategories = new Set();
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+    { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]
+  ));
+}
+
+function loadIssueState() {
+  try {
+    const raw = localStorage.getItem(ISSUE_DECISIONS_KEY);
+    if (raw) issueDecisions = JSON.parse(raw) || {};
+  } catch (e) {}
+  try {
+    const rawP = localStorage.getItem(ISSUE_POLICY_KEY);
+    if (rawP) {
+      policyState = JSON.parse(rawP) || {};
+      if (policyState["accept_lone"]) ALLOWED_SET_SOCIAL.add("lone");
+      if (policyState["accept_packstar"]) ALLOWED_SET_SOCIAL.add("pack*");
+    }
+  } catch (e) {}
+}
+function saveIssueState() {
+  try { localStorage.setItem(ISSUE_DECISIONS_KEY, JSON.stringify(issueDecisions)); } catch (e) {}
+  try { localStorage.setItem(ISSUE_POLICY_KEY, JSON.stringify(policyState)); } catch (e) {}
+}
+
+function findRowByIndex(rowIndex) {
+  if (!table || rowIndex == null) return null;
+  return table.getRows().find(r => r.getData()._row_index === rowIndex) || null;
+}
+
+function rowHasIssueLive(issue) {
+  const cat = issue.__category;
+  const r = findRowByIndex(issue.row_index);
+  if (!r) return false;
+  const data = r.getData();
+  switch (cat.category_id) {
+    case "code_present_but_pictures_0": {
+      const pics = parseFloat(data["#pictures"]);
+      const code = (data["code"] || "").toString().trim();
+      return code && (isNaN(pics) || pics === 0);
+    }
+    case "code_is_empty_but_pictures_0": {
+      const pics = parseFloat(data["#pictures"]);
+      const code = (data["code"] || "").toString().trim();
+      return !code && pics > 0;
+    }
+    case "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9": {
+      const code = (data["code"] || "").toString().trim();
+      if (!code) return false;
+      const concat = ["A1","A2","B3","B4","B5","C6","C7","D8","D9"]
+        .map(c => (data[c] ?? "").toString().trim()).join("_");
+      return code !== concat;
+    }
+    case "gender_not_in_m_f_blank": {
+      const v = (data["gender"] ?? "").toString();
+      if (v === "" || v == null) return false;
+      return !(v === "m" || v === "f");
+    }
+    case "social_dynamic_out_of_pack_group_unknown": {
+      const v = (data["social dynamic"] ?? "").toString().trim().toLowerCase();
+      if (!v) return false;
+      return !ALLOWED_SET_SOCIAL.has(v);
+    }
+    case "string_hygiene_whitespace_tabs": {
+      const col = issue.details && issue.details.col;
+      if (!col) return true;
+      const v = data[col];
+      if (typeof v !== "string") return false;
+      return v !== v.trim() || /[\t\n]/.test(v);
+    }
+    case "whitespace_in_serial_number": {
+      const v = data["serial number"];
+      if (typeof v !== "string") return false;
+      return v !== v.trim();
+    }
+    case "main_poligon_not_in_area": {
+      const a = (data["area"] ?? "").toString();
+      const m = (data["main poligon"] ?? "").toString().trim().toLowerCase();
+      if (!m) return false;
+      const aParts = a.split(/\s*,\s*/).map(s => s.trim().toLowerCase()).filter(Boolean);
+      return aParts.length > 0 && !aParts.includes(m);
+    }
+    default:
+      // Cross-row / regex-heavy checks: trust the original flag until next full
+      // re-validation; user can mark them resolved manually.
+      return true;
+  }
+}
+
+function isResolved(issue) {
+  const dec = issueDecisions[issue.id];
+  if (dec === "decided_keep" || dec === "resolved_by_edit") return true;
+  return !rowHasIssueLive(issue);
+}
+
+function categoryStats(cat) {
+  let remain = 0;
+  for (const it of cat.issues) {
+    it.__category = cat;
+    if (!isResolved(it)) remain++;
+  }
+  return { remain, total: cat.issues.length };
+}
+
+function totalUnresolved() {
+  let n = 0;
+  for (const cat of ISSUES) n += categoryStats(cat).remain;
+  return n;
+}
+function totalIssues() {
+  let n = 0;
+  for (const cat of ISSUES) n += cat.issues.length;
+  return n;
+}
+
+function renderIssuePanel() {
+  const list = $("ip-list");
+  if (!list) return;
+  list.innerHTML = "";
+  for (const cat of ISSUES) {
+    cat.issues.forEach(it => { it.__category = cat; });
+    const stats = categoryStats(cat);
+    const catEl = document.createElement("div");
+    catEl.className = `ip-cat sev-${cat.severity}`;
+    if (issueOpenCategories.has(cat.category_id)) catEl.classList.add("open");
+
+    const header = document.createElement("div");
+    header.className = "ip-cat-header";
+    header.innerHTML = `
+      <span class="arrow">▶</span>
+      <span style="flex:1;">${escapeHtml(cat.title)}</span>
+      <span class="count">${stats.remain}/${stats.total}</span>
+    `;
+    header.addEventListener("click", () => {
+      if (issueOpenCategories.has(cat.category_id)) issueOpenCategories.delete(cat.category_id);
+      else issueOpenCategories.add(cat.category_id);
+      renderIssuePanel();
+    });
+    catEl.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "ip-cat-body";
+    if (cat.hint) {
+      const hint = document.createElement("div");
+      hint.className = "ip-hint";
+      hint.textContent = cat.hint;
+      body.appendChild(hint);
+    }
+    if (cat.kind === "bulk" || cat.kind === "policy") {
+      const actionsEl = document.createElement("div");
+      actionsEl.className = "ip-actions";
+      if (cat.kind === "bulk" && cat.bulk_label) {
+        const btn = document.createElement("button");
+        btn.className = "primary";
+        btn.textContent = cat.bulk_label;
+        btn.addEventListener("click", () => executeBulkAction(cat));
+        actionsEl.appendChild(btn);
+      }
+      for (const a of cat.policy_actions || []) {
+        const btn = document.createElement("button");
+        btn.textContent = a.label;
+        btn.addEventListener("click", () => executePolicyAction(cat, a));
+        actionsEl.appendChild(btn);
+      }
+      body.appendChild(actionsEl);
+    }
+    for (const issue of cat.issues) {
+      issue.__category = cat;
+      const resolved = isResolved(issue);
+      const it = document.createElement("div");
+      it.className = "ip-issue";
+      if (resolved) it.classList.add("resolved");
+      if (issue.id === activeIssueId) it.classList.add("active");
+      const label = issue.serial || `row ${issue.row_index ?? "?"}`;
+      const colHint = issue.target_column ? `→ ${issue.target_column}` : "";
+      it.innerHTML = `
+        <span><span class="ip-issue-key">${escapeHtml(label)}</span>
+              <span style="color:#888;font-size:11px;"> ${escapeHtml(colHint)}</span></span>
+        <span class="ip-issue-state">${resolved ? "✓" : ""}</span>
+      `;
+      it.addEventListener("click", () => focusIssue(issue));
+      body.appendChild(it);
+    }
+    catEl.appendChild(body);
+    list.appendChild(catEl);
+  }
+  $("ip-total").textContent = totalIssues();
+  $("ip-remaining").textContent = totalUnresolved();
+  $("ip-resolved").textContent = totalIssues() - totalUnresolved();
+  if ($("review-count")) $("review-count").textContent = totalUnresolved();
+  applyCellBadges();
+}
+
+function applyCellBadges() {
+  if (!table) return;
+  // Clear existing decoration
+  table.getRows().forEach(row => {
+    row.getElement().classList.remove("row-issue-active");
+    row.getCells().forEach(cell => {
+      cell.getElement().classList.remove("cell-issue-error", "cell-issue-warning",
+        "cell-issue-info", "cell-issue-active");
+    });
+  });
+  if (!isAdmin) return;
+  for (const cat of ISSUES) {
+    for (const issue of cat.issues) {
+      issue.__category = cat;
+      if (isResolved(issue)) continue;
+      const r = findRowByIndex(issue.row_index);
+      if (!r) continue;
+      if (issue.target_column) {
+        const cell = r.getCells().find(c => c.getColumn().getField() === issue.target_column);
+        if (!cell) continue;
+        const sevClass = cat.severity === "errors" ? "cell-issue-error"
+          : cat.severity === "warnings" ? "cell-issue-warning" : "cell-issue-info";
+        cell.getElement().classList.add(sevClass);
+        if (issue.id === activeIssueId) {
+          cell.getElement().classList.add("cell-issue-active");
+          r.getElement().classList.add("row-issue-active");
+        }
+      }
+    }
+  }
+}
+
+function focusIssue(issue) {
+  activeIssueId = issue.id;
+  const r = findRowByIndex(issue.row_index);
+  if (r) r.scrollTo("center", true);
+  showActiveIssueCard(issue);
+  renderIssuePanel();
+}
+
+function showActiveIssueCard(issue) {
+  const card = $("ip-active-card");
+  card.classList.add("show");
+  const cat = issue.__category;
+  $("ip-active-title").textContent =
+    `${cat.title} — ${issue.serial || `row ${issue.row_index}`}`;
+  let detailHtml = `<strong>Hint:</strong> ${escapeHtml(cat.hint || "(no hint)")}`;
+  if (issue.details) {
+    const lines = [];
+    for (const [k, v] of Object.entries(issue.details)) {
+      if (k.startsWith("_") || k === "row_index") continue;
+      lines.push(`<strong>${escapeHtml(k)}:</strong> <code>${escapeHtml(String(v).slice(0,90))}</code>`);
+    }
+    if (lines.length) detailHtml += "<br><br>" + lines.join("<br>");
+  }
+  $("ip-active-detail").innerHTML = detailHtml;
+
+  const actionsEl = $("ip-active-actions");
+  actionsEl.innerHTML = "";
+  if (issue.target_column) {
+    const editBtn = document.createElement("button");
+    editBtn.className = "primary";
+    editBtn.textContent = `✏ Edit "${issue.target_column}"`;
+    editBtn.addEventListener("click", () => editTargetCell(issue));
+    actionsEl.appendChild(editBtn);
+  }
+  for (const ra of (cat.row_actions || [])) {
+    const btn = document.createElement("button");
+    btn.textContent = ra.label;
+    btn.addEventListener("click", () => executeRowAction(cat, issue, ra));
+    actionsEl.appendChild(btn);
+  }
+  const okBtn = document.createElement("button");
+  okBtn.textContent = "✓ Mark as correct";
+  okBtn.addEventListener("click", () => {
+    issueDecisions[issue.id] = "decided_keep";
+    saveIssueState();
+    renderIssuePanel();
+  });
+  actionsEl.appendChild(okBtn);
+
+  const skipBtn = document.createElement("button");
+  skipBtn.textContent = "Skip ▶";
+  skipBtn.addEventListener("click", () => nextIssue(1));
+  actionsEl.appendChild(skipBtn);
+}
+
+function editTargetCell(issue) {
+  const r = findRowByIndex(issue.row_index);
+  if (!r) return;
+  const cell = r.getCells().find(c => c.getColumn().getField() === issue.target_column);
+  if (!cell) return;
+  cell.edit(true);
+}
+
+function executeRowAction(cat, issue, action) {
+  const r = findRowByIndex(issue.row_index);
+  if (!r) return;
+  const data = r.getData();
+  switch (action.id) {
+    case "trim_cell": {
+      const v = data[issue.target_column];
+      if (typeof v === "string") r.update({ [issue.target_column]: v.trim() });
+      break;
+    }
+    case "set_cell_blank": {
+      r.update({ [issue.target_column]: "" });
+      break;
+    }
+    case "set_code_from_regions": {
+      const concat = ["A1","A2","B3","B4","B5","C6","C7","D8","D9"]
+        .map(c => (data[c] ?? "").toString().trim()).join("_");
+      r.update({ "code": concat });
+      break;
+    }
+  }
+  onChange();
+}
+
+function executeBulkAction(cat) {
+  if (cat.category_id === "string_hygiene_whitespace_tabs") {
+    if (!confirm(`Trim leading/trailing whitespace and remove tabs/newlines in ${cat.issues.length} cells?`)) return;
+    for (const issue of cat.issues) {
+      const r = findRowByIndex(issue.row_index);
+      if (!r) continue;
+      const col = issue.details && issue.details.col;
+      if (!col) continue;
+      const v = r.getData()[col];
+      if (typeof v === "string") r.update({ [col]: v.trim().replace(/[\t\n]+/g, " ") });
+    }
+    onChange();
+  } else if (cat.category_id === "polygon_name_casing_inconsistency") {
+    for (const issue of cat.issues) {
+      const forms = (issue.details && issue.details.forms) || [];
+      const lower = (issue.details && issue.details.canonical_lower) || "";
+      const choice = prompt(
+        `Polygon (lowercase: '${lower}'). Forms found: ${forms.join(", ")}\n\n` +
+        `Type the form to use as canonical:`, forms[0] || "");
+      if (choice == null) continue;
+      const trimmed = choice.trim();
+      if (!trimmed) continue;
+      table.getRows().forEach(r => {
+        const data = r.getData();
+        for (const col of ["area", "main poligon"]) {
+          const v = (data[col] ?? "").toString();
+          if (!v) continue;
+          const replaced = v.split(/\s*,\s*/).map(p => {
+            const t = p.trim();
+            if (t.toLowerCase() === lower) return trimmed;
+            return t;
+          }).join(", ");
+          if (replaced !== v) r.update({ [col]: replaced });
+        }
+      });
+      issueDecisions[issue.id] = "decided_keep";
+    }
+    saveIssueState();
+    onChange();
+  }
+}
+
+function executePolicyAction(cat, action) {
+  switch (action.id) {
+    case "accept_lone":
+      ALLOWED_SET_SOCIAL.add("lone");
+      policyState["accept_lone"] = true;
+      break;
+    case "accept_packstar":
+      ALLOWED_SET_SOCIAL.add("pack*");
+      policyState["accept_packstar"] = true;
+      break;
+    case "rename_lone_to_unknown":
+      if (!confirm("Replace all 'lone' with 'unknown' in social dynamic?")) return;
+      table.getRows().forEach(r => {
+        const v = (r.getData()["social dynamic"] ?? "").toString().trim().toLowerCase();
+        if (v === "lone") r.update({ "social dynamic": "unknown" });
+      });
+      onChange();
+      break;
+    case "rename_packstar_to_pack":
+      if (!confirm("Replace 'pack*' with 'pack' in social dynamic?")) return;
+      table.getRows().forEach(r => {
+        const v = (r.getData()["social dynamic"] ?? "").toString().trim();
+        if (v === "pack*") r.update({ "social dynamic": "pack" });
+      });
+      onChange();
+      break;
+    case "move_observers_to_new_column":
+      if (!confirm("Add a new 'reporter' column and move observer names from cams_spotted? Take effect immediately and persist on next Save.")) return;
+      addReporterColumn();
+      break;
+    case "keep_as_is":
+      for (const issue of cat.issues) issueDecisions[issue.id] = "decided_keep";
+      break;
+  }
+  saveIssueState();
+  renderIssuePanel();
+}
+
+function addReporterColumn() {
+  if (!PAYLOAD.columns.includes("reporter")) {
+    const idx = PAYLOAD.columns.indexOf("cams_spotted");
+    PAYLOAD.columns.splice(idx + 1, 0, "reporter");
+  }
+  table.getRows().forEach(r => {
+    const data = r.getData();
+    const v = (data["cams_spotted"] ?? "").toString();
+    const tokens = v.split(/\s*,\s*/).map(t => t.trim()).filter(Boolean);
+    const numeric = tokens.filter(t => /^\d+$/.test(t)).join(", ");
+    const names = tokens.filter(t => !/^\d+$/.test(t)).join(", ");
+    if (names) r.update({ "cams_spotted": numeric, "reporter": names });
+    else if (data["reporter"] === undefined) r.update({ "reporter": "" });
+  });
+  rebuildTable();
+  onChange();
+}
+
+function nextIssue(direction) {
+  const flat = [];
+  for (const cat of ISSUES) {
+    for (const it of cat.issues) {
+      it.__category = cat;
+      if (!isResolved(it)) flat.push(it);
+    }
+  }
+  if (flat.length === 0) {
+    activeIssueId = null;
+    $("ip-active-card").classList.remove("show");
+    renderIssuePanel();
+    return;
+  }
+  let curIdx = flat.findIndex(it => it.id === activeIssueId);
+  if (curIdx === -1) curIdx = direction > 0 ? -1 : flat.length;
+  const next = (curIdx + direction + flat.length) % flat.length;
+  issueOpenCategories.add(flat[next].__category.category_id);
+  focusIssue(flat[next]);
+}
+
+function toggleIssuePanel(show) {
+  $("issue-panel").classList.toggle("show", show);
+  document.body.classList.toggle("with-issue-panel", show);
+  if (show) {
+    renderIssuePanel();
+    if (!activeIssueId) nextIssue(1);
+  } else {
+    activeIssueId = null;
+    applyCellBadges();
+  }
+}
+
+function init() {
+  $("stat-total").textContent = PAYLOAD.n_total_rows;
+  $("stat-build").textContent = PAYLOAD.build_iso;
+
+  baselineRows = JSON.parse(JSON.stringify(PAYLOAD.rows));
+
+  // Restore unsaved edits if present
+  let initialData = JSON.parse(JSON.stringify(PAYLOAD.rows));
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (confirm("Found unsaved edits in this browser from a previous session. Restore them?")) {
+          initialData = parsed;
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    }
+  } catch (e) {}
+
+  table = new Tabulator("#data-table", {
+    data: initialData,
+    columns: buildColumns(),
+    layout: "fitDataStretch",
+    height: "calc(100vh - 280px)",
+    movableColumns: true,
+    rowFormatter: rowFormatter,
+    cellEdited: () => onChange(),
+    rowAdded: () => onChange(),
+    rowDeleted: () => onChange(),
+    dataFiltered: () => refreshStats(),
+  });
+  table.on("tableBuilt", () => { applyFilters(); refreshStats(); onChange(); });
+
+  $("search-input").addEventListener("input", applyFilters);
+  $("show-empty-code").addEventListener("change", applyFilters);
+  $("reset-filters").addEventListener("click", () => {
+    $("search-input").value = "";
+    $("show-empty-code").checked = false;
+    table.clearHeaderFilter();
+    applyFilters();
+  });
+
+  // Column-visibility menu
+  const colMenu = $("col-toggle-menu");
+  const colList = $("col-toggle-list");
+  function rebuildColMenu() {
+    colList.innerHTML = "";
+    PAYLOAD.columns.forEach(name => {
+      const wrap = document.createElement("label");
+      wrap.style.display = "flex";
+      wrap.style.alignItems = "center";
+      wrap.style.gap = "6px";
+      wrap.style.padding = "3px 4px";
+      wrap.style.fontSize = "12px";
+      wrap.style.cursor = "pointer";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      const c = table.getColumn(name);
+      cb.checked = c ? c.isVisible() : true;
+      cb.addEventListener("change", () => {
+        const col = table.getColumn(name);
+        if (!col) return;
+        if (cb.checked) col.show(); else col.hide();
+      });
+      wrap.appendChild(cb);
+      const txt = document.createElement("span");
+      txt.textContent = name;
+      wrap.appendChild(txt);
+      colList.appendChild(wrap);
+    });
+  }
+  $("col-toggle-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const visible = colMenu.style.display === "block";
+    colMenu.style.display = visible ? "none" : "block";
+    if (!visible) rebuildColMenu();
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("col-toggle-wrap").contains(e.target)) colMenu.style.display = "none";
+  });
+  $("col-show-all").addEventListener("click", () => {
+    PAYLOAD.columns.forEach(c => { const col = table.getColumn(c); if (col) col.show(); });
+    rebuildColMenu();
+  });
+  $("col-hide-all").addEventListener("click", () => {
+    // Keep at least the first column visible to avoid an empty table.
+    PAYLOAD.columns.forEach((c, i) => { const col = table.getColumn(c); if (col && i > 0) col.hide(); });
+    rebuildColMenu();
+  });
+  $("export-csv").addEventListener("click", () => table.download("csv", "wolves_data.csv"));
+  $("export-xlsx").addEventListener("click", () => table.download("xlsx", "wolves_data_view.xlsx", { sheetName: "wolves" }));
+  $("admin-login-btn").addEventListener("click", () => {
+    $("pwd-modal").classList.add("show");
+    $("pwd-input").value = "";
+    $("pwd-error").textContent = " ";
+    $("pwd-input").focus();
+  });
+  $("pwd-cancel").addEventListener("click", () => $("pwd-modal").classList.remove("show"));
+  $("pwd-input").addEventListener("keydown", e => { if (e.key === "Enter") $("pwd-submit").click(); });
+  $("pwd-submit").addEventListener("click", async () => {
+    const h = await sha256Hex($("pwd-input").value);
+    if (h === PWD_HASH) {
+      $("pwd-modal").classList.remove("show");
+      setMode(true);
+    } else {
+      $("pwd-error").textContent = "Wrong password.";
+    }
+  });
+  $("logout-btn").addEventListener("click", () => setMode(false));
+  $("save-btn").addEventListener("click", saveAsXlsx);
+  $("discard-btn").addEventListener("click", discardChanges);
+  $("add-row-btn").addEventListener("click", () => {
+    const empty = {};
+    for (const c of PAYLOAD.columns) empty[c] = "";
+    table.addRow(empty, true);
+  });
+
+  // Issue review wire-up
+  loadIssueState();
+  if ($("review-issues-btn")) {
+    $("review-issues-btn").addEventListener("click", () => {
+      toggleIssuePanel(!$("issue-panel").classList.contains("show"));
+    });
+  }
+  if ($("ip-close")) $("ip-close").addEventListener("click", () => toggleIssuePanel(false));
+  if ($("ip-prev")) $("ip-prev").addEventListener("click", () => nextIssue(-1));
+  if ($("ip-next")) $("ip-next").addEventListener("click", () => nextIssue(1));
+  // Initial counter (works pre-admin so the button shows the right number once revealed)
+  if ($("review-count")) $("review-count").textContent = totalUnresolved();
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
+"""
+
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    main()
