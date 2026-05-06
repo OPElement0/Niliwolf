@@ -23,11 +23,105 @@ from pathlib import Path
 
 import pandas as pd
 
-from wolf_lib import INPUT_FILE, OUTPUT_DIR, SHEET_NAME
+from wolf_lib import (
+    INPUT_FILE,
+    OUTPUT_DIR,
+    SHEET_NAME,
+    REGIONS,
+    process_all_regions,
+    identification_buckets,
+    ID_BUCKET_ORDER,
+)
 from step1d_dataqc import run_checks
 
 OUT_PATH = OUTPUT_DIR / "data_table.html"
 PASSWORD = "112358"
+SCHEMATIC_PATH = OUTPUT_DIR / "assets" / "wolf_schematic.jpg"
+DEFINITIONS_TABLE_PATH = OUTPUT_DIR / "assets" / "region_definitions_table.jpg"
+
+# Anatomical metadata (mirrors step3_build_app.py — keep in sync).
+GROUP_COLORS = {"A": "#E91E63", "B": "#42A5F5", "C": "#FF7043", "D": "#9C27B0"}
+GROUP_NAMES = {
+    "A": "Cheek (A1, A2)",
+    "B": "Periocular (B3, B4, B5)",
+    "C": "Nasal (C6, C7)",
+    "D": "Nape (D8, D9)",
+}
+REGION_GROUP = {
+    "A1": "A", "A2": "A",
+    "B3": "B", "B4": "B", "B5": "B",
+    "C6": "C", "C7": "C",
+    "D8": "D", "D9": "D",
+}
+REGION_NAMES = {
+    "A1": "Infraorbital patch",
+    "A2": "Malar (eye–ear) stripe",
+    "B3": "Below eye",
+    "B4": "Upper outer eye",
+    "B5": "Upper inner eye (near nasal bridge)",
+    "C6": "Central nasal stripe",
+    "C7": "Lateral nasal (side region)",
+    "D8": "Upper nape",
+    "D9": "Side nape",
+}
+REGION_DESCRIPTIONS = {
+    "A1": "Light/dark patch below the eye on the cheek",
+    "A2": "Stripe extending from eye toward ear",
+    "B3": "Lower periocular region",
+    "B4": "Outer upper eye region",
+    "B5": "Inner upper eye region near nasal bridge",
+    "C6": "Stripe along bridge of nose",
+    "C7": "Lateral nasal areas",
+    "D8": "Upper neck behind head",
+    "D9": "Lateral neck region",
+}
+REGION_VARIATION = {
+    "A1": "Shape, size, contrast",
+    "A2": "Presence, thickness, continuity",
+    "B3": "Contrast, extent",
+    "B4": "Shape, shading",
+    "B5": "Shape, contrast",
+    "C6": "Width, continuity",
+    "C7": "Color contrast, extent",
+    "D8": "Color tone, patterning",
+    "D9": "Pattern, contrast",
+}
+
+# Identification-bucket palette (mirror of step3_build_app.py)
+ID_BUCKET_COLORS = {
+    "Unique (1)":         "#1B5E20",
+    "Shared 2-3":         "#66BB6A",
+    "Shared 4-6":         "#C5E1A5",
+    "Shared 7-10":        "#FFF176",
+    "Shared 11-20":       "#FFB74D",
+    "Shared 21-35":       "#F57C00",
+    "Shared 36+":         "#6D4C41",
+    "Asymmetric":         "#1E88E5",
+    "Partial-ambiguous":  "#9E9E9E",
+    "P":                  "#FB8C00",
+    "N":                  "#E53935",
+    "Empty":              "#000000",
+}
+
+# Status (per region cell) palette — used for in-cell badges
+STATUS_COLORS = {
+    "unambiguous":        "#43A047",
+    "asymmetric":         "#1E88E5",
+    "partial_ambiguous":  "#9E9E9E",
+    "P":                  "#FB8C00",
+    "N":                  "#E53935",
+    "empty":              "#757575",
+    "unknown":            "#9C27B0",
+}
+STATUS_LABELS = {
+    "unambiguous":        "Full",
+    "asymmetric":         "Asymmetric",
+    "partial_ambiguous":  "Partial",
+    "P":                  "P (unclear)",
+    "N":                  "N (not visible)",
+    "empty":              "Empty",
+    "unknown":            "Unknown",
+}
 
 # ---------------------------------------------------------------------------
 # Category metadata for the issue-review UI.
@@ -284,6 +378,16 @@ def build_issues_payload(findings, df) -> dict:
     }
 
 
+def _encode_image_b64(path: Path) -> tuple[str, str]:
+    """Return (data-uri-prefix, base64-string) for an image file. Empty string if missing."""
+    if not path.exists():
+        return ("", "")
+    suffix = path.suffix.lower().lstrip(".")
+    mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif", "webp": "webp"}.get(suffix, "octet-stream")
+    b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    return (f"data:image/{mime};base64,", b64)
+
+
 def main() -> None:
     if not INPUT_FILE.exists():
         raise SystemExit(f"Source not found: {INPUT_FILE}")
@@ -291,6 +395,24 @@ def main() -> None:
     df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME)
     df.columns = [str(c).strip() for c in df.columns]
 
+    # ----- Compute per-region status using wolf_lib (only on the analysis pool) -----
+    df_pool = df[df["code"].notna()].copy()
+    processed = process_all_regions(df_pool)
+    # Map: original sheet row index -> {region: status_string}
+    status_by_row: dict[int, dict[str, str]] = {}
+    for idx in processed.index:
+        per_region: dict[str, str] = {}
+        for region in REGIONS:
+            status = processed.at[idx, f"{region}_status"]
+            per_region[region] = "empty" if pd.isna(status) else str(status)
+        status_by_row[int(idx)] = per_region
+
+    # ----- Per-region identification-bucket distributions for the chart -----
+    bucket_dist: dict[str, dict[str, int]] = {}
+    for region in REGIONS:
+        bucket_dist[region] = {k: int(v) for k, v in identification_buckets(processed, region).items()}
+
+    # ----- Build per-row records -----
     rows: list[dict] = []
     for idx, row in df.iterrows():
         record = {"_row_index": int(idx)}
@@ -304,6 +426,8 @@ def main() -> None:
                 )
             else:
                 record[col] = str(val)
+        # Attach per-region status so the JS can highlight cells & filter rows.
+        record["_status"] = status_by_row.get(int(idx), {r: "empty" for r in REGIONS})
         rows.append(record)
 
     columns = list(df.columns)
@@ -311,9 +435,27 @@ def main() -> None:
 
     pwd_hash = hashlib.sha256(PASSWORD.encode("utf-8")).hexdigest()
     xlsx_b64 = base64.b64encode(INPUT_FILE.read_bytes()).decode("ascii")
+    schematic_prefix, schematic_b64 = _encode_image_b64(SCHEMATIC_PATH)
+    deftable_prefix, deftable_b64 = _encode_image_b64(DEFINITIONS_TABLE_PATH)
 
     findings = run_checks(df)
     issues_payload = build_issues_payload(findings, df)
+
+    # Anatomy / region metadata for the JS side
+    anatomy = {
+        "regions": REGIONS,
+        "region_group": REGION_GROUP,
+        "group_colors": GROUP_COLORS,
+        "group_names": GROUP_NAMES,
+        "region_names": REGION_NAMES,
+        "region_descriptions": REGION_DESCRIPTIONS,
+        "region_variation": REGION_VARIATION,
+        "status_colors": STATUS_COLORS,
+        "status_labels": STATUS_LABELS,
+        "id_bucket_order": ID_BUCKET_ORDER,
+        "id_bucket_colors": ID_BUCKET_COLORS,
+        "bucket_dist": bucket_dist,
+    }
 
     payload = {
         "rows": rows,
@@ -321,8 +463,10 @@ def main() -> None:
         "sheet_name": SHEET_NAME,
         "n_total_rows": len(df),
         "n_visible_default": n_visible,
+        "n_pool": len(df_pool),
         "build_iso": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
         "issues": issues_payload,
+        "anatomy": anatomy,
     }
 
     payload_json = json.dumps(payload, ensure_ascii=False, default=str)
@@ -331,12 +475,17 @@ def main() -> None:
     html = HTML_TEMPLATE
     html = html.replace("__PWD_HASH__", pwd_hash)
     html = html.replace("__XLSX_BASE64__", xlsx_b64)
+    html = html.replace("__SCHEMATIC_SRC__", (schematic_prefix + schematic_b64) if schematic_b64 else "")
+    html = html.replace("__DEFTABLE_SRC__", (deftable_prefix + deftable_b64) if deftable_b64 else "")
     html = html.replace("__PAYLOAD_JSON__", payload_json)
 
     OUT_PATH.write_text(html, encoding="utf-8")
     size_kb = len(html.encode("utf-8")) / 1024
     print(f"  wrote: {OUT_PATH}")
     print(f"  size : {size_kb:.1f} KB  ({len(rows)} rows × {len(columns)} cols)")
+    print(f"  pool : {len(df_pool)} wolves processed for status / buckets")
+    print(f"  imgs : schematic={'yes' if schematic_b64 else 'MISSING'}  "
+          f"deftable={'yes' if deftable_b64 else 'MISSING'}")
     print(f"  issues: {issues_payload['totals']['errors_categories']}E / "
           f"{issues_payload['totals']['warnings_categories']}W / "
           f"{issues_payload['totals']['info_categories']}I categories, "
@@ -351,6 +500,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_simple.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -406,6 +556,89 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   .tabulator { font-size: 12.5px; }
   .tabulator-row.row-empty-code { background: #fffde7 !important; }
+
+  /* Status filter chips */
+  .status-filter-bar {
+    background: #fff; padding: 8px 14px; border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .status-filter-bar .label { font-size: 12px; color: #555; font-weight: 600; margin-right: 4px; }
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 14px; font-size: 12px;
+    cursor: pointer; user-select: none; border: 2px solid transparent;
+    background: #f0f0f0; color: #333; font-weight: 500; transition: all 0.15s;
+  }
+  .status-chip:hover { transform: translateY(-1px); }
+  .status-chip.active { color: white; }
+  .status-chip .dot {
+    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  }
+  .status-chip .count {
+    background: rgba(255,255,255,0.35); padding: 1px 6px; border-radius: 8px;
+    font-size: 10.5px; font-weight: 700; margin-left: 2px;
+  }
+  .status-chip:not(.active) .count { background: rgba(0,0,0,0.08); color: #555; }
+
+  /* Status badges inside region cells (admin or hover only) */
+  .tabulator .tabulator-cell.region-cell { position: relative; }
+  .tabulator .tabulator-cell.region-cell::before {
+    content: ""; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+    width: 4px; height: 70%; border-radius: 2px;
+  }
+  .tabulator .tabulator-cell.status-unambiguous::before { background: #43A047; }
+  .tabulator .tabulator-cell.status-asymmetric::before { background: #1E88E5; }
+  .tabulator .tabulator-cell.status-partial_ambiguous::before { background: #9E9E9E; }
+  .tabulator .tabulator-cell.status-P::before { background: #FB8C00; }
+  .tabulator .tabulator-cell.status-N::before { background: #E53935; }
+  .tabulator .tabulator-cell.status-empty::before { background: #BDBDBD; }
+  .tabulator .tabulator-cell.region-cell { padding-left: 10px !important; }
+
+  /* Sections below the table */
+  .section {
+    background: #fff; padding: 18px 22px; border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-top: 16px;
+  }
+  .section h2 {
+    margin: 0 0 6px; font-size: 18px; font-weight: 700; color: #1a1a1a;
+    border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; display: flex;
+    align-items: center; gap: 10px;
+  }
+  .section h2 .swatch {
+    display: inline-block; width: 14px; height: 14px; border-radius: 3px;
+    background: linear-gradient(90deg, #E91E63, #42A5F5, #FF7043, #9C27B0);
+  }
+  .section .section-sub {
+    color: #666; font-size: 12.5px; margin-bottom: 12px; line-height: 1.5;
+  }
+
+  /* Anatomy reference layout */
+  .anatomy-grid {
+    display: grid; gap: 18px;
+    grid-template-columns: minmax(320px, 1fr) minmax(380px, 1.2fr);
+  }
+  @media (max-width: 980px) {
+    .anatomy-grid { grid-template-columns: 1fr; }
+  }
+  .anatomy-grid img {
+    width: 100%; height: auto; border-radius: 8px; border: 1px solid #eee;
+    background: #fafafa;
+  }
+  .region-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .region-table th, .region-table td {
+    padding: 6px 8px; text-align: left; border-bottom: 1px solid #eee;
+  }
+  .region-table th { background: #fafbfc; font-weight: 600; color: #444; font-size: 11.5px; }
+  .region-table .group-cell { font-weight: 700; }
+  .region-table tr:hover { background: #f8fafc; }
+  .region-key { display: inline-flex; align-items: center; gap: 4px; }
+  .region-key .pill {
+    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  }
+
+  /* Plotly chart container */
+  #region-distribution-chart { width: 100%; height: 480px; min-height: 380px; }
 
   /* Issue review panel (admin-only) */
   body.with-issue-panel { padding-right: 380px; transition: padding-right 0.2s; }
@@ -514,6 +747,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div class="controls">
     <input type="text" id="search-input" placeholder="Search across all columns…" />
     <label><input type="checkbox" id="show-empty-code" /> show wolves with no code</label>
+    <label><input type="checkbox" id="show-status-bars" checked /> region status badges</label>
     <div id="col-toggle-wrap" style="position:relative; display:inline-block;">
       <button id="col-toggle-btn" type="button">Columns ▼</button>
       <div id="col-toggle-menu" style="display:none; position:absolute; top:100%; left:0; margin-top:4px;
@@ -531,6 +765,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button id="reset-filters">Reset filters</button>
   </div>
 </header>
+
+<div class="status-filter-bar" id="status-filter-bar">
+  <span class="label">Filter by region status (any of 9 regions):</span>
+  <span class="status-chip" data-status="unambiguous"   style="--c:#43A047;"><span class="dot" style="background:#43A047;"></span>Full <span class="count" id="cnt-unambiguous">0</span></span>
+  <span class="status-chip" data-status="asymmetric"    style="--c:#1E88E5;"><span class="dot" style="background:#1E88E5;"></span>Asymmetric <span class="count" id="cnt-asymmetric">0</span></span>
+  <span class="status-chip" data-status="partial_ambiguous" style="--c:#9E9E9E;"><span class="dot" style="background:#9E9E9E;"></span>Partial <span class="count" id="cnt-partial_ambiguous">0</span></span>
+  <span class="status-chip" data-status="P"             style="--c:#FB8C00;"><span class="dot" style="background:#FB8C00;"></span>P (unclear) <span class="count" id="cnt-P">0</span></span>
+  <span class="status-chip" data-status="N"             style="--c:#E53935;"><span class="dot" style="background:#E53935;"></span>N (not visible) <span class="count" id="cnt-N">0</span></span>
+  <span style="flex:1;"></span>
+  <button id="status-clear" style="padding:4px 10px; font-size:11.5px;">Clear status filter</button>
+</div>
 
 <div id="admin-bar" class="admin-bar">
   <div><strong>Admin mode active</strong> — click any cell to edit. Empty-code rows now visible. Edits stay in your browser until you save.</div>
@@ -572,6 +817,48 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </div>
 
 <div id="data-table"></div>
+
+<!-- ============= Anatomy reference ============= -->
+<div class="section" id="anatomy-section">
+  <h2><span class="swatch"></span>Anatomy reference</h2>
+  <div class="section-sub">
+    Each wolf's pelt is encoded across 9 regions, grouped into 4 anatomical zones.
+    Codes within a region capture the morphological variation noted in the rightmost column.
+    Click a region row to highlight it in the schematic.
+  </div>
+  <div class="anatomy-grid">
+    <div>
+      <img src="__SCHEMATIC_SRC__" alt="Wolf head schematic — A, B, C, D regions" />
+    </div>
+    <div>
+      <table class="region-table" id="region-ref-table">
+        <thead>
+          <tr>
+            <th>Region</th><th>Group</th><th>Region name</th>
+            <th>Anatomical description</th><th>Variation encoded</th>
+          </tr>
+        </thead>
+        <tbody><!-- populated by JS --></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============= Per-region status distribution chart ============= -->
+<div class="section" id="distribution-section">
+  <h2><span class="swatch"></span>Per-region identification breakdown</h2>
+  <div class="section-sub">
+    Each column represents one region. Each bar holds 100% of the analysed wolves
+    (n = <span id="dist-n">0</span>), partitioned into identification-power buckets:
+    <strong>Unique</strong> = wolves whose code in this region appears in no other wolf;
+    <strong>Shared 2-3 → 36+</strong> = a heat-map of how widely a code is reused
+    (lighter = uncommon, darker brown = dominates the population);
+    <strong>Asymmetric</strong> / <strong>Partial</strong> / <strong>P</strong> /
+    <strong>N</strong> = non-resolvable categories.
+    Hover any segment for exact counts. Use Plotly's camera icon to download as PNG.
+  </div>
+  <div id="region-distribution-chart"></div>
+</div>
 
 <div class="footer">
   <strong>About this page:</strong>
@@ -640,9 +927,27 @@ function buildColumns() {
       col.width = 110;
     }
     if (grp) {
+      // Region columns get a status-coloured left bar via cellFormatter.
       col.cssClass = `cell-${grp}`;
       col.headerCssClass = `col-${grp}`;
-      col.width = 84;
+      col.width = 92;
+      col.formatter = function(cell) {
+        const data = cell.getRow().getData();
+        const cellEl = cell.getElement();
+        const status = (data._status && data._status[name]) || "empty";
+        // Reset and apply status class
+        cellEl.classList.remove(
+          "region-cell",
+          "status-unambiguous", "status-asymmetric", "status-partial_ambiguous",
+          "status-P", "status-N", "status-empty", "status-unknown"
+        );
+        if (window._showStatusBars !== false) {
+          cellEl.classList.add("region-cell", "status-" + status);
+        }
+        cellEl.title = `${PAYLOAD.anatomy.region_names[name] || name}\nStatus: ${PAYLOAD.anatomy.status_labels[status] || status}`;
+        const v = cell.getValue();
+        return v == null || v === "" ? "" : String(v);
+      };
     } else if (name === "notes") {
       col.formatter = "textarea";
       col.width = 240;
@@ -667,10 +972,20 @@ function applyFilters() {
   if (!table) return;
   const showEmpty = isAdmin || $("show-empty-code").checked;
   const q = ($("search-input").value || "").trim().toLowerCase();
+  const activeStatuses = window._activeStatuses || new Set();
   table.setFilter(row => {
     if (!showEmpty) {
       const code = row["code"];
       if (code === undefined || code === null || code === "") return false;
+    }
+    if (activeStatuses.size > 0) {
+      // Row passes if ANY of its 9 region statuses is in the active set.
+      const st = row._status || {};
+      let any = false;
+      for (const r of PAYLOAD.anatomy.regions) {
+        if (activeStatuses.has(st[r])) { any = true; break; }
+      }
+      if (!any) return false;
     }
     if (q) {
       for (const c of PAYLOAD.columns) {
@@ -730,6 +1045,9 @@ function onChange() {
         `${diffs} unsaved change${diffs === 1 ? "" : "s"}`;
   // Re-validate issues against current data
   if (typeof renderIssuePanel === "function" && isAdmin) renderIssuePanel();
+  // Refresh status-chip counts (depends on _status — only changes if user edits a region cell;
+  // we don't recompute statuses live, but at least the chips reflect filter effects).
+  if (typeof refreshStatusChipCounts === "function") refreshStatusChipCounts();
 }
 
 function countDiffs(currentData) {
@@ -791,6 +1109,178 @@ async function saveAsXlsx() {
   URL.revokeObjectURL(url);
 
   alert("File downloaded as wolves_data.xlsx.\n\nNext steps:\n1. Move the file into the project folder (replacing the current one).\n2. Run update.bat to refresh the analyses.\n3. The dashboard and this table will both rebuild.");
+}
+
+// ============================================================================
+// Region reference table + status filter chips + per-region distribution chart
+// ============================================================================
+
+window._activeStatuses = new Set();
+window._showStatusBars = true;
+
+function populateRegionRefTable() {
+  const tbody = document.querySelector("#region-ref-table tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  const A = PAYLOAD.anatomy;
+  for (const r of A.regions) {
+    const grp = A.region_group[r];
+    const tr = document.createElement("tr");
+    tr.dataset.region = r;
+    tr.innerHTML = `
+      <td><span class="region-key"><span class="pill" style="background:${A.group_colors[grp]};"></span>${r}</span></td>
+      <td class="group-cell" style="color:${A.group_colors[grp]};">${A.group_names[grp]}</td>
+      <td>${escapeHtml(A.region_names[r] || "")}</td>
+      <td style="color:#555;">${escapeHtml(A.region_descriptions[r] || "")}</td>
+      <td style="color:#444;font-style:italic;">${escapeHtml(A.region_variation[r] || "")}</td>
+    `;
+    tr.addEventListener("click", () => {
+      // Scroll the table to the column for this region
+      try { table.scrollToColumn(r, "middle", true); } catch (e) {}
+      // Also flash a header highlight
+      document.querySelectorAll(".region-table tr").forEach(x => x.style.background = "");
+      tr.style.background = "#fff8e1";
+      setTimeout(() => { tr.style.background = ""; }, 1200);
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+function refreshStatusChipCounts() {
+  // Count rows where AT LEAST ONE of the 9 regions has the given status.
+  const counts = {
+    unambiguous: 0, asymmetric: 0, partial_ambiguous: 0,
+    P: 0, N: 0, empty: 0,
+  };
+  if (!table) return counts;
+  const data = table.getData();
+  for (const row of data) {
+    const st = row._status || {};
+    const seen = new Set();
+    for (const r of PAYLOAD.anatomy.regions) {
+      const s = st[r];
+      if (s && !seen.has(s)) seen.add(s);
+    }
+    for (const s of seen) {
+      if (counts[s] !== undefined) counts[s]++;
+    }
+  }
+  for (const k of Object.keys(counts)) {
+    const el = document.getElementById("cnt-" + k);
+    if (el) el.textContent = counts[k];
+  }
+  return counts;
+}
+
+function setupStatusChips() {
+  const chips = document.querySelectorAll(".status-chip");
+  chips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      const s = chip.dataset.status;
+      if (window._activeStatuses.has(s)) {
+        window._activeStatuses.delete(s);
+        chip.classList.remove("active");
+        chip.style.background = "";
+        chip.style.borderColor = "transparent";
+      } else {
+        window._activeStatuses.add(s);
+        chip.classList.add("active");
+        chip.style.background = chip.style.getPropertyValue("--c");
+        chip.style.borderColor = chip.style.getPropertyValue("--c");
+      }
+      applyFilters();
+    });
+  });
+  $("status-clear").addEventListener("click", () => {
+    window._activeStatuses.clear();
+    chips.forEach(c => {
+      c.classList.remove("active");
+      c.style.background = "";
+      c.style.borderColor = "transparent";
+    });
+    applyFilters();
+  });
+}
+
+function setupStatusBarsToggle() {
+  const cb = $("show-status-bars");
+  if (!cb) return;
+  cb.addEventListener("change", () => {
+    window._showStatusBars = cb.checked;
+    table.redraw(true);
+  });
+}
+
+function renderRegionDistributionChart() {
+  if (!window.Plotly) return;
+  const A = PAYLOAD.anatomy;
+  const regions = A.regions;
+  const buckets = A.id_bucket_order;
+  const colors = A.id_bucket_colors;
+  const dist = A.bucket_dist;
+
+  // Total per region (should all equal n_pool)
+  const totals = {};
+  for (const r of regions) {
+    totals[r] = 0;
+    for (const b of buckets) totals[r] += dist[r][b] || 0;
+  }
+  const nPool = totals[regions[0]] || PAYLOAD.n_pool || 0;
+  const dn = document.getElementById("dist-n");
+  if (dn) dn.textContent = nPool;
+
+  // One trace per bucket; values = % per region
+  const traces = buckets.map(b => ({
+    name: b,
+    type: "bar",
+    x: regions,
+    y: regions.map(r => totals[r] ? (100 * (dist[r][b] || 0) / totals[r]) : 0),
+    customdata: regions.map(r => dist[r][b] || 0),
+    marker: { color: colors[b], line: { width: 0.5, color: "rgba(0,0,0,0.15)" } },
+    hovertemplate:
+      "<b>%{x}</b><br>" +
+      b + ": %{y:.1f}%<br>" +
+      "wolves: %{customdata}<extra></extra>",
+  }));
+
+  // Region annotation: anatomical group colour bar above each x label
+  const shapes = regions.map((r, i) => {
+    const grp = A.region_group[r];
+    return {
+      type: "rect",
+      xref: "x", yref: "paper",
+      x0: i - 0.4, x1: i + 0.4, y0: 1.005, y1: 1.025,
+      line: { width: 0 }, fillcolor: A.group_colors[grp],
+    };
+  });
+
+  Plotly.newPlot("region-distribution-chart", traces, {
+    barmode: "stack",
+    bargap: 0.18,
+    margin: { l: 56, r: 16, t: 36, b: 60 },
+    yaxis: {
+      title: "% of analysed wolves",
+      range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
+    },
+    xaxis: {
+      title: "Region (grouped by anatomical zone — see colour bar above)",
+      tickfont: { size: 12, color: "#222" },
+    },
+    legend: {
+      orientation: "h", x: 0.5, xanchor: "center", y: -0.18,
+      font: { size: 11 }, traceorder: "normal",
+    },
+    shapes: shapes,
+    plot_bgcolor: "#fff", paper_bgcolor: "#fff",
+  }, {
+    displaylogo: false,
+    toImageButtonOptions: {
+      format: "png", filename: "wolf_region_distribution",
+      height: 720, width: 1280, scale: 2,
+    },
+    modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"],
+    responsive: true,
+  });
 }
 
 // ============================================================================
@@ -1383,6 +1873,24 @@ function init() {
   if ($("ip-next")) $("ip-next").addEventListener("click", () => nextIssue(1));
   // Initial counter (works pre-admin so the button shows the right number once revealed)
   if ($("review-count")) $("review-count").textContent = totalUnresolved();
+
+  // ---- Anatomy reference + status filter chips + distribution chart ----
+  populateRegionRefTable();
+  setupStatusChips();
+  setupStatusBarsToggle();
+  // Initial chip counts (run after the table is built so getData() works)
+  table.on("tableBuilt", () => { refreshStatusChipCounts(); });
+  // Render chart (Plotly is async-loaded via CDN; check)
+  if (window.Plotly) {
+    renderRegionDistributionChart();
+  } else {
+    const wait = setInterval(() => {
+      if (window.Plotly) {
+        clearInterval(wait);
+        renderRegionDistributionChart();
+      }
+    }, 80);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);

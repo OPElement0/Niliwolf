@@ -144,12 +144,24 @@ The previous `D10` column has been removed (replaced by `notes`).
 **See `data_dictionary.md` for the full per-column reference.**
 
 ### Anatomical groups (visual aid only — regions are analytically independent)
-| Group | Colour | Regions | Anatomy |
-|-------|--------|---------|---------|
-| **A** | `#E91E63` pink | A1, A2 | Muzzle stripe (A1=lower, A2=upper) |
-| **B** | `#42A5F5` blue | B3, B4, B5 | Around the eye |
-| **C** | `#FF7043` orange | C6, C7 | C6=nose tip, C7=chin |
-| **D** | `#9C27B0` purple | D8, D9 | Side of head (D8=upper, D9=lower) |
+
+The 9 regions are organised into 4 anatomical groups (corrected per the user's
+schematic + region-name table on 2026-05-03):
+
+| Region | Group | Region name | Anatomical description | Primary variation encoded |
+|---|---|---|---|---|
+| **A1** | **A — Cheek** `#E91E63` | Infraorbital patch | Light/dark patch below the eye on the cheek | Shape, size, contrast |
+| **A2** | A — Cheek | Malar (eye–ear) stripe | Stripe extending from eye toward ear | Presence, thickness, continuity |
+| **B3** | **B — Periocular** `#42A5F5` | Below eye | Lower periocular region | Contrast, extent |
+| **B4** | B — Periocular | Upper outer | Outer upper eye region | Shape, shading |
+| **B5** | B — Periocular | Upper inner | Inner upper eye region near nasal bridge | Shape, contrast |
+| **C6** | **C — Nasal** `#FF7043` | Central stripe | Stripe along bridge of nose | Width, continuity |
+| **C7** | C — Nasal | Side region | Lateral nasal areas | Color contrast, extent |
+| **D8** | **D — Nape** `#9C27B0` | Upper nape | Upper neck behind head | Color tone, patterning |
+| **D9** | D — Nape | Side nape | Lateral neck region | Pattern, contrast |
+
+Anatomical schematic asset: `assets/wolf_schematic.png` (side-profile illustration with
+the 9 polygons hand-drawn in their group colours by the user, supplied 2026-05-03).
 
 ---
 
@@ -212,25 +224,43 @@ Each cell in a region column is classified into one of these statuses:
 
 ---
 
-## 4. Color / Pattern Decomposition (4 regions only)
+## 4. Code structure per region (per user's 2026-05-03 explanation)
 
-For these regions, the cleaned code is split into a **color** part and a **pattern** part:
+The codes are NOT a single uniform alphabet — each region has its own micro-grammar
+that reflects the anatomical variation it captures.
 
-| Region | Color letters | Rule |
-|--------|---------------|------|
-| **A1** | `e f g h i j k l m` | trailing letter from this set is color; rest is pattern |
-| **A2** | `e f g h i j k l m` | same as A1 |
-| **C6** | `e f g h i j k l` | trailing letter |
-| **D8** | `0–9` | digit immediately after `a` is the color; pattern follows `b` |
+| Region | Structure | Examples | What each piece encodes |
+|---|---|---|---|
+| **A1, A2** | `<pattern-letter><digit>[mod-letters][color-letter]` | `a5tye`, `b1l`, `c1zf`, `a1txi` | leading `a/b/c/d` = pattern type; digit = pattern refinement; up to 2 mid letters (e.g. `t`, `y`, `v`, `z`, `x`) = additional refinements; **trailing letter from `{e,f,g,h,i,j,k,l,m}` = color** |
+| **B3, B4, B5** | `<pattern-letter><digit>[a/b]` | `c2b`, `b2b`, `a1b`, `c1`, `a2`, `b` | letter+digit = pattern; **trailing `a` = low contrast, trailing `b` = high contrast** (this is a contrast suffix, NOT a colour) |
+| **C6** | same shape as A1/A2 | `c1f`, `a3i`, `c1g` | pattern type + refinement + **color** trailing letter from `{e,f,g,h,i,j,k,l}` (no `m`) |
+| **C7** | pattern only — no color, no contrast suffix | `c`, `a1`, `b2` | "complementary" pattern; the lateral nasal area's variation isn't colour-encoded |
+| **D8** | `a<color-digit>[b<pattern-digit>]` | `a4b5`, `a2b5`, `a3b` | **first digit (after `a`) = colour tone**; **second digit (after `b`) = pattern**; the `b` segment is optional when no patterning is visible |
+| **D9** | `a<contrast-digit>` | `a2`, `a4`, `a5` | only **contrast level** is encoded (e.g. `a2` = contrast level 2) — there is no shape/pattern variable here, which is why D9 has only 4 distinct codes |
 
-D8 regex: `^a([0-9]*)(b([0-9a-z]*))?$`. After cleaning N/P, both color and pattern can be empty:
-- `a4` → color=`4`, pattern=`(no pattern)` (no `b` marker)
-- `a4b5` → color=`4`, pattern=`5`
-- `ab4` → color=`missing`, pattern=`4`
-- `a5b` → color=`5`, pattern=`missing`
-- `a3b` → color=`3`, pattern=`missing`
+Implementation reference (`wolf_lib.py:split_color_pattern` etc.):
+- A1/A2: trailing letter from `{e..m}` is colour, rest is pattern.
+- C6: trailing letter from `{e..l}` is colour, rest is pattern.
+- D8 regex `^a([0-9]*)(b([0-9a-z]*))?$` — first digits = colour, after `b` = pattern.
+- B regions and C7 currently have NO formal colour/pattern split in `wolf_lib`; the
+  `a/b` contrast suffix on B is implicit in the cleaned-code substring rule. *(If we
+  later want explicit contrast aggregation for B, that becomes a small `wolf_lib`
+  extension — not blocking visualisations.)*
+
+After cleaning N/P, both colour and pattern parts of D8 can be empty:
+- `a4` → colour `4`, pattern `(no pattern)` (no `b` marker)
+- `a4b5` → colour `4`, pattern `5`
+- `ab4` → colour `missing`, pattern `4`
+- `a5b` → colour `5`, pattern `missing`
+- `a3b` → colour `3`, pattern `missing`
 
 The label `"missing"` indicates the part was N or P in the raw data and was stripped during cleaning.
+
+**For visualisations**: when displaying codes in the dashboard, we can decompose them
+into the labelled axes above (e.g. tooltip on a B3 cell `c2b` reads "pattern c2 — high
+contrast"). The user has a formal internal document that maps individual letter
+identities to specific morphologies; for the current visualisation scope we treat
+codes as opaque IDs and rely on aggregate stats + photo examples.
 
 ---
 

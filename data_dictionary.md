@@ -56,7 +56,41 @@ single primary in `main poligon`.
 | Column | Type | Meaning |
 |---|---|---|
 | `code` | text | Composite of all 9 region codes joined with `_`. Empty → drop wolf from analysis. |
-| `A1`, `A2`, `B3`, `B4`, `B5`, `C6`, `C7`, `D8`, `D9` | text | Per-region pelt pattern code. See `CLAUDE.md` Sections 3–4 for classification rules (`unambiguous`, `asymmetric`, `partial_ambiguous`, `N`, `P`, `empty`). |
+
+### Region columns — proper anatomical names
+
+Per the user's schematic + table (2026-05-03):
+
+| Column | Group | Region name | Anatomical description | Code structure | Primary variation encoded |
+|---|---|---|---|---|---|
+| **A1** | A — Cheek | Infraorbital patch | Light/dark patch below the eye on the cheek | `<pat-letter><digit>[mods][color]` | Shape, size, contrast |
+| **A2** | A — Cheek | Malar (eye–ear) stripe | Stripe extending from eye toward ear | same as A1 | Presence, thickness, continuity |
+| **B3** | B — Periocular | Below eye | Lower periocular region | `<pat-letter><digit>[a\|b]` | Contrast, extent |
+| **B4** | B — Periocular | Upper outer | Outer upper eye region | same as B3 | Shape, shading |
+| **B5** | B — Periocular | Upper inner | Inner upper eye region near nasal bridge | same as B3 | Shape, contrast |
+| **C6** | C — Nasal | Central stripe | Stripe along bridge of nose | same as A1 (color set without `m`) | Width, continuity |
+| **C7** | C — Nasal | Side region | Lateral nasal areas | pattern only — no color | Color contrast, extent |
+| **D8** | D — Nape | Upper nape | Upper neck behind head | `a<color-digit>[b<pattern-digit>]` | Color tone, patterning |
+| **D9** | D — Nape | Side nape | Lateral neck region | `a<contrast-digit>` | Pattern, contrast |
+
+For the per-region code structure, see `CLAUDE.md` Section 4.
+For classification rules (`unambiguous`, `asymmetric`, `partial_ambiguous`, `N`, `P`, `empty`),
+see `CLAUDE.md` Section 3.
+
+### Code-character semantics (summary)
+
+- **A1, A2**: leading letter `{a,b,c,d}` = pattern type; digit = pattern refinement;
+  optional 1–2 middle letters = further refinements; trailing letter from `{e..m}` = color.
+- **B3, B4, B5**: pattern letter + digit; trailing `a` = low contrast, trailing `b` = high
+  contrast. (Not a color suffix — a contrast suffix.)
+- **C6**: same shape as A1/A2; trailing color letter from `{e..l}` (no `m`).
+- **C7**: pattern only (no color, no contrast suffix).
+- **D8**: first letter+digit (`aN`) = color; optional second letter+digit (`bN`) = pattern.
+- **D9**: contrast level only (`a2` = level 2 contrast); no shape variable.
+
+The user has a formal internal document that maps each individual letter to specific
+morphological features; this dictionary records the structural grammar above as the
+basis for visualisations and aggregate analysis.
 
 ## G. Free-text
 

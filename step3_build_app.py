@@ -36,10 +36,10 @@ from wolf_lib import (
 # ---------------------------------------------------------------------------
 
 GROUP_COLORS = {
-    "A": "#E91E63",  # pink — muzzle stripe
-    "B": "#42A5F5",  # blue — eye area
-    "C": "#FF7043",  # orange — nose / chin
-    "D": "#9C27B0",  # purple — head side
+    "A": "#E91E63",  # pink — Cheek
+    "B": "#42A5F5",  # blue — Periocular (around eye)
+    "C": "#FF7043",  # orange — Nasal
+    "D": "#9C27B0",  # purple — Nape
 }
 
 REGION_GROUP = {
@@ -50,10 +50,48 @@ REGION_GROUP = {
 }
 
 GROUP_NAMES = {
-    "A": "Muzzle (A1, A2)",
-    "B": "Eye (B3, B4, B5)",
-    "C": "Nose & Chin (C6, C7)",
-    "D": "Head Side (D8, D9)",
+    "A": "Cheek (A1, A2)",
+    "B": "Periocular (B3, B4, B5)",
+    "C": "Nasal (C6, C7)",
+    "D": "Nape (D8, D9)",
+}
+
+# Proper anatomical region names + descriptions (per user's schematic, 2026-05-03).
+# Surfaced as tooltips and tab subtitles throughout the dashboard.
+REGION_NAMES = {
+    "A1": "Infraorbital patch",
+    "A2": "Malar (eye–ear) stripe",
+    "B3": "Below eye",
+    "B4": "Upper outer eye",
+    "B5": "Upper inner eye (near nasal bridge)",
+    "C6": "Central nasal stripe",
+    "C7": "Lateral nasal (side region)",
+    "D8": "Upper nape",
+    "D9": "Side nape",
+}
+
+REGION_DESCRIPTIONS = {
+    "A1": "Light/dark patch below the eye on the cheek",
+    "A2": "Stripe extending from eye toward ear",
+    "B3": "Lower periocular region",
+    "B4": "Outer upper eye region",
+    "B5": "Inner upper eye region near nasal bridge",
+    "C6": "Stripe along bridge of nose",
+    "C7": "Lateral nasal areas",
+    "D8": "Upper neck behind head",
+    "D9": "Lateral neck region",
+}
+
+REGION_VARIATION = {
+    "A1": "Shape, size, contrast",
+    "A2": "Presence, thickness, continuity",
+    "B3": "Contrast, extent",
+    "B4": "Shape, shading",
+    "B5": "Shape, contrast",
+    "C6": "Width, continuity",
+    "C7": "Color contrast, extent",
+    "D8": "Color tone, patterning",
+    "D9": "Pattern, contrast",
 }
 
 # 9 distinct (line dash, marker symbol) combos so each region is visually
