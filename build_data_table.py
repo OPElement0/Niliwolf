@@ -412,6 +412,18 @@ def main() -> None:
     for region in REGIONS:
         bucket_dist[region] = {k: int(v) for k, v in identification_buckets(processed, region).items()}
 
+    # ----- Per-region (code, count) lists — used to drill down on click -----
+    codes_per_region: dict[str, list[dict]] = {}
+    for region in REGIONS:
+        status_col = f"{region}_status"
+        cleaned_col = f"{region}_cleaned"
+        unambig = processed[processed[status_col] == "unambiguous"]
+        code_counts = unambig[cleaned_col].value_counts()
+        codes_per_region[region] = [
+            {"code": str(code), "count": int(count)}
+            for code, count in code_counts.items()
+        ]
+
     # ----- Build per-row records -----
     rows: list[dict] = []
     for idx, row in df.iterrows():
@@ -455,6 +467,7 @@ def main() -> None:
         "id_bucket_order": ID_BUCKET_ORDER,
         "id_bucket_colors": ID_BUCKET_COLORS,
         "bucket_dist": bucket_dist,
+        "codes_per_region": codes_per_region,
     }
 
     payload = {
@@ -639,6 +652,60 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   /* Plotly chart container */
   #region-distribution-chart { width: 100%; height: 480px; min-height: 380px; }
+
+  /* Codes drill-down modal */
+  #codes-modal .modal { min-width: min(520px, 90vw); max-width: 90vw; max-height: 80vh; overflow-y: auto; }
+  .codes-group { margin: 14px 0; padding: 10px 12px; border: 1px solid #e0e0e0;
+                  border-radius: 8px; background: #fafbfc; }
+  .codes-group .header { font-weight: 700; font-size: 13px; margin-bottom: 8px;
+                          color: #333; display: flex; justify-content: space-between; }
+  .codes-group .codes-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .codes-group .codes-list code { background: #fff; padding: 4px 10px; border-radius: 5px;
+                                    border: 1px solid #ddd; font-family: 'SF Mono', Consolas, monospace;
+                                    font-size: 12.5px; }
+
+  /* ----- Mobile-responsive layout ----- */
+  @media (max-width: 768px) {
+    body { padding: 8px; }
+    header { padding: 10px 12px; }
+    h1 { font-size: 15px; }
+    h1 .mode-badge { font-size: 10px; padding: 1px 6px; }
+    .stats { gap: 5px; font-size: 11px; }
+    .stat { padding: 2px 7px; }
+    .legend { font-size: 10px; gap: 4px; }
+    .legend strong { font-size: 10px; }
+    .legend span { padding: 1px 6px; font-size: 10px; }
+    .controls { gap: 5px; margin-top: 8px; }
+    .controls input[type="text"] { min-width: 100%; flex: 1; padding: 5px 8px; font-size: 12px; }
+    .controls button, .controls label { font-size: 11px; padding: 4px 8px; }
+    .status-filter-bar {
+      padding: 6px 10px; gap: 5px;
+      flex-direction: column; align-items: flex-start;
+    }
+    .status-filter-bar .label { font-size: 11px; margin-right: 0; }
+    .status-chip { font-size: 11px; padding: 3px 8px; }
+    .status-chip .count { font-size: 9.5px; padding: 0 5px; }
+    .status-filter-bar > button { align-self: stretch; }
+    .anatomy-grid { grid-template-columns: 1fr; gap: 12px; }
+    .anatomy-grid img { max-width: 100%; }
+    .region-table th, .region-table td { padding: 4px 6px; font-size: 11.5px; }
+    .region-table th:nth-child(4), .region-table td:nth-child(4) { display: none; } /* hide description col */
+    #region-distribution-chart { height: 420px; min-height: 320px; }
+    .section { padding: 12px 14px; }
+    .section h2 { font-size: 15px; }
+    .section .section-sub { font-size: 11.5px; }
+    /* Issue panel covers full width on mobile when shown */
+    body.with-issue-panel { padding-right: 8px; }
+    .issue-panel { width: 100%; box-shadow: none; border-top: 2px solid #f57c00; }
+    .footer { font-size: 10.5px; padding: 6px 10px; }
+    .tabulator { font-size: 11.5px; }
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: 13px; }
+    .legend { display: none; }   /* save space — colours visible in chart anyway */
+    .topline > div:last-child { width: 100%; }
+    #admin-login-btn { width: 100%; padding: 6px !important; }
+  }
 
   /* Issue review panel (admin-only) */
   body.with-issue-panel { padding-right: 380px; transition: padding-right 0.2s; }
@@ -879,6 +946,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="modal-buttons">
       <button id="pwd-cancel">Cancel</button>
       <button id="pwd-submit" class="btn-primary">Login</button>
+    </div>
+  </div>
+</div>
+
+<div id="codes-modal" class="modal-bg">
+  <div class="modal">
+    <h2 id="codes-modal-title">Codes</h2>
+    <div id="codes-modal-body" style="font-size:13px; color:#555;"></div>
+    <div class="modal-buttons">
+      <button id="codes-modal-close" class="btn-primary">Close</button>
     </div>
   </div>
 </div>
@@ -1211,6 +1288,22 @@ function setupStatusBarsToggle() {
   });
 }
 
+// Bucket → count range, used both for click-to-drill-down and labelling
+const BUCKET_COUNT_RANGES = {
+  "Unique (1)":   [1, 1],
+  "Shared 2-3":   [2, 3],
+  "Shared 4-6":   [4, 6],
+  "Shared 7-10":  [7, 10],
+  "Shared 11-20": [11, 20],
+  "Shared 21-35": [21, 35],
+  "Shared 36+":   [36, 9999],
+};
+// Buckets that represent codes shared by multiple wolves (so a drill-down makes sense)
+const DRILLDOWN_BUCKETS = new Set([
+  "Shared 2-3", "Shared 4-6", "Shared 7-10",
+  "Shared 11-20", "Shared 21-35", "Shared 36+",
+]);
+
 function renderRegionDistributionChart() {
   if (!window.Plotly) return;
   const A = PAYLOAD.anatomy;
@@ -1229,19 +1322,41 @@ function renderRegionDistributionChart() {
   const dn = document.getElementById("dist-n");
   if (dn) dn.textContent = nPool;
 
-  // One trace per bucket; values = % per region
-  const traces = buckets.map(b => ({
-    name: b,
-    type: "bar",
-    x: regions,
-    y: regions.map(r => totals[r] ? (100 * (dist[r][b] || 0) / totals[r]) : 0),
-    customdata: regions.map(r => dist[r][b] || 0),
-    marker: { color: colors[b], line: { width: 0.5, color: "rgba(0,0,0,0.15)" } },
-    hovertemplate:
-      "<b>%{x}</b><br>" +
-      b + ": %{y:.1f}%<br>" +
-      "wolves: %{customdata}<extra></extra>",
-  }));
+  // Helper: pick black or white text based on background luminance
+  function textColorFor(bg) {
+    const m = /^#([0-9a-f]{6})/i.exec(bg);
+    if (!m) return "#000";
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+    const lum = 0.299*r + 0.587*g + 0.114*b;
+    return lum > 165 ? "#222" : "#fff";
+  }
+
+  // One trace per bucket — labels appear only when segment >= 10%
+  const traces = buckets.map(b => {
+    const ys = regions.map(r => totals[r] ? (100 * (dist[r][b] || 0) / totals[r]) : 0);
+    const counts = regions.map(r => dist[r][b] || 0);
+    return {
+      name: b,
+      type: "bar",
+      x: regions,
+      y: ys,
+      customdata: counts,
+      // Show "12%" inside any segment >= 10%
+      text: ys.map(y => y >= 10 ? `${y.toFixed(0)}%` : ""),
+      textposition: "inside",
+      insidetextanchor: "middle",
+      textfont: { color: textColorFor(colors[b]), size: 11, family: "sans-serif" },
+      cliponaxis: false,
+      marker: { color: colors[b], line: { width: 0.5, color: "rgba(0,0,0,0.15)" } },
+      hovertemplate:
+        "<b>%{x}</b><br>" +
+        b + ": %{y:.1f}%<br>" +
+        "wolves: %{customdata}" +
+        (DRILLDOWN_BUCKETS.has(b) ? "<br><i>click to see codes</i>" : "") +
+        "<extra></extra>",
+    };
+  });
 
   // Region annotation: anatomical group colour bar above each x label
   const shapes = regions.map((r, i) => {
@@ -1249,25 +1364,35 @@ function renderRegionDistributionChart() {
     return {
       type: "rect",
       xref: "x", yref: "paper",
-      x0: i - 0.4, x1: i + 0.4, y0: 1.005, y1: 1.025,
+      x0: i - 0.4, x1: i + 0.4, y0: 1.005, y1: 1.028,
       line: { width: 0 }, fillcolor: A.group_colors[grp],
     };
+  });
+
+  // Coloured x-axis tick labels using inline HTML (Plotly supports <span>)
+  const ticktext = regions.map(r => {
+    const grp = A.region_group[r];
+    const c = A.group_colors[grp];
+    return `<span style="color:${c}; font-weight:700;">${r}</span>`;
   });
 
   Plotly.newPlot("region-distribution-chart", traces, {
     barmode: "stack",
     bargap: 0.18,
-    margin: { l: 56, r: 16, t: 36, b: 60 },
+    margin: { l: 56, r: 16, t: 36, b: 56 },
     yaxis: {
-      title: "% of analysed wolves",
+      title: { text: "% of analysed wolves", font: { size: 12 } },
       range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
     },
     xaxis: {
-      title: "Region (grouped by anatomical zone — see colour bar above)",
-      tickfont: { size: 12, color: "#222" },
+      title: { text: "Region (anatomical group colour shown both above and on the label)", font: { size: 11, color: "#666" } },
+      tickmode: "array",
+      tickvals: regions,
+      ticktext: ticktext,
+      tickfont: { size: 13 },
     },
     legend: {
-      orientation: "h", x: 0.5, xanchor: "center", y: -0.18,
+      orientation: "h", x: 0.5, xanchor: "center", y: -0.22,
       font: { size: 11 }, traceorder: "normal",
     },
     shapes: shapes,
@@ -1281,6 +1406,55 @@ function renderRegionDistributionChart() {
     modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"],
     responsive: true,
   });
+
+  // Click-to-drill-down on Shared buckets
+  const chartEl = document.getElementById("region-distribution-chart");
+  chartEl.on("plotly_click", function(event) {
+    if (!event || !event.points || !event.points.length) return;
+    const p = event.points[0];
+    const region = p.x;
+    const bucket = p.data.name;
+    if (!DRILLDOWN_BUCKETS.has(bucket)) return;
+    showCodesForBucket(region, bucket);
+  });
+}
+
+function showCodesForBucket(region, bucket) {
+  const A = PAYLOAD.anatomy;
+  const range = BUCKET_COUNT_RANGES[bucket];
+  if (!range) return;
+  const codes = A.codes_per_region[region] || [];
+  const matching = codes.filter(c => c.count >= range[0] && c.count <= range[1]);
+  // Group by count
+  const byCount = {};
+  for (const c of matching) {
+    (byCount[c.count] = byCount[c.count] || []).push(c.code);
+  }
+  const counts = Object.keys(byCount).map(Number).sort((a, b) => b - a);
+  const grpColor = A.group_colors[A.region_group[region]];
+  $("codes-modal-title").innerHTML =
+    `<span style="color:${grpColor};">${escapeHtml(region)}</span> ` +
+    `<span style="color:#888; font-weight:400;">— ${escapeHtml(A.region_names[region] || "")}</span><br>` +
+    `<span style="font-size:13px; font-weight:500; color:#666;">Bucket: ${escapeHtml(bucket)} (count range ${range[0]}–${range[1] === 9999 ? "∞" : range[1]})</span>`;
+  let html = "";
+  if (counts.length === 0) {
+    html = `<p style="padding: 8px 0;">No codes in this bucket fall within the count range.</p>`;
+  } else {
+    for (const cnt of counts) {
+      const codeList = byCount[cnt];
+      html += `<div class="codes-group">
+        <div class="header">
+          <span>Count = ${cnt} <span style="color:#888;font-weight:400;">(shared by ${cnt} wolf${cnt === 1 ? "" : "ves"})</span></span>
+          <span style="color:#888;font-weight:400;font-size:11.5px;">${codeList.length} distinct code${codeList.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="codes-list">
+          ${codeList.map(c => `<code>${escapeHtml(c)}</code>`).join("")}
+        </div>
+      </div>`;
+    }
+  }
+  $("codes-modal-body").innerHTML = html;
+  $("codes-modal").classList.add("show");
 }
 
 // ============================================================================
@@ -1878,6 +2052,13 @@ function init() {
   populateRegionRefTable();
   setupStatusChips();
   setupStatusBarsToggle();
+  // Codes modal close
+  if ($("codes-modal-close")) {
+    $("codes-modal-close").addEventListener("click", () => $("codes-modal").classList.remove("show"));
+    $("codes-modal").addEventListener("click", (e) => {
+      if (e.target === $("codes-modal")) $("codes-modal").classList.remove("show");
+    });
+  }
   // Initial chip counts (run after the table is built so getData() works)
   table.on("tableBuilt", () => { refreshStatusChipCounts(); });
   // Render chart (Plotly is async-loaded via CDN; check)
