@@ -32,11 +32,11 @@ def print_section(title: str, char: str = "=") -> None:
 
 
 def main() -> None:
-    df = load_data(only_with_pictures=True)
+    df = load_data()  # canonical: every wolf with non-empty code
     proc = process_all_regions(df)
 
     print_section("REVIEW — REFINED RULES APPLIED", "=")
-    print(f"Wolves with #pictures > 0: {len(df)}")
+    print(f"Wolves in analysis pool (code != null): {len(df)}")
 
     # Audit each region in detail
     for r in REGIONS:

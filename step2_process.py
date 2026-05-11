@@ -31,8 +31,8 @@ from wolf_lib import (
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    df = load_data(only_with_pictures=True)
-    print(f"Loaded {len(df)} wolves with #pictures > 0")
+    df = load_data()  # canonical: every wolf with non-empty code
+    print(f"Loaded {len(df)} wolves with non-empty code (canonical analysis pool)")
 
     proc = process_all_regions(df)
 

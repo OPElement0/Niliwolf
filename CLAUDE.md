@@ -11,7 +11,11 @@ Status as of this session:
 
 - Source file moved into the project: `wolves_data.xlsx` (78.9 KB).
 - Backup of the previous file: `wolves_data.OLD.xlsx`.
-- New analysis pool: **99 wolves** (was 98). Sheet (2) has 104 rows × 28 cols.
+- Canonical analysis pool: **100 wolves** (every row with `code != null`).
+  Sheet (2) has 104 rows × 28 cols; 4 rows have empty `code` and are dropped.
+  *(Previously listed as 99 with `#pictures > 0` — that filter was rescinded
+  on 2026-05-11 per user statement: "any wolf with a code is an identified
+  wolf; the picture count is informational only".)*
 - A new Excel sheet `נתוני זיהוי זאבים` (without the `(2)`) appeared in the file
   with 106 rows × 21 cols — it lacks `code` / `#pictures` and is **not used by
   the pipeline**. Treat sheet `נתוני זיהוי זאבים (2)` as canonical.
@@ -21,12 +25,15 @@ Status as of this session:
   `time on camera`. Old `D10` column was dropped (replaced by `notes`).
 - Column meanings are documented in **`data_dictionary.md`** — read that
   alongside this file.
-- New filter rule in `wolf_lib.load_data()`: rows with empty `code` are dropped
-  (4 such rows in (2): `M11H, F25, Y38`, plus a trailing blank). Rule is
-  ALWAYS applied; `#pictures > 0` is still optional via `only_with_pictures`.
-- One outstanding data quality issue: `O80` has a code but `#pictures = 0` —
-  the user said this is a typo she will fix. Currently excluded by
-  `#pictures > 0`.
+- `wolf_lib.load_data()` filter: rows with empty `code` are dropped
+  (4 such rows: `M11H`, `F25`, `Y38`, trailing blank). The `#pictures > 0`
+  filter is **disabled by default** (since 2026-05-11) — passing
+  `only_with_pictures=True` is preserved for optional photographed-only
+  studies but is NOT the canonical pool.
+- Known data-quality item: `O80` has a code but `#pictures = 0` — this is a
+  typo in the picture count the user will fix. **O80 is included in the
+  analysis pool**; only the picture-count value is wrong, not the wolf's
+  existence/identification.
 
 ### New artifact: interactive data table
 
@@ -117,8 +124,9 @@ Final deliverable for the paper is **Figure 1**, an interactive HTML dashboard d
 | **Excel file** | `C:\Users\nilim\Desktop\wolf paper\wolves_data.xlsx` (in the project, not Downloads) |
 | **Sheet name** | `נתוני זיהוי זאבים (2)` (Hebrew — Wolf Identification Data) |
 | **Total rows in sheet** | 104 |
-| **Wolves analysed** | 99 (filtered: `code != null` AND `#pictures > 0`) |
-| **Excluded** | 5 → 4 with empty `code` (`M11H, F25, Y38`, trailing blank) + 1 with empty `#pictures` (`O80` — user will fix) |
+| **Wolves analysed (canonical pool)** | **100** — filtered by `code != null` only |
+| **Excluded** | 4 rows with empty `code` (`M11H`, `F25`, `Y38`, trailing blank) |
+| **`#pictures` filter — NOT applied** | The picture count is informational only; data-entry errors in `#pictures` (e.g. `O80` currently has `#pictures=0` as a typo the user will fix) do NOT exclude a wolf from analysis. **Any wolf with a non-empty `code` IS an identified wolf.** |
 | **Collection window** | 3 months |
 | **Same wolf rule** | One row per wolf regardless of how many times photographed |
 | **Other sheets** | `נתוני זיהוי זאבים` (106×21, no code/pictures — NOT used) and `גרפים` (11 rows, auxiliary) |

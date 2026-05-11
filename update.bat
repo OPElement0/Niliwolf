@@ -38,17 +38,7 @@ if %ERRORLEVEL% neq 0 (
 echo   Report: data_quality_report.md
 
 echo.
-echo ===== [4/5] Rebuilding analysis dashboard =====
-%PY% -X utf8 step3_build_app.py
-if %ERRORLEVEL% neq 0 (
-  echo.
-  echo ERROR in step3_build_app.py — see message above.
-  pause
-  exit /b 1
-)
-
-echo.
-echo ===== [5/5] Rebuilding interactive data table =====
+echo ===== [4/5] Rebuilding interactive data table =====
 %PY% -X utf8 build_data_table.py
 if %ERRORLEVEL% neq 0 (
   echo.
@@ -58,9 +48,18 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo ===== Done — opening data table and dashboard =====
+echo ===== [5/5] Running chart-vs-table integrity verification =====
+%PY% -X utf8 verify_chart_vs_table.py
+if %ERRORLEVEL% neq 0 (
+  echo.
+  echo Verification found discrepancies — see data_chart_verification_report.md
+) else (
+  echo   Chart and table are perfectly consistent.
+)
+
+echo.
+echo ===== Done — opening data table =====
 start "" "data_table.html"
-start "" "wolf_dashboard.html"
 echo.
 echo Press any key to close this window.
 pause >nul

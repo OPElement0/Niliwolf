@@ -232,11 +232,22 @@ def split_color_pattern(code: str, region: str) -> tuple[str, str] | None:
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_data(path: Path = INPUT_FILE, only_with_pictures: bool = True) -> pd.DataFrame:
+def load_data(path: Path = INPUT_FILE, only_with_pictures: bool = False) -> pd.DataFrame:
+    """Return the analysis pool: every wolf with a non-empty `code`.
+
+    Canonical rule (user-stated 2026-05-11): **any wolf that has a `code` value
+    is an identified wolf and is part of the analysis pool**, regardless of
+    `#pictures`. The picture count is informational only; data-entry errors
+    in `#pictures` (e.g. O80 currently has #pictures=0 as a typo to fix) MUST
+    NOT exclude a wolf from analysis.
+
+    `only_with_pictures=True` is preserved as an *optional* extra filter for
+    studies that need photographed-only wolves, but it is NO LONGER the
+    default and should NOT be used for the canonical pool.
+    """
     df = pd.read_excel(path, sheet_name=SHEET_NAME)
     df.columns = [str(c).strip() for c in df.columns]
-    # Always drop rows whose 'code' is empty — wolves without pelt-pattern data
-    # are not analysable. The source Excel keeps them; only the pipeline filters.
+    # Canonical filter: keep every wolf with a non-empty `code`.
     if "code" in df.columns:
         df = df[df["code"].notna()].copy()
     if only_with_pictures:

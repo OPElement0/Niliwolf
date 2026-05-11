@@ -94,7 +94,7 @@ def main() -> None:
     issues = []
 
     raw_full = load_data(only_with_pictures=False)
-    df = load_data(only_with_pictures=True)
+    df = load_data()  # canonical: every wolf with non-empty code
     proc = process_all_regions(df)
 
     section("AUDIT REPORT — Wolf Pelt Pattern Analysis")
