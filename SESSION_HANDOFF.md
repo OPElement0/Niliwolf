@@ -13,7 +13,60 @@
 
 ---
 
-## Last session — 2026-05-02
+## Last session — 2026-05-11 (most recent)
+
+### Where we are right now
+- The **canonical analysis pool is 100 wolves** (every wolf with non-empty `code`).
+  The `#pictures > 0` filter was **rescinded** — see Rule 0 in
+  `~/.claude/skills/wolf-pelt-analysis/SKILL.md` for the user's verbatim statement.
+- `data_table.html` is the **single deliverable** of the public site. Hosted at:
+  https://opelement0.github.io/Niliwolf/ — anyone with the link can view; admin
+  password `112358` gates editing (client-side soft gate).
+- `wolf_dashboard.html` was **removed** from the repo & site (no longer relevant
+  after data_table.html became feature-complete).
+- The page now contains: editable table + status filter chips + anatomy reference
+  section (with the user-supplied schematic) + per-region 100% stacked bar chart
+  (Plotly, drill-down on Shared buckets, colored x-axis labels, percentage labels
+  ≥10%) + mobile-responsive layout + issue-review panel (admin only).
+- A full **chart ↔ table ↔ raw-xlsx integrity check** runs as the last step of
+  `update.bat` (`verify_chart_vs_table.py`). It passed 4/4 layers with 0 mismatches
+  on the latest build.
+- Narrative analysis report for A1, C6, D8, D9 is in
+  `region_narratives_A1_C6_D8_D9.md` — written for the user to reuse in the paper.
+  Numbers refreshed to 100-pool. Section 1 explicitly distinguishes `n_unique`
+  (count of distinct codes) from "Singletons" (count of wolves with one-of-a-kind
+  codes) — common confusion the reader of the paper might hit.
+
+### Next session — what the user has flagged
+> "אני מתחילה שיחה חדשה איתך בקרוב על מיון מידע נוסף בטבלה"
+> ("I'll start a new chat with you soon about sorting more information in the table.")
+
+**Likely scope of the next session:** extend the analytical machinery to the
+*metadata* columns (not just the 9 pelt regions). Candidates:
+- `gender`, `social dynamic`, `pack name`, `שיוך` (the last two only after the
+  user cleans them — currently off-limits per Rule 12 in SKILL.md).
+- `area`, `main poligon` (geographic).
+- `cams_spotted` (which cameras detected each wolf — the 60-camera grid).
+- `time on camera` (date / range — needs parsing).
+- `seen with` (co-occurrence — could become a network plot).
+- `#sights`, `#right`, `#left`, `#front`, `#no good`, `#pictures` (photo counts).
+
+The user is the one driving which columns to tackle; ask her at the start of the
+next session.
+
+### Open issues parked from earlier
+- 47 data-QC issues in the issue-review panel (admin mode → click "Review issues").
+  The user has not stepped through them yet.
+- O80 still has `#pictures = 0` — she said she'll fix the count; the wolf itself
+  is fine and included in analysis.
+- Y42 (`30.9.20-27.10`, missing year on second side) and O68 (`29.8-29`,
+  malformed) — unparseable `time on camera` entries that need her edit.
+- 26 wolves where the precomputed `code` ≠ `A1_…_D9` concat — auto-fix action
+  available in the issue panel.
+
+---
+
+## Earlier session — 2026-05-02
 
 ### What was built
 
@@ -112,15 +165,16 @@ PY="<path to python 3.10>"
 
 # 1) sanity: imports work
 "$PY" -c "from wolf_lib import load_data, process_all_regions; print(len(load_data()))"
-# expect: 99
+# expect: 100  (since 2026-05-11; previously 99)
 
 # 2) full refresh
 update.bat        # Windows
-# or run the 5 scripts manually (see CLAUDE.md §6.B)
+# Runs: step2_process -> step1c_audit -> step1d_dataqc -> build_data_table -> verify_chart_vs_table
 
-# 3) open the outputs
-start "" "wolf_dashboard.html"
+# 3) open the output
 start "" "data_table.html"
+# Note: wolf_dashboard.html was removed 2026-05-06 — data_table.html is the
+# single deliverable now.
 ```
 
 If any of those fail, read the error and fix `INPUT_FILE` / `SHEET_NAME` in `wolf_lib.py`.
