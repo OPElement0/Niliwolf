@@ -9,6 +9,10 @@ __pycache__/
 # Auto-generated transient outputs
 audit_summary.txt
 
+# Sync server runtime artifacts
+sync_server.log
+.sync_backups/
+
 # OS junk
 .DS_Store
 Thumbs.db

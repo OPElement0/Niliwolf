@@ -1,28 +1,21 @@
 {
   "summary": {
-    "n_errors_categories": 3,
-    "n_warnings_categories": 5,
-    "n_info_categories": 6,
-    "n_error_rows": 30,
-    "n_warning_rows": 66,
-    "n_info_rows": 99,
-    "source_rows": 104,
-    "source_cols": 28
+    "n_errors_categories": 2,
+    "n_warnings_categories": 3,
+    "n_info_categories": 5,
+    "n_error_rows": 28,
+    "n_warning_rows": 38,
+    "n_info_rows": 96,
+    "source_rows": 100,
+    "source_cols": 28,
+    "decisions_applied": {
+      "suppressed_decided_keep": 0,
+      "suppressed_fixed_in_xlsx": 0,
+      "annotated_with_comment": 0,
+      "fixed_but_still_detected": 0
+    }
   },
   "errors": [
-    {
-      "category": "code present but #pictures = 0",
-      "category_id": "code_present_but_pictures_0",
-      "severity": "errors",
-      "description": "1 wolf(ves): code exists but pictures=0 — likely typo, fix #pictures",
-      "rows": [
-        {
-          "serial": "O80",
-          "code": "b3k_a1k_b_d_a1a_b1j_c_a5b5_a1",
-          "_id": "code_present_but_pictures_0__O80__"
-        }
-      ]
-    },
     {
       "category": "time on camera unparseable",
       "category_id": "time_on_camera_unparseable",
@@ -47,7 +40,7 @@
       "category": "seen with references unknown wolf",
       "category_id": "seen_with_references_unknown_wolf",
       "severity": "errors",
-      "description": "27 reference(s) point to a serial not present in the table",
+      "description": "26 reference(s) point to a serial not present in the table",
       "rows": [
         {
           "from_serial": "F23",
@@ -108,12 +101,6 @@
           "seen_with": "seen together",
           "missing_reference": "seen together",
           "_id": "seen_with_references_unknown_wolf__Y35__seen_together"
-        },
-        {
-          "from_serial": "Y38",
-          "seen_with": "seen together",
-          "missing_reference": "seen together",
-          "_id": "seen_with_references_unknown_wolf__Y38__seen_together"
         },
         {
           "from_serial": "Y39",
@@ -215,188 +202,6 @@
     }
   ],
   "warnings": [
-    {
-      "category": "code != concat(A1, A2, B3, B4, B5, C6, C7, D8, D9)",
-      "category_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9",
-      "severity": "warnings",
-      "description": "26 wolf(ves): the 'code' string doesn't match the joined region cells",
-      "rows": [
-        {
-          "serial": "M4",
-          "code (actual)": "d2k_a7kl_b_b_b_c2j_b2_a5_a2",
-          "concat A1..D9": "d2k_a7k_b_b_b_c2j_b2_a5_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__M4__"
-        },
-        {
-          "serial": "M6H",
-          "code (actual)": "b1k_a1i_a3_c1_c1_c3i_a2_a3b5_b2",
-          "concat A1..D9": "b1k_a1i_a3_c1_c1_c3i_a2_a3b5_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__M6H__"
-        },
-        {
-          "serial": "H12",
-          "code (actual)": "d2l_a1kl_N_N_N_P_a1_a5b5_a1",
-          "concat A1..D9": "d2l_a1k_N_N_N_P_a1_a5b5_a1",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__H12__"
-        },
-        {
-          "serial": "H13S",
-          "code (actual)": "a1txi_a3i_b_c1a_c1a_c1g_b2_a4b5_a4",
-          "concat A1..D9": "a1txi_a3i_b_c1a_a1a_c1g_b2_a4b5_a4",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__H13S__"
-        },
-        {
-          "serial": "H14",
-          "code (actual)": "a4vyf_a3f_a2_c1_c1_c3g_c3_a3_N",
-          "concat A1..D9": "a4vyf_a3f_a2_c1_c1_c3g_a3_a3_N",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__H14__"
-        },
-        {
-          "serial": "K16",
-          "code (actual)": "b1i_a3i_N_N_N_b1ic7c_a4b5_a2",
-          "concat A1..D9": "b1i_a3i_N_N_N_b1i_c_a4b5_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__K16__"
-        },
-        {
-          "serial": "F104",
-          "code (actual)": "a2wzf_a11e_a2b_b1b_Ra1bLa2b_c3g_c_a4b5_a1",
-          "concat A1..D9": "a2wf_a11e_a2b_b1b_Ra1bLa2b_c3g_c_a4b5_a1",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__F104__"
-        },
-        {
-          "serial": "F23",
-          "code (actual)": "z1i_a5i_P_Pb5N_N_N_N_N",
-          "concat A1..D9": "z1i_a5i_P_P_N_N_N_N_N",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__F23__"
-        },
-        {
-          "serial": "Y27",
-          "code (actual)": "a3vze_a4e_a2a_d_a1b_c1e_a1_a1b1d9a2",
-          "concat A1..D9": "a3vze_a4e_a2a_d_a1b_c1e_a1_a1b1_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y27__"
-        },
-        {
-          "serial": "Y101",
-          "code (actual)": "a4uze_a4e_a2b_c2b_c2b_c1e_a3d8a3b5_a2",
-          "concat A1..D9": "a4uze_a4e_a2b_c2b_c2b_c1e_a3_a3b5_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y101__"
-        },
-        {
-          "serial": "Y28",
-          "code (actual)": "N_a1k_PP_PP_P_ci_N_a6b5_a1",
-          "concat A1..D9": "N_a1k_P_P_P_ci_N_a6b5_a1",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y28__"
-        },
-        {
-          "serial": "Y29",
-          "code (actual)": "c1zf_a5f_a3a_c2a_c2a_c1f_a1D_a3b4_a3",
-          "concat A1..D9": "c1zf_a5f_a3a_c2a_c2a_c1f_a1_a3b4_a3",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y29__"
-        },
-        {
-          "serial": "Y31",
-          "code (actual)": "f_N_b_Rb1aLc2a_Ra1aLc2a_f_p_a3_N",
-          "concat A1..D9": "f_N_b_Rb1aLc2a_Ra1aLc2a_f_P_a3_N",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y31__"
-        },
-        {
-          "serial": "Y33",
-          "code (actual)": "a1tze_a4e_b_b1b_a1b_c1e_c1e_a3_a3_a2",
-          "concat A1..D9": "a1tze_a4e_b_b1b_a1b_c1e_a3_a3_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y33__"
-        },
-        {
-          "serial": "Y39",
-          "code (actual)": "b3j_a9j_b_Rb1aLd_Ra2bLd6_N_N_a6_N",
-          "concat A1..D9": "b3j_a9j_Rb1aLd_Rb1aLd_Ra2bLd_N_N_a6_N",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y39__"
-        },
-        {
-          "serial": "Y43",
-          "code (actual)": "a1txj_a4_b_d_a1a_c3g_b2_a4_a2",
-          "concat A1..D9": "a1txj_a4j_b_d_a1a_c3g_b2_a4_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y43__"
-        },
-        {
-          "serial": "Y44",
-          "code (actual)": "a5uyf_a1i_b_b2b_a1b_a4g_c_a4b5_a2",
-          "concat A1..D9": "a5uyf_a1u_b_b2b_a1b_a4g_c_a4b5_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y44__"
-        },
-        {
-          "serial": "Y37",
-          "code (actual)": "a3uzf_a4f_N_b1a_b1a_c3f_a1_a4b1_a2",
-          "concat A1..D9": "a3uzf_a4f_N_b1a_b1a_c3f_a1_a4b1_a3",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Y37__"
-        },
-        {
-          "serial": "Sh109",
-          "code (actual)": "a3vzf-a4f-N-b2a-a2a-a4h-a1-a3-a4",
-          "concat A1..D9": "a3zf_a4f_N_b2a_a2a_a3h_a1_a3_a4",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Sh109__"
-        },
-        {
-          "serial": "Sh54",
-          "code (actual)": "c1yi_a5i_b_d_d_c3g_b1_a3b5_a4",
-          "concat A1..D9": "c1yi_a5i_b_d_d_c3g_b2_a3b5_a4",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Sh54__"
-        },
-        {
-          "serial": "O71",
-          "code (actual)": "b4i_a8i_b_b2b_a1b_c1g_a1_a4b5_a2",
-          "concat A1..D9": "b4f_a8i_b_b2b_a1b_c1g_a1_a4b5_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O71__"
-        },
-        {
-          "serial": "O72",
-          "code (actual)": "a1wyi_a4i_b_d_N_c3i_b1_a3b5_a2",
-          "concat A1..D9": "a1wyi_a4i_b_d_N_c3i_b2_a3b5_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O72__"
-        },
-        {
-          "serial": "O77",
-          "code (actual)": "Ra3vzfLb1f_a2f_a2b_b2b_a1b_b1g_c_a4_a2",
-          "concat A1..D9": "Ra3vzfLb1f_a2f_a2b_b2b_a1b_b1g_c_a1_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O77__"
-        },
-        {
-          "serial": "O82",
-          "code (actual)": "b2l_N_N_Pa_N_dl_c_a8_a1",
-          "concat A1..D9": "b2l_N_Pa_N_dl_c_c_a8_a1",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__O82__"
-        },
-        {
-          "serial": "Sn84",
-          "code (actual)": "a1txg_a1g_N_N_b1h_c_a4_a2",
-          "concat A1..D9": "a1txg_a1g_N_N_N_b1h_c_a4_a2",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__Sn84__"
-        },
-        {
-          "serial": "In92",
-          "code (actual)": "a2ze_e_a2a_b1b_a2b_e_P_N_N",
-          "concat A1..D9": "a2ze_e_a2a_b1b_a2b_c1f_P_N_N",
-          "_id": "code_concat_a1_a2_b3_b4_b5_c6_c7_d8_d9__In92__"
-        }
-      ]
-    },
-    {
-      "category": "gender not in {m, f, blank}",
-      "category_id": "gender_not_in_m_f_blank",
-      "severity": "warnings",
-      "description": "2 row(s): unexpected gender value (case, whitespace, or other)",
-      "rows": [
-        {
-          "serial": "S19",
-          "value": "'?'",
-          "_id": "gender_not_in_m_f_blank__S19__"
-        },
-        {
-          "serial": "F21",
-          "value": "'?'",
-          "_id": "gender_not_in_m_f_blank__F21__"
-        }
-      ]
-    },
     {
       "category": "social dynamic out of {pack, group, unknown}",
       "category_id": "social_dynamic_out_of_pack_group_unknown",
@@ -632,25 +437,10 @@
   ],
   "info": [
     {
-      "category": "rows with empty 'serial number'",
-      "category_id": "rows_with_empty_serial_number",
-      "severity": "info",
-      "description": "1 row(s) lack a serial number — only the trailing blank row is expected",
-      "rows": [
-        {
-          "row_index": 103,
-          "code": "(empty)",
-          "area": "(empty)",
-          "#pictures": 0,
-          "_id": "rows_with_empty_serial_number__row103__"
-        }
-      ]
-    },
-    {
       "category": "'pack name' vs 'שיוך' diverge",
       "category_id": "pack_name_vs_diverge",
       "severity": "info",
-      "description": "66 row(s) differ between the two columns — for user's manual cleanup",
+      "description": "64 row(s) differ between the two columns — for user's manual cleanup",
       "rows": [
         {
           "serial": "M3",
@@ -675,12 +465,6 @@
           "pack name": "?",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__F22__"
-        },
-        {
-          "serial": "F25",
-          "pack name": "?",
-          "שיוך": "(blank)",
-          "_id": "pack_name_vs_diverge__F25__"
         },
         {
           "serial": "F26",
@@ -765,12 +549,6 @@
           "pack name": "yehodiya trio",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Y36__"
-        },
-        {
-          "serial": "Y38",
-          "pack name": "golden pack",
-          "שיוך": "(blank)",
-          "_id": "pack_name_vs_diverge__Y38__"
         },
         {
           "serial": "Y39",

@@ -1,0 +1,326 @@
+{
+  "generated_at": "2026-05-12T02:30:00Z",
+  "generated_by": "Claude — Fix & Clarify v1 audit pass (refreshed 2026-05-12)",
+  "questions": [
+
+    {
+      "id": "cq_extra_midletter_3_wolves",
+      "kind": "general",
+      "question": "3 wolves still have a code-vs-cell mismatch where the `code` field has an EXTRA mid-letter that's missing from the region cell. The grammar allows mid-letters, so both versions are syntactically valid — only you know which is the true observation. Please decide for each: M4 A2 — code says `a7kl`, cell says `a7k` (extra `l`). H12 A2 — code says `a1kl`, cell says `a1k` (extra `l`). F104 A1 — code says `a2wzf`, cell says `a2wf` (extra `z`). For each: should the cell be EXTENDED to match the code (e.g. M4 A2 becomes `a7kl`), or should the code be REGENERATED to match the cell (e.g. M4 A2 stays `a7k`)?",
+      "evidence": {"M4_A2": "code=a7kl vs cell=a7k", "H12_A2": "code=a1kl vs cell=a1k", "F104_A1": "code=a2wzf vs cell=a2wf"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_y39_b5_extra_digit",
+      "kind": "row",
+      "serial": "Y39",
+      "target_column": "B5",
+      "question": "After fixing B3, Y39 still has a discrepancy in B5. The region cell holds `Ra2bLd` (asymmetric, no trailing digit). The `code` field's B5 segment holds `Ra2bLd6` (extra trailing `6`). Which is correct — was the `6` a typo in the code field (then I should regenerate code from regions), or is the `6` meaningful and the region cell needs to become `Ra2bLd6`?",
+      "evidence": {"region_cell": "Ra2bLd", "code_segment": "Ra2bLd6", "full_code": "b3j_a9j_b_Rb1aLd_Ra2bLd6_N_N_a6_N"},
+      "severity_hint": "errors"
+    },
+
+    {
+      "id": "cq_a1_singletons_methodology",
+      "kind": "general",
+      "question": "A1 has 55 singleton codes out of 89 unambiguous wolves (62%). The paper would treat singletons as evidence that this single region individually identifies most wolves. Do you want this stated as Tier-1 evidence, or should we condition the claim on orthogonal confirmation from at least one other region (e.g., C6)?",
+      "evidence": {"region": "A1", "singletons": 55, "n_unambiguous": 89, "n_pool": 100},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_c6_second_id_strength",
+      "kind": "general",
+      "question": "C6 (central nasal stripe) has 26 singletons out of 88 unambiguous and 42 distinct codes — the second-strongest single-region identifier after A1. For the paper, do we promote C6 alongside A1 in the headline, or treat it as a supporting region only?",
+      "evidence": {"region": "C6", "singletons": 26, "n_unambiguous": 88, "n_unique": 42},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_d9_low_discrimination",
+      "kind": "general",
+      "question": "D9 (side nape) has only 4 distinct codes total, no singletons, and a2 covers 40/100 wolves. For Figure 1, do we keep D9 in the main panel (to be transparent that one region failed) or move it to supplementary with a methods sentence explaining low discrimination?",
+      "evidence": {"region": "D9", "n_unique": 4, "n_pool": 100, "dominant_code": "a2 (40 wolves)"},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_d8_pattern_vs_color_separation",
+      "kind": "general",
+      "question": "D8 codes split into color-digit (after `a`) and pattern-digit (after `b`). 4 wolves have only the color part (e.g. `a4` with no `b` suffix) — they exist but pattern is genuinely uncoded. Should D8 stats report color-only and color+pattern separately, or treat them as one bucket?",
+      "evidence": {"region": "D8", "color_only_count": "4 wolves (no `b` segment)"},
+      "severity_hint": "info"
+    },
+
+    {
+      "id": "cq_b_regions_no_contrast_suffix",
+      "kind": "general",
+      "question": "The B-region grammar says trailing `a` = low contrast, `b` = high contrast. But ~30 wolves have B3/B4/B5 codes WITHOUT either suffix (e.g. M3 B3=`a3`, M2k B4=`c2`, Y43 B4=`d`). What does the absence encode — 'contrast not observable', 'default value', or 'no contrast info needed for this pattern'? This affects whether `a3` and `a3a` should merge in rank-frequency.",
+      "evidence": {"affected_examples": "M3, M2k, Y43, M10 (D-pattern only), Sh54, others — ~30 cells across B3/B4/B5"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_o78_a1_near_identical_asymmetric",
+      "kind": "row",
+      "serial": "O78",
+      "target_column": "A1",
+      "question": "O78 A1 is asymmetric: right=`a4vxi`, left=`a4txi`. The right/left differ only in one mid-letter (v vs t). Is this a genuine asymmetry, or a typo where one side should match the other?",
+      "evidence": {"raw": "Ra4vxiLa4txi", "right": "a4vxi", "left": "a4txi"},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_y31_b4_asymmetric_pattern_jump",
+      "kind": "row",
+      "serial": "Y31",
+      "target_column": "B4",
+      "question": "Y31 B4 is asymmetric with right=`b1a`, left=`c2a` — different leading letters (b → c) AND different digits. Real left/right divergence at this scale, or one side mis-coded?",
+      "evidence": {"raw": "Rb1aLc2a"},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_y39_b3_asymmetric_loss_of_pattern",
+      "kind": "row",
+      "serial": "Y39",
+      "target_column": "B3",
+      "question": "Y39 B3 is asymmetric: right=`b1a` (full pattern), left=`d` (single letter). Is the left genuinely just `d`, or is the left side partly obscured/unobservable (in which case it should probably be `P` instead)?",
+      "evidence": {"raw": "Rb1aLd"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_h13s_b5_leading_letter_disagree",
+      "kind": "row",
+      "serial": "H13S",
+      "target_column": "B5",
+      "question": "H13S has a substantive disagreement: the `code` field says B5=`c1a` but the B5 column says `a1a`. Different leading letters (c vs a) — which version is correct?",
+      "evidence": {"code_field": "c1a", "region_cell": "a1a"},
+      "severity_hint": "errors"
+    },
+    {
+      "id": "cq_h14_c7_leading_letter_disagree",
+      "kind": "row",
+      "serial": "H14",
+      "target_column": "C7",
+      "question": "H14: `code` field says C7=`c3` but the C7 column says `a3`. Different leading letters. Which is correct?",
+      "evidence": {"code_field": "c3", "region_cell": "a3"},
+      "severity_hint": "errors"
+    },
+    {
+      "id": "cq_y28_b3_b4_double_p",
+      "kind": "row",
+      "serial": "Y28",
+      "target_column": "B3",
+      "question": "Y28's `code` field has B3=`PP` and B4=`PP` (doubled P), while the region columns have just `P`. Was the doubled-P meaningful (e.g., 'partly visible TWICE' or some emphasis), or just a transcription error?",
+      "evidence": {"code_B3": "PP", "region_B3": "P", "code_B4": "PP", "region_B4": "P"},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_y31_c7_case_mismatch",
+      "kind": "row",
+      "serial": "Y31",
+      "target_column": "C7",
+      "question": "Y31 C7: `code` field says `p` (lowercase), region cell says `P` (uppercase). Uppercase P = 'pattern unclear' status. Lowercase p has no defined meaning. Is the region cell `P` correct?",
+      "evidence": {"code_field": "p", "region_cell": "P"},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_y44_a2_unusual_letter_u",
+      "kind": "row",
+      "serial": "Y44",
+      "target_column": "A2",
+      "question": "Y44 A2: `code` field says `a1i`, region cell says `a1u`. The letter `u` isn't in the A2 color set ({e..m}) or the standard pattern modifier set. Is `a1u` correct (and the color set should be extended), or a typo of `a1i`?",
+      "evidence": {"code_field": "a1i", "region_cell": "a1u"},
+      "severity_hint": "errors"
+    },
+    {
+      "id": "cq_o82_row_shift_check",
+      "kind": "row",
+      "serial": "O82",
+      "target_column": "code",
+      "question": "O82 has FOUR regions where `code` disagrees with the column cell, in a pattern suggesting the code's segments shifted. Region values: B3=`Pa`, B4=`N`, B5=`dl`, C6=`c`. Code claims: B3=`N`, B4=`Pa`, B5=`N`, C6=`dl`. Was the `code` written before some columns got re-labelled? Which set of values represents reality? (Also: B5=`dl` is unusual — not the standard B-grammar.)",
+      "evidence": {"region_cells": "Pa/N/dl/c", "code_segments": "N/Pa/N/dl"},
+      "severity_hint": "errors"
+    },
+    {
+      "id": "cq_in92_c6_meaning_collapse",
+      "kind": "row",
+      "serial": "In92",
+      "target_column": "C6",
+      "question": "In92 C6: `code` field says just `e` (one letter, color-only?), region cell says `c1f` (full pattern+color). These encode different amounts of information. Which is the true observation?",
+      "evidence": {"code_field": "e", "region_cell": "c1f"},
+      "severity_hint": "errors"
+    },
+    {
+      "id": "cq_m6h_d9_disagreement",
+      "kind": "row",
+      "serial": "M6H",
+      "target_column": "D9",
+      "question": "M6H D9: `code` field says `b2`, region cell says `a2`. D9 has only 4 distinct codes total (and `b2` isn't one of them) — so this is a meaningful disagreement. Was the original observation `a2` (one of the known 4) or `b2` (a NEW 5th code)?",
+      "evidence": {"code_field": "b2", "region_cell": "a2", "known_d9_codes": "a1, a2, a3, a4"},
+      "severity_hint": "errors"
+    },
+
+    {
+      "id": "cq_code_partcount_mismatches_batch",
+      "kind": "general",
+      "question": "7 wolves have a `code` field with a wrong number of underscore-separated segments (not 9): K16, F23, Y27, Y101, Y33, Sh109, Sn84. The region columns themselves are fine — only the precomputed `code` string is off. Most likely a paste error. The QC panel has a 'Replace code with concatenated regions' row action — should we apply it to all 7 in one click? (Asks here for the methodology-level confirmation; per-row buttons are in QC.)",
+      "evidence": {"affected_serials": "K16, F23, Y27, Y101, Y33, Sh109, Sn84"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_social_dynamic_lone",
+      "kind": "general",
+      "question": "23 wolves are coded `social dynamic = 'lone'` (a 4th value not in the documented set {pack, group, unknown}). Options: (A) accept 'lone' as an official 4th category and document it in the paper; (B) rename all 'lone' to 'unknown'; (C) rename to 'solitary' for terminology consistency. What's your call?",
+      "evidence": {"count": 23, "examples": "H12, H13S, H99, H14, H15m, K16, K106, K17f, S18, S100, ..."},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_social_dynamic_packstar",
+      "kind": "row",
+      "serial": "Y102",
+      "target_column": "social dynamic",
+      "question": "Y102 has `social dynamic = 'pack*'` (the only one). What does the asterisk mean — 'suspected pack but not confirmed', 'pack member seen alone', something else? Should it merge into `pack` or stay distinct?",
+      "evidence": {"value": "pack*"},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_gender_question_mark",
+      "kind": "general",
+      "question": "Two wolves have `gender = '?'` (S19, F21) where the documented rule is 'blank when uncertain'. Should I set both to blank, or did the `?` encode 'we tried but couldn't tell' (different from 'never assessed')?",
+      "evidence": {"affected_serials": "S19, F21"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_y42_time_on_camera",
+      "kind": "row",
+      "serial": "Y42",
+      "target_column": "time on camera",
+      "question": "Y42 time-on-camera = `30.9.20-27.10` — second date is missing the year. Should it be `30.9.20-27.10.20` (same year) or something else? (Required for the temporal analysis.)",
+      "evidence": {"value": "30.9.20-27.10"},
+      "severity_hint": "errors"
+    },
+    {
+      "id": "cq_o68_time_on_camera",
+      "kind": "row",
+      "serial": "O68",
+      "target_column": "time on camera",
+      "question": "O68 time-on-camera = `29.8-29` — unparseable. Looks like a corrupted range. What's the intended value?",
+      "evidence": {"value": "29.8-29"},
+      "severity_hint": "errors"
+    },
+    {
+      "id": "cq_o80_pictures_zero",
+      "kind": "row",
+      "serial": "O80",
+      "target_column": "#pictures",
+      "question": "O80 has a full code (`b3k_a1k_b_d_a1a_b1j_c_a5b5_a1`) but `#pictures = 0`. You mentioned this is a typo in the count — can you confirm the intended value, and update the cell?",
+      "evidence": {"code": "b3k_a1k_b_d_a1a_b1j_c_a5b5_a1", "pictures": 0},
+      "severity_hint": "errors"
+    },
+
+    {
+      "id": "cq_seen_with_seen_together",
+      "kind": "general",
+      "question": "18 wolves have `seen with = 'seen together'` (literal string, no specific reference). This isn't a wolf ID — it's a free-text note. For the co-occurrence analysis, should we: (A) treat 'seen together' as 'co-occurred with someone unidentified, count unknown', (B) ignore these entries entirely, (C) replace with `1 unrecognized` to mirror the existing convention?",
+      "evidence": {"count": 18, "examples": "Y27, Y29-Y45 (most), Sh55, Sh57, Sn85, In92, In93"},
+      "severity_hint": "warnings"
+    },
+    {
+      "id": "cq_seen_with_unknown_serials",
+      "kind": "general",
+      "question": "9 `seen with` entries reference wolf serials that don't exist in sheet (2): F21s, Sh37y, and combined forms like `Sh52+1 unrecognized`. These look like they're from the OLDER non-(2) sheet with `s`/`y` suffixes. Should I (A) treat suffixed serials as aliases of their base (F21s → F21, Sh37y → Sh37), or (B) leave them as-is and flag the co-occurrence link as broken?",
+      "evidence": {"missing_refs": "F21s, Sh37y, Sh52+1 unrecognized, Sh53+1 unrecognized, 7 min after Sh49+Sh37y"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_poor_data_wolves_paper_text",
+      "kind": "general",
+      "question": "6 wolves have ≥5 of 9 regions marked N/P/empty (unobservable): F23 (7/9), Sh55 (6/9), F24, Y28, Sh59, In97 (each 5/9). For the Methods/Limitations section, should the paper (A) keep these in the analysis pool with a noted caveat, (B) list them by name as 'limited-data wolves', (C) exclude them from rank-frequency but keep in the overall count?",
+      "evidence": {"affected_serials_and_counts": "F23:7, Sh55:6, F24:5, Y28:5, Sh59:5, In97:5"},
+      "severity_hint": "info"
+    },
+
+    {
+      "id": "cq_asymmetric_in_rank_frequency",
+      "kind": "general",
+      "question": "13 wolves total have at least one asymmetric region (R…L… encoding). In rank-frequency, do we count each asymmetric wolf as: (A) ONE entity at its raw code (`Ra3vzfLb1f`), (B) TWO entries (right + left as separate codes), or (C) hybrid: one in wolf-centric counts, two in side-aware view? Current pipeline does the hybrid; confirm this is the right paper-side framing.",
+      "evidence": {"total_asymmetric_wolf_region_cells": 13, "wolves_affected": "O77, O78, M5, Y32, Y31, Y39, Y47, F104, O70"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_bucket_boundaries_review",
+      "kind": "general",
+      "question": "The identification buckets are Unique / Shared 2-3 / 4-6 / 7-10 / 11-20 / 21-35 / 36+. Looking at the actual distribution, would you prefer to (A) keep as-is, (B) merge `Shared 11-20` and `Shared 21-35` into one `Shared 11-35` (since few codes land in each), or (C) shift boundaries to align with biological intuition (e.g., 'rare', 'uncommon', 'common', 'dominant')?",
+      "evidence": {"current_buckets": "Unique, 2-3, 4-6, 7-10, 11-20, 21-35, 36+"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_pack_name_vs_shiyukh_canonical",
+      "kind": "general",
+      "question": "`pack name` and `שיוך` are currently both off-limits until you clean them. When you do clean: (A) which becomes the canonical column for the paper, (B) should the cleaned version be in English (for the paper) or Hebrew (for your field notes), (C) is the cleanup something I can help with by proposing groupings from the data?",
+      "evidence": {"status": "off-limits until cleaned (per project rules)"},
+      "severity_hint": "info"
+    },
+
+    {
+      "id": "cq_unambiguous_terminology_paper",
+      "kind": "general",
+      "question": "We call codes `unambiguous` for status (well-defined codes). For the paper, would you prefer the published term to remain 'unambiguous', or shift to something like 'resolved', 'determinate', 'specific', or 'clean'? (You've been firm that 'unique' is wrong because it confuses 'well-defined' with 'one-of-a-kind' — confirmed.)",
+      "evidence": {"current_term": "unambiguous"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_color_letter_set_extension",
+      "kind": "general",
+      "question": "Documented color-letter sets: A1/A2 use {e..m} (9 letters), C6 uses {e..l} (8 letters, no `m`). I noticed a few rare codes with `n` or other letters near the end (e.g. Y44 A2=`a1u` which has `u`). Are there any approved color letters outside the documented sets that the analysis should accept, or should those count as 'unusual' anomalies?",
+      "evidence": {"documented_a1_a2": "e f g h i j k l m", "documented_c6": "e f g h i j k l", "unexpected_examples": "Y44 A2=a1u"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_figure_1_panel_choice",
+      "kind": "general",
+      "question": "Plan for Figure 1: 3-panel composite — (A) 3x3 grid of rank-frequency curves per region, (B) 100% stacked bar of identification buckets per region (already in the dashboard), (C) entropy vs. %-usable scatter. Confirm this is the target, or do you want to swap one panel (e.g. for an example-photo strip showing what an `unambiguous` vs `partial` vs `asymmetric` wolf looks like)?",
+      "evidence": {"current_static_panels": "panel_A_rank_frequency_grid.png exists"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_heatmap_supplementary",
+      "kind": "general",
+      "question": "Pending: a heatmap supplementary figure showing top 5-10 codes per region × 9 regions. Confirm scope: top-5 codes per region (45 rows), or top-10 (90 rows)? And do you want the heatmap normalised within-region (% of wolves) or absolute counts?",
+      "evidence": {"status": "not built yet"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_dna_validation_channel",
+      "kind": "general",
+      "question": "If/when DNA data exists for a subset of these wolves, the paper's strongest claim becomes 'pelt-pattern identification agrees with molecular ID'. Do you have (or expect to have) DNA samples for any of the 100 wolves, or is the methodology paper a pelt-only validation against re-sighting consistency?",
+      "evidence": {"current_validation": "internal consistency only"},
+      "severity_hint": "info"
+    },
+
+    {
+      "id": "cq_anatomy_schematic_credit",
+      "kind": "general",
+      "question": "The anatomical schematic (`assets/wolf_schematic.png`) is your hand-drawn illustration showing the 9 polygons in their group colours. For the paper figure, do we (A) use that drawing directly, (B) recreate it in a vector tool for publication quality, (C) license a different illustration?",
+      "evidence": {"current_asset": "assets/wolf_schematic.png (hand-drawn)"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_publication_dataset_release",
+      "kind": "general",
+      "question": "Will the underlying `wolves_data.xlsx` be released alongside the paper (as supplementary data) or remain private? This affects whether we anonymise the wolf names (`Segen`, `Foxy`, `Odem`) and the local nicknames in `notes`.",
+      "evidence": {"current_columns_with_local_info": "name (3 filled), notes (free text)"},
+      "severity_hint": "info"
+    },
+    {
+      "id": "cq_cams_per_wolf_distribution",
+      "kind": "general",
+      "question": "`cams_spotted` lists camera IDs (1-60) per wolf. A natural supplementary stat is 'how many cameras detected each wolf' (mobility proxy). Would that be useful for the paper, or stay informational? If useful, do we relate it to `#sights` (sighting count per wolf) for a 2D plot?",
+      "evidence": {"camera_grid": "60 cameras"},
+      "severity_hint": "info"
+    }
+
+  ]
+}

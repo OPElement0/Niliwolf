@@ -4,6 +4,160 @@
 > Read `CLAUDE.md` in full first, then this file, then `data_dictionary.md`. After
 > that you should have full context to continue without re-asking the user.
 
+---
+
+## Last session — 2026-05-12 (evening, most recent)
+
+### What landed in this session
+
+1. **Local sync server (`sync_server.py` + `start_sync.bat`)** — live-sync
+   loop between `data_table.html` admin mode and the on-disk
+   `wolves_data.xlsx` / `data_decisions.json`. Eliminates the manual
+   download → drop → update.bat cycle. Status pill in the header shows
+   `Sync: synced HH:MM` / `saving` / `pipeline running` / `offline`. Pipeline
+   (`step1d_dataqc.py`) runs in the background after every save. Backups
+   to `.sync_backups/` (last 20 per file).
+2. **"Save table edits" button** in the admin bar — force-saves the full
+   table to disk via the sync server's bulk endpoint. Catches anything the
+   per-cell sync missed. Pending counter (`N pending`) updates live.
+3. **"Decisions remaining" counter** — practical number (open Claude
+   questions + open QC categories) shown in the panel header. Replaces
+   the misleading item-level count.
+4. **localStorage ↔ disk merge on load** — newer `updated_at` wins per id.
+   Fixes the bug where the browser cached stale statuses while the disk
+   already had fresher decisions.
+5. **Scrollable active card** — `max-height: 55vh; overflow-y: auto` so
+   buttons stay reachable when the question + textarea are long.
+6. **Empty-row cleanup** — `M11H`, `F25`, `Y38` + trailing blank row
+   removed (100 wolves now in the xlsx).
+7. **Code≠concat category fully cleared** — was 26 wolves; now 0. Mix of
+   user table edits + 9 Claude-question fixes (8 user-affirmed +
+   `cq_y39_b5_extra_digit` newly identified + `cq_code_partcount_mismatches_batch`
+   batch).
+8. **3 grammar / structural memories** saved to `~/.claude/projects/...`:
+   - "Asymmetric R/L coding is intentional — never question it"
+   - "B-region exceptions: `b` (B3), `d` (B4/B5) are complete codes; no
+      a/b suffix required"
+   - "Add Claude questions to `claude_questions.json` during chat — surface
+      decision points to the panel, not only inline"
+9. **`audit_report.md` now appends Clarifications section** with every
+   user comment (status=answered or needs_more_data).
+10. **`step1d_dataqc.py` suppresses findings with status=`decided_keep`**
+    and inlines user comments below the row in the QC report.
+
+### Where we are at session end
+
+- **xlsx**: 100 wolves, 0 empty rows, no code≠concat mismatches.
+- **Decisions made by user**: 20 (last build), of which 11+ are
+  `fixed_in_xlsx` and several `answered` with substantive paper-relevant
+  comments. `audit_report.md` carries those comments forward.
+- **Claude questions**: 39 authored, ~14 still open after this session.
+- **Categories worth her attention next session**:
+  - `cq_extra_midletter_3_wolves` (M4 A2, H12 A2, F104 A1 — extra mid-letter
+    in code field; needs her ruling on whether the cell should be extended
+    or the code regenerated)
+  - The remaining methodology questions (D9, asymmetric in rank-frequency,
+    bucket boundaries, terminology, Figure 1 panel composition, etc.)
+  - QC categories with bulk actions: `social_dynamic = 'lone'` (23 wolves),
+    `seen with = 'seen together'` (18 wolves), polygon casing
+- **Pipeline verifier**: 4/4 layers pass, 0 mismatches.
+
+### Important workflow rules in effect
+
+- **The admin Fix & Clarify panel is the canonical channel for decisions**
+  (not chat). Per `feedback_add_claude_questions_during_chat.md`: whenever
+  Claude identifies a new anomaly during chat, the next action is to
+  append it to `claude_questions.json` so it appears in the panel.
+- **xlsx edits flow through the sync server** when `start_sync.bat` is
+  running. Otherwise the page falls back to localStorage + manual
+  download.
+- **`data_decisions.json` is the source of truth for user statuses + comments.**
+  Read by `step1d_dataqc.py` (suppression) and `step1c_audit.py`
+  (clarifications section). The Save → download button on the page is a
+  redundant safety net when sync is offline.
+
+### Files added / modified in this session
+
+| Type | File |
+|---|---|
+| New | `sync_server.py`, `start_sync.bat` |
+| New | `claude_questions.json`, `data_decisions.json` |
+| New | `missing_data_report.md`, `b_regions_missing_contrast_suffix.md` |
+| Modified | `build_data_table.py` — sync client, save button, merge-on-load, scrollable card |
+| Modified | `step1d_dataqc.py` — reads decisions, suppresses + annotates |
+| Modified | `step1c_audit.py` — appends Clarifications section |
+| Modified | `CLAUDE.md` — Fix & Clarify section + B-grammar exceptions |
+| Modified | `wolves_data.xlsx` — 4 empty rows removed, 20+ data edits applied |
+| Generated | `audit_report.md`, `data_quality_report.{md,json}`, `data_chart_verification_report.md` |
+
+### Previous session (earlier same day — kept for context)
+
+
+
+1. **Fix & Clarify Mode** is live inside `data_table.html` admin panel. Unified UX
+   for QC findings + Claude's authored questions. Per item: status dropdown
+   (`open` / `answered` / `decided_keep` / `fixed_in_xlsx` / `needs_more_data`)
+   + free-text comment + 💾 Save / ✓ Mark answered. Top filter tabs:
+   All / Needs reply / Answered / Resolved.
+2. **`claude_questions.json` v1** — 37 Claude-authored open questions covering:
+   per-region rarity methodology (A1/C6/D8/D9), B-region contrast suffix gap,
+   3 asymmetric edge cases, 8 substantive code-vs-concat disagreements, 1 batch
+   for 7 part-count code mismatches, metadata anomalies (`lone`/`pack*`/gender `?`,
+   `time on camera` × 2, O80 #pictures=0, `seen with` × 2), 1 poor-data wolves
+   question, and ~12 methodology questions for the paper (D9 placement, bucket
+   boundaries, asymmetric counting, terminology, dataset release, etc.).
+3. **`data_decisions.json`** — new committed file, single source of truth for
+   Nili's status + comment per issue/question. Round-trip via the admin UI's
+   💾/📥 buttons. Embedded at build time so the page pre-populates on next
+   open.
+4. **`step1d_dataqc.py`** now reads `data_decisions.json` and suppresses any
+   finding with status `decided_keep` (banner: "N finding(s) suppressed via
+   data_decisions.json"). Findings marked `fixed_in_xlsx` that the source still
+   shows are kept and annotated. Findings with `answered`/`needs_more_data` are
+   kept with their user comments inlined below each row.
+5. **`step1c_audit.py`** now appends a "Clarifications from data owner" section
+   to `audit_report.md`, listing every comment with status `answered` or
+   `needs_more_data`, sorted by `updated_at` desc.
+6. **Bug fix**: phantom "Found unsaved edits…" popup that fired on every load.
+   Root cause: `onChange()` was called by `tableBuilt` and unconditionally wrote
+   the baseline to localStorage. Fixed two ways — `onChange()` only persists when
+   `diffs > 0`, and the load-time restore prompt now silently drops the stored
+   value if it matches the baseline. Old stale localStorage entries auto-clean on
+   first reload of the new build.
+7. **Bug fix**: Claude's "general" questions (no row anchor) were being
+   auto-resolved by the live re-check because `findRowByIndex(null)` returns
+   null → `rowHasIssueLive` → `false` → `isResolved` → `true`. Now `isResolved`
+   special-cases `__is_claude` issues to only resolve via explicit decision.
+
+### Where we are right now
+- Canonical pool: **100 wolves** (every wolf with non-empty `code`). Unchanged.
+- `data_table.html` is the **single deliverable**, hosted at
+  https://opelement0.github.io/Niliwolf/ — admin password `112358`.
+- After this session, the build reports: `232 total items` (37 Claude + 195 QC),
+  `230 unresolved`, `0 answered`, `2 auto-resolved by live re-check`.
+- Pipeline `update.bat` runs all 5 steps cleanly. Chart↔table integrity verifier
+  passes 4/4 layers with 0 mismatches.
+
+### Next session — handoff to Nili
+1. **Open `data_table.html` → login admin** (`112358`) → click "⚠ Review issues".
+2. Click "Needs reply" tab — first 37 items are Claude's questions, then the
+   46 still-open QC items.
+3. For each item: type a comment in the textarea, pick a status, click "💾 Save"
+   (or just blur — autosave). Keyboard `Skip ▶` to move on.
+4. When done (or whenever), click 💾 at the top → save `data_decisions.json`
+   into the project folder (replacing the empty one).
+5. Run `update.bat`. The next QC report will suppress your `decided_keep` items
+   and inline your comments. The audit report will get a Clarifications section.
+6. Share back with Claude in the next session — the saved file is the input for
+   incorporating your answers into analysis decisions / paper text.
+
+### Open from previous sessions (still relevant)
+- O80 `#pictures = 0` — typo in the count; Claude question `cq_o80_pictures_zero`.
+- Y42 / O68 unparseable time on camera — Claude questions `cq_y42_time_on_camera`
+  / `cq_o68_time_on_camera`.
+- 26 code≠concat wolves — `cq_code_partcount_mismatches_batch` covers the 7
+  mechanical ones; 8 substantive ones have individual Claude questions.
+
 > **For the user (Nili) — if you're picking up on a new machine:**
 > 1. Make sure you have the *whole* `wolf paper` folder (xlsx, all `.py` scripts, all `.md` files,
 >    CSVs, `update.bat`, `wolf_dashboard.html`, `data_table.html`).

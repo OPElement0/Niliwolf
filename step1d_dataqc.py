@@ -31,6 +31,7 @@ from wolf_lib import INPUT_FILE, REGIONS, SHEET_NAME
 
 OUT_MD = Path(__file__).parent / "data_quality_report.md"
 OUT_JSON = Path(__file__).parent / "data_quality_report.json"
+DECISIONS_PATH = Path(__file__).parent / "data_decisions.json"
 
 # Allowed values
 GENDER_ALLOWED = {"m", "f"}
@@ -592,11 +593,22 @@ def check_region_value_hygiene(df: pd.DataFrame, f: Findings) -> None:
 # Markdown report
 # ---------------------------------------------------------------------------
 
-def render_md(f: Findings, df: pd.DataFrame, sheet: str) -> str:
+def render_md(f: Findings, df: pd.DataFrame, sheet: str,
+              decision_stats: dict | None = None) -> str:
     lines = []
     lines.append(f"# Data Quality Report — `wolves_data.xlsx`\n")
     lines.append(f"**Generated:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}  ")
     lines.append(f"**Source sheet:** `{sheet}` ({len(df)} rows × {len(df.columns)} cols)\n")
+
+    if decision_stats:
+        suppressed_keep = decision_stats.get("suppressed_decided_keep", 0)
+        annotated = decision_stats.get("annotated_with_comment", 0)
+        fixed_but_still = decision_stats.get("fixed_but_still_detected", 0)
+        if suppressed_keep or annotated or fixed_but_still:
+            lines.append("> **From `data_decisions.json`:** "
+                         f"{suppressed_keep} finding(s) suppressed (status=decided_keep), "
+                         f"{annotated} carry a user comment, "
+                         f"{fixed_but_still} marked `fixed_in_xlsx` but still detected.\n")
 
     lines.append("## Summary\n")
     lines.append("| Severity | Categories | Total rows flagged |")
@@ -624,7 +636,11 @@ def render_md(f: Findings, df: pd.DataFrame, sheet: str) -> str:
             lines.append(f"### {item['category']}")
             lines.append(item["description"])
             if item["rows"]:
-                cols = list(item["rows"][0].keys())
+                # Hide audit-only fields (_id, _user_*) from the displayed columns,
+                # but surface user comments inline below each row that has one.
+                display_cols = [c for c in item["rows"][0].keys()
+                                if not (c.startswith("_") and c != "_id")]
+                cols = [c for c in display_cols if c != "_id"]
                 lines.append("")
                 lines.append("| " + " | ".join(cols) + " |")
                 lines.append("|" + "---|" * len(cols))
@@ -635,6 +651,20 @@ def render_md(f: Findings, df: pd.DataFrame, sheet: str) -> str:
                         s = str(v).replace("|", "\\|")
                         cells.append(s[:80])
                     lines.append("| " + " | ".join(cells) + " |")
+                    # Inline annotation lines below the row
+                    note = row.get("_note")
+                    user_status = row.get("_user_status")
+                    user_comment = row.get("_user_comment")
+                    if note or user_status or user_comment:
+                        bits = []
+                        if user_status:
+                            bits.append(f"status=`{user_status}`")
+                        if user_comment:
+                            bits.append(f'note from data owner: "{user_comment[:200]}"')
+                        if note:
+                            bits.append(f"⚠ {note}")
+                        if bits:
+                            lines.append(f"| _{(' · '.join(bits))[:600]}_ {'|' * (len(cols) - 1)}|")
                 if len(item["rows"]) > 30:
                     lines.append(f"\n*(showing first 30 of {len(item['rows'])} rows)*")
             lines.append("")
@@ -667,13 +697,82 @@ def run_checks(df: pd.DataFrame) -> Findings:
     return f
 
 
+def load_decisions() -> dict:
+    """Read data_decisions.json's 'decisions' map. Returns {} if absent or malformed."""
+    if not DECISIONS_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(DECISIONS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    decs = raw.get("decisions") if isinstance(raw, dict) else None
+    return decs or {}
+
+
+def apply_decisions(findings: Findings, decisions: dict) -> dict:
+    """Walk the findings and apply user decisions.
+
+    - status='decided_keep'    → drop the row from the report.
+    - status='fixed_in_xlsx'   → drop the row only if the underlying check
+                                  no longer flags it. Since we run on the
+                                  CURRENT xlsx, if it's still in `findings`
+                                  the user marked it fixed but the data
+                                  still shows the issue → keep and annotate.
+    - status='answered'/'needs_more_data' → keep, but attach user comment.
+
+    Returns a dict of suppression stats for the report header.
+    """
+    stats = {"suppressed_decided_keep": 0,
+             "suppressed_fixed_in_xlsx": 0,
+             "annotated_with_comment": 0,
+             "fixed_but_still_detected": 0}
+    if not decisions:
+        return stats
+    for severity in ("errors", "warnings", "info"):
+        items_kept = []
+        for cat in getattr(findings, severity):
+            rows_kept = []
+            for r in cat["rows"]:
+                dec = decisions.get(r.get("_id"))
+                if not dec:
+                    rows_kept.append(r)
+                    continue
+                status = (dec.get("status") or "").strip()
+                comment = (dec.get("comment") or "").strip()
+                if status == "decided_keep":
+                    stats["suppressed_decided_keep"] += 1
+                    continue
+                if status == "fixed_in_xlsx":
+                    # Row is in current findings → user said fixed but it's not.
+                    r["_user_comment"] = comment
+                    r["_user_status"] = status
+                    r["_note"] = "marked fixed_in_xlsx but still detected"
+                    stats["fixed_but_still_detected"] += 1
+                    rows_kept.append(r)
+                    continue
+                # Other statuses (open, answered, needs_more_data): keep + annotate
+                if comment:
+                    r["_user_comment"] = comment
+                    stats["annotated_with_comment"] += 1
+                if status and status != "open":
+                    r["_user_status"] = status
+                rows_kept.append(r)
+            if rows_kept:
+                cat = {**cat, "rows": rows_kept}
+                items_kept.append(cat)
+        setattr(findings, severity, items_kept)
+    return stats
+
+
 def main() -> None:
     df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME)
     df.columns = [str(c).strip() for c in df.columns]
 
     f = run_checks(df)
+    decisions = load_decisions()
+    decision_stats = apply_decisions(f, decisions)
 
-    md = render_md(f, df, SHEET_NAME)
+    md = render_md(f, df, SHEET_NAME, decision_stats)
     OUT_MD.write_text(md, encoding="utf-8")
 
     json_payload = {
@@ -686,6 +785,7 @@ def main() -> None:
             "n_info_rows": sum(len(it["rows"]) for it in f.info),
             "source_rows": len(df),
             "source_cols": len(df.columns),
+            "decisions_applied": decision_stats,
         },
         "errors": f.errors,
         "warnings": f.warnings,
@@ -698,6 +798,11 @@ def main() -> None:
     print(f"  Errors:   {len(f.errors)} categories, {sum(len(it['rows']) for it in f.errors)} flagged rows")
     print(f"  Warnings: {len(f.warnings)} categories, {sum(len(it['rows']) for it in f.warnings)} flagged rows")
     print(f"  Info:     {len(f.info)} categories, {sum(len(it['rows']) for it in f.info)} flagged rows")
+    suppressed = decision_stats["suppressed_decided_keep"] + decision_stats["suppressed_fixed_in_xlsx"]
+    if decisions:
+        print(f"  Decisions applied: {suppressed} suppressed (decided_keep), "
+              f"{decision_stats['annotated_with_comment']} annotated, "
+              f"{decision_stats['fixed_but_still_detected']} flagged 'fixed but still detected'.")
 
 
 if __name__ == "__main__":

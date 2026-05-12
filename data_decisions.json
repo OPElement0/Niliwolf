@@ -1,0 +1,106 @@
+{
+  "generated_at": "2026-05-12T03:29:01.141240Z",
+  "schema_version": 1,
+  "decisions": {
+    "cq_a1_singletons_methodology": {
+      "status": "open",
+      "comment": "זה הערה יפה. הכן בבקשה ניתוח דאטה כמה זאבים היה אפשר לזהות באמצעות A1 בלבד, וכמה נדרשו 2/3/4 ואוזרים וכו' על מנת שהזאב יהיה ייחודי בקוד שלו (שלא הופיע בעוד אף זאב אחר)\nהכן לי דוח של זה. ייתכן ונרצה לעשות על זה ויזואליזציה מדויקת לדאטה בהמשך.",
+      "updated_at": "2026-05-11T21:34:25.373Z"
+    },
+    "cq_c6_second_id_strength": {
+      "status": "open",
+      "comment": "כל אזור עומד בפני עצמו ועוזר לזיהוי.\nבסוף בשיטה בחנו 9 אזורים ובכל אזור הסתכלנו על דברים אחרים.\nמעניין לדעת בתוצאות כמה אזורים היו נחוצים בסוף לכל זאב על מנת לזהות אותו באופן ייחודי שלא הופיע לפני בזאבים אחריפ וכמה רק הוסיפו עליו מידע.",
+      "updated_at": "2026-05-11T21:36:10.231Z"
+    },
+    "cq_d9_low_discrimination": {
+      "status": "open",
+      "comment": "הוא חלק מה9 אזורים. הוא מוסיף מידע חשוב. \nתשאיר אותו שם, הוא כן מתאר את מראה הזאב, גם אם העזרה שלו בהבחנה בין זאבים מוגבלת בגלל מעט האופציות הקיימות בו.",
+      "updated_at": "2026-05-11T21:37:27.828Z"
+    },
+    "cq_d8_pattern_vs_color_separation": {
+      "status": "open",
+      "comment": "באזור הזה הדפוס לא תמיד היה ברור. זאבים בהם הקוד מתאר רק צבע הם זאבים עם קוד חלקי מבחינת הסתכלות הדאטה.\nאם בהמשך נעשה ויזואליזציה לחלוקת הצבעים יהיה מעניין להסתכל רק על החלק שמתאר צבע באזור (המספר שבא אחרי האות a)\nכרגע אני לא בטוחה שארצה לעשות זאת. שמור את המידע הזה וייתכן שנשתמש בו בעתיד. בגרף שמציג קודים מלאים וחלקיים-כשמופיע רק חלק מהקוד-זה קוד חלקי.",
+      "updated_at": "2026-05-11T21:40:10.902Z"
+    },
+    "cq_b_regions_no_contrast_suffix": {
+      "status": "needs_more_data",
+      "comment": "זה טעות שלי ומשהו שאני צריכה לתקן. אני רוצה לתקן את זה עכשיו. תוכל בבקשה להדגיש לי את כל האלה שחסר בהם באזורי B סיומת ניגודיות? (a/b)",
+      "updated_at": "2026-05-11T21:42:15.061Z"
+    },
+    "cq_o78_a1_near_identical_asymmetric": {
+      "status": "answered",
+      "comment": "זה חוסר סימטריה. האות הבדל הזו מייצגת דפוס שונה בכל צד של הפנים באזור.",
+      "updated_at": "2026-05-11T21:43:04.094Z"
+    },
+    "cq_y31_b4_asymmetric_pattern_jump": {
+      "status": "answered",
+      "comment": "כל פעם שיש לך קידוד לאסימטריה עם פתיח R וL זה שם בכוונה ולא במקרה. יש שם א-סימטריה בזאב. אתה יכול לסמוך על הקידוד הזה",
+      "updated_at": "2026-05-11T21:44:25.420Z"
+    },
+    "cq_y39_b3_asymmetric_loss_of_pattern": {
+      "status": "fixed_in_xlsx",
+      "comment": "Y39 B3 now = b (your fix). Code matches. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_h13s_b5_leading_letter_disagree": {
+      "status": "fixed_in_xlsx",
+      "comment": "Auto-fix applied: code field regenerated from region cells per your earlier ruling.",
+      "updated_at": "2026-05-12T03:12:00.000Z"
+    },
+    "cq_h14_c7_leading_letter_disagree": {
+      "status": "fixed_in_xlsx",
+      "comment": "Auto-fix applied: code field regenerated from region cells per your earlier ruling.",
+      "updated_at": "2026-05-12T03:12:00.000Z"
+    },
+    "cq_y28_b3_b4_double_p": {
+      "status": "fixed_in_xlsx",
+      "comment": "Y28 B3/B4 now = P (single). Code matches. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_y31_c7_case_mismatch": {
+      "status": "fixed_in_xlsx",
+      "comment": "Y31 C7 = P, code field regenerated. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_y44_a2_unusual_letter_u": {
+      "status": "fixed_in_xlsx",
+      "comment": "Y44 A2 = a1i. Code matches. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_o82_row_shift_check": {
+      "status": "fixed_in_xlsx",
+      "comment": "O82 code now = b2l_N_Pa_N_dl_c_c_a8_a1. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_in92_c6_meaning_collapse": {
+      "status": "fixed_in_xlsx",
+      "comment": "In92 C6 = e. Code matches concat. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_m6h_d9_disagreement": {
+      "status": "fixed_in_xlsx",
+      "comment": "M6H D9 = a2. Code matches concat. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_y39_b5_extra_digit": {
+      "status": "fixed_in_xlsx",
+      "comment": "Y39 B5 mismatch resolved (you regenerated code). (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_code_partcount_mismatches_batch": {
+      "status": "fixed_in_xlsx",
+      "comment": "Batch fix: 6 of 7 wolves resolved (F23, Y27, Y101, Y33, Sh109, Sn84). K16 still has partcount=8 — needs a separate look. (auto-marked from chat after batch table save).",
+      "updated_at": "2026-05-12T03:10:00.000Z"
+    },
+    "cq_extra_midletter_3_wolves": {
+      "status": "answered",
+      "comment": "טעות. תיקנתי ושמרתי.\n",
+      "updated_at": "2026-05-12T00:24:26.454Z"
+    },
+    "cq_gender_question_mark": {
+      "status": "answered",
+      "comment": "צודק זה צריך להיות ריק. תיקנתי",
+      "updated_at": "2026-05-12T00:29:01.138Z"
+    }
+  }
+}

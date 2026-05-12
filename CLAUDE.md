@@ -240,7 +240,7 @@ that reflects the anatomical variation it captures.
 | Region | Structure | Examples | What each piece encodes |
 |---|---|---|---|
 | **A1, A2** | `<pattern-letter><digit>[mod-letters][color-letter]` | `a5tye`, `b1l`, `c1zf`, `a1txi` | leading `a/b/c/d` = pattern type; digit = pattern refinement; up to 2 mid letters (e.g. `t`, `y`, `v`, `z`, `x`) = additional refinements; **trailing letter from `{e,f,g,h,i,j,k,l,m}` = color** |
-| **B3, B4, B5** | `<pattern-letter><digit>[a/b]` | `c2b`, `b2b`, `a1b`, `c1`, `a2`, `b` | letter+digit = pattern; **trailing `a` = low contrast, trailing `b` = high contrast** (this is a contrast suffix, NOT a colour) |
+| **B3, B4, B5** | `<pattern-letter><digit>[a/b]`  *with standalone exceptions: B3=`b`, B4=`d`, B5=`d`* | `c2b`, `b2b`, `a1b`, `c1`, `a2`, `b` (B3), `d` (B4/B5) | letter+digit = pattern; **trailing `a` = low contrast, trailing `b` = high contrast** (this is a contrast suffix, NOT a colour). **Exception (Nili 2026-05-12):** the standalone forms B3=`b`, B4=`d`, B5=`d` are complete codes on their own — they do NOT require a contrast suffix. |
 | **C6** | same shape as A1/A2 | `c1f`, `a3i`, `c1g` | pattern type + refinement + **color** trailing letter from `{e,f,g,h,i,j,k,l}` (no `m`) |
 | **C7** | pattern only — no color, no contrast suffix | `c`, `a1`, `b2` | "complementary" pattern; the lateral nasal area's variation isn't colour-encoded |
 | **D8** | `a<color-digit>[b<pattern-digit>]` | `a4b5`, `a2b5`, `a3b` | **first digit (after `a`) = colour tone**; **second digit (after `b`) = pattern**; the `b` segment is optional when no patterning is visible |
@@ -295,6 +295,8 @@ C:\Users\nilim\Desktop\wolf paper\
 ├─ audit_report.md           ← latest analysis-pipeline audit
 ├─ data_quality_report.md    ← latest source-data QC report (errors / warnings / info)
 ├─ data_quality_report.json  ← machine-readable QC findings (consumed by data_table.html)
+├─ claude_questions.json     ← Claude-authored open questions (read at build time → admin panel)
+├─ data_decisions.json       ← Nili's status + comment per issue/question (single source of truth)
 │
 ├─ wolves_processed.csv          ← every wolf × region with status / cleaned / right / left / color / pattern
 ├─ wolves_processed_preview.csv  ← subset for quick review
@@ -329,10 +331,27 @@ The plan file is at `C:\Users\nilim\.claude\plans\c-users-nilim-downloads-wolves
 
 `update.bat` runs five steps in order:
 - `step2_process.py` — re-process all CSVs.
-- `step1c_audit.py` — analysis pipeline audit (writes `audit_report.md`).
-- `step1d_dataqc.py` — source data quality check (writes `data_quality_report.md`, `.json`).
+- `step1c_audit.py` — analysis pipeline audit (writes `audit_report.md`, appends Clarifications section from `data_decisions.json`).
+- `step1d_dataqc.py` — source data quality check (writes `data_quality_report.md`, `.json`); suppresses findings with `decided_keep` status and inlines user comments from `data_decisions.json`.
 - `step3_build_app.py` — rebuild analysis dashboard.
-- `build_data_table.py` — rebuild interactive admin/viewer table (embeds the latest QC findings into the issue-review panel).
+- `build_data_table.py` — rebuild interactive admin/viewer table (embeds the latest QC findings + `claude_questions.json` + prefilled decisions into the Fix & Clarify panel).
+
+### Fix & Clarify Mode (admin-only)
+- `data_table.html` includes a right-side panel under admin login (password `112358`).
+- Two sources of items, unified UI:
+  - **🤖 Claude's questions** — open questions Claude authored in `claude_questions.json` (methodology + per-wolf anomalies).
+  - **QC findings** — auto-detected by `step1d_dataqc.py` (errors / warnings / info).
+- Per item: status dropdown (`open`, `answered`, `decided_keep`, `fixed_in_xlsx`, `needs_more_data`), free-text comment, "Mark answered" / "Save comment".
+- Filter tabs at the top: All / Needs reply / Answered / Resolved.
+- Persistence layers (hot → cold):
+  1. **localStorage** key `wolves_clarifications_v1` (hot in-browser cache).
+  2. **`data_decisions.json`** in the project root (committed, single source of truth). Updated via the 💾 button → drop into the project folder → `update.bat` pre-fills the page from it on next build.
+  3. Read by `step1d_dataqc.py` (suppression) and `step1c_audit.py` (Clarifications appendix).
+- Round-trip: type in admin → 💾 download `data_decisions.json` → move into the project folder → run `update.bat` → next build embeds the saved answers.
+
+### Refreshing Claude's open questions
+- `claude_questions.json` is Claude-authored once per audit pass; replace it when you want a fresh batch (e.g. after new data).
+- Schema: `{generated_at, generated_by, questions: [{id, kind: "row"|"general", serial, target_column, question, evidence, severity_hint}]}`.
 
 ### B. Manual commands (if `update.bat` not preferred)
 ```bash

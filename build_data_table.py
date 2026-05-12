@@ -38,6 +38,8 @@ OUT_PATH = OUTPUT_DIR / "data_table.html"
 PASSWORD = "112358"
 SCHEMATIC_PATH = OUTPUT_DIR / "assets" / "wolf_schematic.jpg"
 DEFINITIONS_TABLE_PATH = OUTPUT_DIR / "assets" / "region_definitions_table.jpg"
+CLAUDE_QUESTIONS_PATH = OUTPUT_DIR / "claude_questions.json"
+DATA_DECISIONS_PATH = OUTPUT_DIR / "data_decisions.json"
 
 # Anatomical metadata (mirrors step3_build_app.py — keep in sync).
 GROUP_COLORS = {"A": "#E91E63", "B": "#42A5F5", "C": "#FF7043", "D": "#9C27B0"}
@@ -388,6 +390,50 @@ def _encode_image_b64(path: Path) -> tuple[str, str]:
     return (f"data:image/{mime};base64,", b64)
 
 
+def _load_json_or(path: Path, default):
+    """Read a JSON file if present; return `default` otherwise. Silent on absence."""
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  WARN: {path.name} unreadable ({e}); using empty default", file=sys.stderr)
+        return default
+
+
+def build_claude_questions_payload(df) -> list:
+    """Resolve every Claude question to a row_index (when serial-anchored) for the UI."""
+    serial_to_idx: dict[str, int] = {}
+    for idx, val in df["serial number"].items():
+        if pd.notna(val):
+            serial_to_idx[str(val).strip()] = int(idx)
+    raw = _load_json_or(CLAUDE_QUESTIONS_PATH, {"questions": []})
+    out: list[dict] = []
+    for q in raw.get("questions", []):
+        serial = q.get("serial") or ""
+        row_index = serial_to_idx.get(str(serial).strip()) if serial else None
+        out.append({
+            "id": q.get("id", ""),
+            "kind": q.get("kind", "general"),
+            "serial": str(serial) if serial else "",
+            "target_column": q.get("target_column"),
+            "question": q.get("question", ""),
+            "evidence": q.get("evidence"),
+            "severity_hint": q.get("severity_hint", "info"),
+            "row_index": row_index,
+        })
+    return out
+
+
+def load_prefilled_decisions() -> dict:
+    """Read data_decisions.json's `decisions` map. Returns {} if absent or malformed."""
+    raw = _load_json_or(DATA_DECISIONS_PATH, {"decisions": {}})
+    decs = raw.get("decisions") or {}
+    if not isinstance(decs, dict):
+        return {}
+    return decs
+
+
 def main() -> None:
     if not INPUT_FILE.exists():
         raise SystemExit(f"Source not found: {INPUT_FILE}")
@@ -452,6 +498,8 @@ def main() -> None:
 
     findings = run_checks(df)
     issues_payload = build_issues_payload(findings, df)
+    claude_questions = build_claude_questions_payload(df)
+    prefilled_decisions = load_prefilled_decisions()
 
     # Anatomy / region metadata for the JS side
     anatomy = {
@@ -479,6 +527,8 @@ def main() -> None:
         "n_pool": len(df_pool),
         "build_iso": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
         "issues": issues_payload,
+        "claude_questions": claude_questions,
+        "prefilled_decisions": prefilled_decisions,
         "anatomy": anatomy,
     }
 
@@ -503,6 +553,8 @@ def main() -> None:
           f"{issues_payload['totals']['warnings_categories']}W / "
           f"{issues_payload['totals']['info_categories']}I categories, "
           f"{issues_payload['totals']['total_rows']} flagged")
+    print(f"  claude: {len(claude_questions)} authored questions, "
+          f"{len(prefilled_decisions)} pre-filled decisions from data_decisions.json")
 
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -754,8 +806,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .ip-issue .ip-issue-key { font-family: monospace; }
   .ip-issue .ip-issue-state { font-size: 10px; color: #888; }
   .ip-active-card { padding: 12px 14px; background: #fff8e1; border-top: 2px solid #f57c00;
-                    display: none; }
+                    display: none; max-height: 55vh; overflow-y: auto;
+                    flex-shrink: 0; }
   .ip-active-card.show { display: block; }
+  .ip-active-card::-webkit-scrollbar { width: 10px; }
+  .ip-active-card::-webkit-scrollbar-thumb { background: rgba(245, 124, 0, 0.4); border-radius: 5px; }
+  .ip-active-card::-webkit-scrollbar-thumb:hover { background: rgba(245, 124, 0, 0.7); }
   .ip-active-card .ip-active-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
   .ip-active-card .ip-active-detail { font-size: 11.5px; color: #555; line-height: 1.45;
                                        margin-bottom: 8px; }
@@ -772,6 +828,127 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .tabulator .tabulator-cell.cell-issue-info { box-shadow: inset 0 0 0 2px #90a4ae; }
   .tabulator .tabulator-cell.cell-issue-active { box-shadow: inset 0 0 0 3px #f57c00, 0 0 0 2px #f57c00; }
   .tabulator-row.row-issue-active { background: #fff8e1 !important; }
+
+  /* Fix & Clarify mode — admin-only additions to issue panel */
+  .ip-header-actions { display: flex; gap: 4px; align-items: center; }
+  .ip-header-actions button {
+    background: rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.08);
+    cursor: pointer; padding: 3px 8px; border-radius: 4px; font-size: 13px;
+    line-height: 1;
+  }
+  .ip-header-actions button:hover { background: #fff; }
+
+  .ip-panel-tabs {
+    display: flex; gap: 3px; padding: 5px 8px; background: #f5f7fa;
+    border-bottom: 1px solid #eee;
+  }
+  .ip-tab {
+    flex: 1; padding: 4px 6px; background: transparent; border: 0;
+    font-size: 11px; cursor: pointer; border-radius: 4px;
+    color: #555; font-weight: 500; text-align: center;
+    display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  }
+  .ip-tab:hover { background: #fff; }
+  .ip-tab.active {
+    background: #fff; color: #111; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    font-weight: 600;
+  }
+  .ip-tab-count {
+    font-size: 10px; padding: 1px 5px; border-radius: 8px;
+    background: rgba(0,0,0,0.08); font-weight: 600;
+  }
+  .ip-tab.active .ip-tab-count { background: #2563eb; color: #fff; }
+
+  /* Claude-questions category gets a distinct teal accent */
+  .ip-cat.sev-claude .ip-cat-header { background: linear-gradient(90deg, #e0f7fa 0%, #fafbfc 60%); }
+  .ip-cat.sev-claude .ip-cat-header .count { background: #80deea; color: #006064; }
+
+  /* Status pill — next to side-list items and active-card title */
+  .ip-status-pill {
+    display: inline-block; padding: 1px 7px; border-radius: 8px;
+    font-size: 10px; font-weight: 700; color: #fff;
+    margin-left: 4px; vertical-align: middle; letter-spacing: 0.2px;
+  }
+  .ip-status-pill.status-open          { background: #9e9e9e; }
+  .ip-status-pill.status-answered      { background: #43a047; }
+  .ip-status-pill.status-decided_keep  { background: #2563eb; }
+  .ip-status-pill.status-fixed_in_xlsx { background: #7e57c2; }
+  .ip-status-pill.status-needs_more_data { background: #ef6c00; }
+
+  /* Clarification block in active card */
+  .ip-clarification {
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e0c97f;
+  }
+  .ip-clarification-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+    font-size: 11.5px; flex-wrap: wrap;
+  }
+  .ip-clarification-row label {
+    color: #555; font-weight: 600;
+  }
+  .ip-status-select {
+    padding: 3px 6px; border: 1px solid #c0a878; border-radius: 4px;
+    background: #fff; font-size: 11.5px; cursor: pointer;
+  }
+  .ip-updated {
+    color: #888; font-size: 10.5px; margin-left: auto; font-style: italic;
+  }
+  .ip-comment {
+    width: 100%; padding: 6px 8px; border: 1px solid #c0a878;
+    border-radius: 5px; font-family: inherit; font-size: 12px;
+    resize: vertical; min-height: 56px; max-height: 180px; box-sizing: border-box;
+    background: #fffef7; line-height: 1.45;
+  }
+  .ip-comment:focus { outline: 1px solid #f57c00; border-color: #f57c00; }
+  .ip-save-flash {
+    display: inline-block; margin-left: 6px; color: #43a047;
+    font-size: 11px; font-weight: 600; opacity: 0; transition: opacity 0.18s;
+  }
+  .ip-save-flash.show { opacity: 1; }
+
+  /* Question prose inside Claude category items */
+  .ip-question-text {
+    background: #f1f8e9; border-left: 3px solid #689f38;
+    padding: 6px 9px; margin: 6px 0; font-size: 12px; line-height: 1.45;
+    color: #2c3e50; border-radius: 3px;
+  }
+  .ip-question-evidence {
+    font-size: 11px; color: #555; margin-top: 4px;
+    background: #fafbfc; padding: 4px 8px; border-radius: 3px;
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+
+  /* Local-sync status pill (top-right of header) */
+  .sync-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 11px; border-radius: 12px;
+    font-size: 11.5px; font-weight: 600; cursor: pointer;
+    background: #f5f5f5; color: #757575; user-select: none;
+    transition: all 0.15s; border: 1px solid transparent;
+    max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sync-pill::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor; opacity: 0.85; flex-shrink: 0;
+  }
+  .sync-pill.sync-saved      { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+  .sync-pill.sync-saving     { background: #fff8e1; color: #ef6c00; border-color: #ffd54f; }
+  .sync-pill.sync-pipeline   { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+  .sync-pill.sync-error      { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
+  .sync-pill.sync-offline    { background: #f5f5f5; color: #757575; border-color: #e0e0e0; }
+  .sync-pill.sync-connected  { background: #e0f7fa; color: #006064; border-color: #80deea; }
+  .sync-pill:hover           { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
+
+  /* Error toast for sync failures */
+  .sync-toast {
+    position: fixed; top: 16px; right: 16px; z-index: 2000;
+    background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a;
+    padding: 10px 14px; border-radius: 8px; max-width: 360px;
+    font-size: 12.5px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    display: none;
+  }
+  .sync-toast.show { display: block; }
+  .sync-toast .close { float: right; cursor: pointer; margin-left: 10px; font-weight: 700; }
 
   /* Login modal */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none;
@@ -805,7 +982,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <span style="background:#9C27B0;">D — head side (D8, D9)</span>
       </div>
     </div>
-    <div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div id="sync-pill" class="sync-pill sync-offline" title="Local sync status — click for details">starting…</div>
       <button id="admin-login-btn" class="btn-warn" style="padding: 8px 14px; font-size: 13px;">
         🔒 Admin login
       </button>
@@ -845,8 +1023,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </div>
 
 <div id="admin-bar" class="admin-bar">
-  <div><strong>Admin mode active</strong> — click any cell to edit. Empty-code rows now visible. Edits stay in your browser until you save.</div>
-  <div style="display:flex; gap:6px;">
+  <div><strong>Admin mode active</strong> — click any cell to edit, press <kbd>Enter</kbd> or click outside to commit. <span id="admin-bar-hint" style="color:#6d4c41;"></span></div>
+  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+    <button id="save-table-btn" class="btn-primary" title="Save every table edit to wolves_data.xlsx right now">
+      💾 Save table edits <span id="save-table-count"></span>
+    </button>
     <button id="review-issues-btn">⚠ Review issues (<span id="review-count">0</span>)</button>
     <button id="add-row-btn">＋ Add row</button>
     <button id="logout-btn">Logout</button>
@@ -855,18 +1036,48 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <aside id="issue-panel" class="issue-panel">
   <div class="ip-header">
-    <h3>Data Quality — Review</h3>
-    <button class="close-btn" id="ip-close" title="Close">×</button>
+    <h3>Fix &amp; Clarify</h3>
+    <div class="ip-header-actions">
+      <button id="ip-download" title="Download all answers as data_decisions.json">💾</button>
+      <button id="ip-load" title="Load saved answers from a JSON file">📥</button>
+      <button class="close-btn" id="ip-close" title="Close">×</button>
+    </div>
   </div>
-  <div class="ip-progress">
-    <span><strong id="ip-remaining">0</strong> remaining</span>
-    <span><strong id="ip-resolved">0</strong> resolved</span>
-    <span><strong id="ip-total">0</strong> total</span>
+  <input type="file" id="ip-load-file" accept=".json" style="display:none">
+  <div class="ip-panel-tabs">
+    <button class="ip-tab active" data-mode="all">All <span class="ip-tab-count" id="ip-tab-count-all">0</span></button>
+    <button class="ip-tab" data-mode="needs_reply">Needs reply <span class="ip-tab-count" id="ip-tab-count-needs_reply">0</span></button>
+    <button class="ip-tab" data-mode="answered">Answered <span class="ip-tab-count" id="ip-tab-count-answered">0</span></button>
+    <button class="ip-tab" data-mode="resolved">Resolved <span class="ip-tab-count" id="ip-tab-count-resolved">0</span></button>
+  </div>
+  <div class="ip-progress" id="ip-progress">
+    <span title="Distinct decisions left (Claude questions + QC categories with open items)">
+      <strong id="ip-decisions-remaining">0</strong> decisions remaining
+    </span>
+    <span title="Items where you've left a comment or set a status"><strong id="ip-answered">0</strong> answered</span>
+    <span title="Total individual items"><strong id="ip-items-total">0</strong> items</span>
   </div>
   <div class="ip-list" id="ip-list"></div>
   <div class="ip-active-card" id="ip-active-card">
     <div class="ip-active-title" id="ip-active-title">—</div>
     <div class="ip-active-detail" id="ip-active-detail">—</div>
+    <div class="ip-clarification" id="ip-clarification">
+      <div class="ip-clarification-row">
+        <label for="ip-status-select">Status:</label>
+        <select id="ip-status-select" class="ip-status-select">
+          <option value="open">Open</option>
+          <option value="answered">Answered</option>
+          <option value="decided_keep">Decided to keep</option>
+          <option value="fixed_in_xlsx">Fixed in xlsx</option>
+          <option value="needs_more_data">Need more data</option>
+        </select>
+        <span class="ip-updated" id="ip-updated">—</span>
+      </div>
+      <textarea id="ip-comment" class="ip-comment"
+                placeholder="Your reply / clarification… (saved on blur)"
+                dir="auto" rows="3"></textarea>
+      <span class="ip-save-flash" id="ip-save-flash">✓ saved</span>
+    </div>
     <div class="ip-actions" id="ip-active-actions"></div>
   </div>
   <div class="ip-nav">
@@ -950,6 +1161,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
 </div>
 
+<div id="sync-toast" class="sync-toast">
+  <span class="close" onclick="document.getElementById('sync-toast').classList.remove('show')">×</span>
+  <strong>Sync error:</strong> <span id="sync-toast-msg">—</span>
+</div>
+
 <div id="codes-modal" class="modal-bg">
   <div class="modal">
     <h2 id="codes-modal-title">Codes</h2>
@@ -986,6 +1202,173 @@ async function sha256Hex(s) {
 }
 
 function rowKey(r, idx) { return r._id ?? `${r["serial number"] ?? ""}#${idx}`; }
+
+// ============================================================================
+// Local sync client — pushes every admin edit / clarification to a local
+// Python server (sync_server.py) running on http://127.0.0.1:7869.
+// If the server isn't running, every method is a no-op and the page falls
+// back to the existing localStorage + manual download path.
+// ============================================================================
+const SYNC_BASE = "http://127.0.0.1:7869";
+let syncActive = false;           // server reachable?
+let syncLastSavedAt = null;       // Date of last successful POST
+let syncStatusTimer = null;       // /api/status polling timer
+let syncProbeTimer = null;        // periodic re-probe when offline
+
+function fmtClock(d) {
+  return d ? d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "—";
+}
+
+function setSyncPill(state, text, tooltip) {
+  const pill = document.getElementById("sync-pill");
+  if (!pill) return;
+  pill.className = `sync-pill sync-${state}`;
+  pill.textContent = text;
+  if (tooltip) pill.title = tooltip;
+  // Update the admin-bar hint to match the current sync state
+  const hint = document.getElementById("admin-bar-hint");
+  if (hint) {
+    if (state === "connected" || state === "saved" || state === "saving" || state === "pipeline") {
+      hint.textContent = "Each edit auto-syncs to disk. The Save button below force-saves the entire table.";
+    } else {
+      hint.textContent = "(sync server offline — your edits stay in this browser; click Save to download an xlsx).";
+    }
+  }
+}
+
+function syncToast(msg) {
+  const toast = document.getElementById("sync-toast");
+  const ms = document.getElementById("sync-toast-msg");
+  if (!toast || !ms) return;
+  ms.textContent = msg;
+  toast.classList.add("show");
+  // Auto-hide after 8s
+  clearTimeout(syncToast._t);
+  syncToast._t = setTimeout(() => toast.classList.remove("show"), 8000);
+}
+
+async function syncProbe() {
+  // Quick ping. Use AbortController for a 1s timeout (works on older browsers).
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1200);
+    const r = await fetch(SYNC_BASE + "/api/ping", { signal: ctrl.signal, cache: "no-store" });
+    clearTimeout(t);
+    if (!r.ok) throw new Error("non-200");
+    const body = await r.json();
+    if (!body.ok) throw new Error("server says not ok");
+    syncActive = true;
+    setSyncPill("connected", "Sync: connected", "Local sync server detected at " + SYNC_BASE);
+    // Begin status polling
+    if (!syncStatusTimer) syncStatusTimer = setInterval(syncPollStatus, 3000);
+    // Cancel periodic re-probe (we're connected)
+    if (syncProbeTimer) { clearInterval(syncProbeTimer); syncProbeTimer = null; }
+    syncPollStatus();
+    return true;
+  } catch (e) {
+    syncActive = false;
+    setSyncPill("offline", "Sync: offline (local cache)",
+      "Sync server is not running. Edits will still save to your browser; double-click start_sync.bat to enable live sync.");
+    if (syncStatusTimer) { clearInterval(syncStatusTimer); syncStatusTimer = null; }
+    // Periodically retry while offline
+    if (!syncProbeTimer) syncProbeTimer = setInterval(() => syncProbe(), 8000);
+    return false;
+  }
+}
+
+async function syncPollStatus() {
+  if (!syncActive) return;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1500);
+    const r = await fetch(SYNC_BASE + "/api/status", { signal: ctrl.signal, cache: "no-store" });
+    clearTimeout(t);
+    if (!r.ok) throw new Error("non-200");
+    const body = await r.json();
+    const p = body.pipeline || {};
+    if (p.running) {
+      setSyncPill("pipeline", "Sync: pipeline running…",
+        "QC pipeline rerunning after your save.");
+    } else if (p.ok === false) {
+      const stderr = (p.stderr_tail || "").slice(-300);
+      setSyncPill("error", "Sync: pipeline failed (click)",
+        "QC pipeline failed. Click for details.");
+      const pill = document.getElementById("sync-pill");
+      if (pill) pill.onclick = () => alert("Pipeline error tail:\n\n" + (stderr || "(no detail)"));
+    } else if (syncLastSavedAt) {
+      setSyncPill("saved", `Sync: synced ${fmtClock(syncLastSavedAt)}`,
+        `Server in sync. Decisions: ${body.decisions_count}.`);
+    } else {
+      setSyncPill("connected", "Sync: connected",
+        `Server in sync. Decisions: ${body.decisions_count}. Pipeline last ran: ${p.ended_at || "—"}.`);
+    }
+  } catch (e) {
+    // Server went away; revert to offline.
+    syncActive = false;
+    setSyncPill("offline", "Sync: offline (local cache)",
+      "Lost connection to sync server. Edits still save to browser.");
+    syncToast("Lost connection to local sync server. Edits saved to browser cache. Start sync_server.bat to re-enable.");
+    if (syncStatusTimer) { clearInterval(syncStatusTimer); syncStatusTimer = null; }
+    if (!syncProbeTimer) syncProbeTimer = setInterval(() => syncProbe(), 8000);
+  }
+}
+
+async function syncPost(endpoint, payload) {
+  if (!syncActive) return { ok: false, offline: true };
+  setSyncPill("saving", "Sync: saving…", "Saving to disk and queuing pipeline.");
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(SYNC_BASE + endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok || !body.ok) {
+      const errmsg = body.error || `HTTP ${r.status}`;
+      setSyncPill("error", "Sync: save failed (click)",
+        "Save error: " + errmsg + ". Click for details.");
+      const pill = document.getElementById("sync-pill");
+      if (pill) pill.onclick = () => alert("Save error on " + endpoint + ":\n\n" + errmsg);
+      syncToast("Save error: " + errmsg);
+      return body;
+    }
+    syncLastSavedAt = new Date();
+    setSyncPill("saved", `Sync: synced ${fmtClock(syncLastSavedAt)}`, "Saved to disk.");
+    return body;
+  } catch (e) {
+    setSyncPill("error", "Sync: network error",
+      "Network error talking to sync server. Edit saved to browser.");
+    syncToast("Sync server unreachable: " + e.message + ". Edits remain in local cache; re-save once server is up.");
+    syncActive = false;
+    if (syncStatusTimer) { clearInterval(syncStatusTimer); syncStatusTimer = null; }
+    if (!syncProbeTimer) syncProbeTimer = setInterval(() => syncProbe(), 8000);
+    return { ok: false, error: e.message };
+  }
+}
+
+// Debouncer for bulk xlsx pushes — multiple rapid cell edits become one POST.
+let _syncBulkTimer = null;
+function syncPushXlsxBulkDebounced() {
+  if (!syncActive || !table) return;
+  if (_syncBulkTimer) clearTimeout(_syncBulkTimer);
+  _syncBulkTimer = setTimeout(() => {
+    const rows = table.getData().map(r => {
+      const copy = {};
+      for (const c of PAYLOAD.columns) copy[c] = r[c] ?? "";
+      return copy;
+    });
+    syncPost("/api/save_xlsx_bulk", { rows, columns: PAYLOAD.columns });
+  }, 700);
+}
+
+function syncPushDecision(id, dec) {
+  if (!syncActive) return;
+  syncPost("/api/save_decisions", { decisions: { [id]: dec } });
+}
 
 function buildColumns() {
   return PAYLOAD.columns.map((name, i) => {
@@ -1115,16 +1498,67 @@ function rebuildTable() {
 
 function onChange() {
   const data = table.getData();
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
   const diffs = countDiffs(data);
+  // Only persist to localStorage when there are ACTUAL unsaved edits — otherwise
+  // the popup "Found unsaved edits…" fires on every page load because tableBuilt
+  // calls onChange() with the pristine baseline.
+  try {
+    if (diffs > 0) localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    else localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {}
   $("save-bar").classList.toggle("show", diffs > 0);
   $("dirty-summary").textContent = diffs === 0 ? "No unsaved changes" :
         `${diffs} unsaved change${diffs === 1 ? "" : "s"}`;
+  // Live counter on the admin-bar Save button
+  const sb = $("save-table-count");
+  if (sb) sb.textContent = diffs > 0 ? `(${diffs} pending)` : "";
   // Re-validate issues against current data
   if (typeof renderIssuePanel === "function" && isAdmin) renderIssuePanel();
   // Refresh status-chip counts (depends on _status — only changes if user edits a region cell;
   // we don't recompute statuses live, but at least the chips reflect filter effects).
   if (typeof refreshStatusChipCounts === "function") refreshStatusChipCounts();
+}
+
+// Force-save: pushes the ENTIRE current table state to disk via the sync server,
+// catching anything that the per-cell sync may have missed (e.g. edits made while
+// the server was offline, or cells whose `cellEdited` event didn't fire).
+async function saveTableNow() {
+  if (!table) return;
+  const btn = $("save-table-btn");
+  const origLabel = btn ? btn.innerHTML : "";
+  if (btn) { btn.disabled = true; btn.innerHTML = "💾 Saving…"; }
+  try {
+    if (syncActive) {
+      const rows = table.getData().map(r => {
+        const copy = {};
+        for (const c of PAYLOAD.columns) copy[c] = r[c] ?? "";
+        return copy;
+      });
+      const result = await syncPost("/api/save_xlsx_bulk", { rows, columns: PAYLOAD.columns });
+      if (result && result.ok) {
+        // Re-baseline so countDiffs returns 0 — we just saved everything to disk.
+        baselineRows = JSON.parse(JSON.stringify(rows));
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        $("save-bar").classList.remove("show");
+        $("dirty-summary").textContent = "No unsaved changes";
+        if (btn) btn.innerHTML = "✓ Saved to disk";
+        setTimeout(() => { if (btn) btn.innerHTML = origLabel; }, 1500);
+        onChange();
+      } else if (btn) {
+        btn.innerHTML = "✗ Save failed";
+        setTimeout(() => { btn.innerHTML = origLabel; }, 2500);
+      }
+    } else {
+      // Offline → fall back to the original download flow.
+      await saveAsXlsx();
+      if (btn) btn.innerHTML = origLabel;
+    }
+  } catch (e) {
+    if (btn) btn.innerHTML = origLabel;
+    syncToast("Save failed: " + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function countDiffs(currentData) {
@@ -1463,14 +1897,25 @@ function showCodesForBucket(region, bucket) {
 // ============================================================================
 
 const ISSUES = (PAYLOAD.issues && PAYLOAD.issues.categories) ? PAYLOAD.issues.categories : [];
+const CLAUDE_QUESTIONS = PAYLOAD.claude_questions || [];
+const PREFILLED_DECISIONS = PAYLOAD.prefilled_decisions || {};
 const ISSUE_DECISIONS_KEY = "wolves_issue_decisions_v1";
 const ISSUE_POLICY_KEY = "wolves_issue_policy_v1";
+const CLARIFICATIONS_KEY = "wolves_clarifications_v1";
+
+const STATUS_LIST = ["open", "answered", "decided_keep", "fixed_in_xlsx", "needs_more_data"];
+const STATUS_LABEL = {
+  open: "open", answered: "answered", decided_keep: "decided keep",
+  fixed_in_xlsx: "fixed in xlsx", needs_more_data: "need more data"
+};
 
 let ALLOWED_SET_SOCIAL = new Set(["pack", "group", "unknown"]);
 let issueDecisions = {};
 let policyState = {};
+let clarifications = {};
 let activeIssueId = null;
 let issueOpenCategories = new Set();
+let panelFilterMode = "all"; // all | needs_reply | answered | resolved
 
 function escapeHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
@@ -1491,15 +1936,222 @@ function loadIssueState() {
       if (policyState["accept_packstar"]) ALLOWED_SET_SOCIAL.add("pack*");
     }
   } catch (e) {}
+  // Clarifications (status + free-text comments)
+  try {
+    const rawC = localStorage.getItem(CLARIFICATIONS_KEY);
+    if (rawC) clarifications = JSON.parse(rawC) || {};
+  } catch (e) {}
+  // MERGE with embedded prefilled (snapshot from data_decisions.json at build time).
+  // Newest `updated_at` per id wins. This catches the case where the sync server
+  // or another machine wrote newer decisions to disk while the browser was holding
+  // stale state in localStorage.
+  let mergedFromDisk = 0;
+  for (const [id, prefilled] of Object.entries(PREFILLED_DECISIONS || {})) {
+    const local = clarifications[id];
+    const localT = (local && local.updated_at) || "";
+    const diskT  = (prefilled && prefilled.updated_at) || "";
+    if (!local || diskT > localT) {
+      clarifications[id] = prefilled;
+      mergedFromDisk++;
+    }
+  }
+  if (mergedFromDisk > 0) {
+    saveClarifications();
+    console.log(`[sync] merged ${mergedFromDisk} fresher decisions from data_decisions.json`);
+  }
+  // Sync legacy issueDecisions so existing isResolved() / Mark-as-correct still work
+  for (const [id, dec] of Object.entries(clarifications)) {
+    if (dec && dec.status === "decided_keep") issueDecisions[id] = "decided_keep";
+  }
 }
 function saveIssueState() {
   try { localStorage.setItem(ISSUE_DECISIONS_KEY, JSON.stringify(issueDecisions)); } catch (e) {}
   try { localStorage.setItem(ISSUE_POLICY_KEY, JSON.stringify(policyState)); } catch (e) {}
 }
+function saveClarifications() {
+  try { localStorage.setItem(CLARIFICATIONS_KEY, JSON.stringify(clarifications)); } catch (e) {}
+}
+function getStatus(id) {
+  return (clarifications[id] && clarifications[id].status) || "open";
+}
+function getComment(id) {
+  return (clarifications[id] && clarifications[id].comment) || "";
+}
+function getUpdatedAt(id) {
+  return (clarifications[id] && clarifications[id].updated_at) || "";
+}
+function setClarification(id, fields) {
+  const existing = clarifications[id] || { status: "open", comment: "" };
+  const next = { ...existing, ...fields };
+  next.updated_at = new Date().toISOString();
+  clarifications[id] = next;
+  if (next.status === "decided_keep") {
+    issueDecisions[id] = "decided_keep";
+    saveIssueState();
+  } else if (issueDecisions[id] === "decided_keep" && next.status !== "decided_keep") {
+    delete issueDecisions[id];
+    saveIssueState();
+  }
+  saveClarifications();
+  // Live-sync: push this single decision to the local server if available
+  syncPushDecision(id, next);
+}
+function fmtTimestamp(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch (e) { return iso; }
+}
 
 function findRowByIndex(rowIndex) {
   if (!table || rowIndex == null) return null;
   return table.getRows().find(r => r.getData()._row_index === rowIndex) || null;
+}
+
+// ----------------------------------------------------------------------------
+// Claude's questions — synthesised as a virtual category that the existing
+// renderIssuePanel loop can consume unchanged.
+// ----------------------------------------------------------------------------
+function buildClaudeCategory() {
+  if (!CLAUDE_QUESTIONS.length) return null;
+  return {
+    category_id: "_claude_questions",
+    title: "🤖 Claude's questions",
+    severity: "claude", // distinct accent in CSS
+    kind: "row",
+    hint: "Open questions authored by Claude — your replies feed back into analysis.",
+    description: `${CLAUDE_QUESTIONS.length} authored questions`,
+    row_actions: [],
+    policy_actions: [],
+    issues: CLAUDE_QUESTIONS.map(q => ({
+      id: q.id,
+      row_index: q.row_index,
+      serial: q.serial || "",
+      target_column: q.target_column || null,
+      __is_claude: true,
+      __severity_hint: q.severity_hint || "info",
+      details: {
+        question: q.question,
+        ...(q.kind ? { kind: q.kind } : {}),
+        ...(q.evidence ? { evidence: typeof q.evidence === "object"
+              ? JSON.stringify(q.evidence) : String(q.evidence) } : {}),
+      },
+    })),
+  };
+}
+
+// All visible categories: Claude's questions first (if any), then QC categories.
+function allCategories() {
+  const out = [];
+  const claude = buildClaudeCategory();
+  if (claude) out.push(claude);
+  for (const c of ISSUES) out.push(c);
+  return out;
+}
+
+// ----------------------------------------------------------------------------
+// Filter tabs
+// ----------------------------------------------------------------------------
+function matchesPanelFilter(issue) {
+  const resolved = isResolved(issue);
+  const status = getStatus(issue.id);
+  switch (panelFilterMode) {
+    case "all": return true;
+    case "needs_reply": return !resolved && status === "open";
+    case "answered": return status === "answered";
+    case "resolved":
+      return resolved || status === "decided_keep" || status === "fixed_in_xlsx";
+    default: return true;
+  }
+}
+
+function refreshPanelTabCounts() {
+  let all = 0, needs = 0, answered = 0, resolved = 0;
+  for (const cat of allCategories()) {
+    for (const it of cat.issues) {
+      it.__category = cat;
+      all++;
+      const r = isResolved(it);
+      const st = getStatus(it.id);
+      if (!r && st === "open") needs++;
+      if (st === "answered") answered++;
+      if (r || st === "decided_keep" || st === "fixed_in_xlsx") resolved++;
+    }
+  }
+  const set = (id, n) => { const el = $(id); if (el) el.textContent = n; };
+  set("ip-tab-count-all", all);
+  set("ip-tab-count-needs_reply", needs);
+  set("ip-tab-count-answered", answered);
+  set("ip-tab-count-resolved", resolved);
+}
+
+// ----------------------------------------------------------------------------
+// Download / load decisions — round-trip with the project's data_decisions.json
+// ----------------------------------------------------------------------------
+function downloadDecisionsJson() {
+  const payload = {
+    generated_at: new Date().toISOString(),
+    schema_version: 1,
+    decisions: clarifications,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "data_decisions.json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  alert("data_decisions.json downloaded.\n\nNext steps:\n1. Move the file into the project folder (replacing the existing one).\n2. Run update.bat — your statuses + comments now flow into the QC report and audit report.");
+}
+
+function loadDecisionsJson(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try { parsed = JSON.parse(reader.result); }
+    catch (e) { alert("Invalid JSON file: " + e.message); return; }
+    const incoming = (parsed && parsed.decisions) ? parsed.decisions : parsed;
+    if (!incoming || typeof incoming !== "object") {
+      alert("File doesn't look like a decisions JSON (no `decisions` object).");
+      return;
+    }
+    // Merge: newest updated_at per id wins; confirm before overwriting any
+    // non-empty existing comment with a different value.
+    let added = 0, updated = 0, kept = 0;
+    const conflicts = [];
+    for (const [id, dec] of Object.entries(incoming)) {
+      const cur = clarifications[id];
+      if (!cur) { clarifications[id] = dec; added++; continue; }
+      const curT = cur.updated_at || "";
+      const newT = dec.updated_at || "";
+      if (newT > curT) {
+        if (cur.comment && dec.comment && cur.comment !== dec.comment) {
+          conflicts.push({ id, cur, dec });
+        } else {
+          clarifications[id] = dec; updated++;
+        }
+      } else {
+        kept++;
+      }
+    }
+    if (conflicts.length) {
+      const proceed = confirm(
+        `${conflicts.length} item(s) have non-empty local comments that differ from the file.\n\n` +
+        `OK = overwrite local with file, Cancel = keep local.`
+      );
+      for (const c of conflicts) {
+        if (proceed) { clarifications[c.id] = c.dec; updated++; }
+        else { kept++; }
+      }
+    }
+    saveClarifications();
+    renderIssuePanel();
+    alert(`Loaded: ${added} added, ${updated} updated, ${kept} kept (no change).`);
+  };
+  reader.readAsText(file);
 }
 
 function rowHasIssueLive(issue) {
@@ -1564,26 +2216,35 @@ function rowHasIssueLive(issue) {
 function isResolved(issue) {
   const dec = issueDecisions[issue.id];
   if (dec === "decided_keep" || dec === "resolved_by_edit") return true;
+  // Claude's questions only resolve via explicit user decision (decided_keep
+  // or `fixed_in_xlsx` with the underlying row going away). They are NOT
+  // auto-resolved by the live re-check, because most of them are general
+  // methodology questions with no row anchor.
+  if (issue.__is_claude) {
+    const st = (clarifications[issue.id] && clarifications[issue.id].status) || "";
+    return st === "decided_keep" || st === "fixed_in_xlsx";
+  }
   return !rowHasIssueLive(issue);
 }
 
 function categoryStats(cat) {
-  let remain = 0;
+  let remain = 0, shown = 0;
   for (const it of cat.issues) {
     it.__category = cat;
     if (!isResolved(it)) remain++;
+    if (matchesPanelFilter(it)) shown++;
   }
-  return { remain, total: cat.issues.length };
+  return { remain, total: cat.issues.length, shown };
 }
 
 function totalUnresolved() {
   let n = 0;
-  for (const cat of ISSUES) n += categoryStats(cat).remain;
+  for (const cat of allCategories()) n += categoryStats(cat).remain;
   return n;
 }
 function totalIssues() {
   let n = 0;
-  for (const cat of ISSUES) n += cat.issues.length;
+  for (const cat of allCategories()) n += cat.issues.length;
   return n;
 }
 
@@ -1591,19 +2252,24 @@ function renderIssuePanel() {
   const list = $("ip-list");
   if (!list) return;
   list.innerHTML = "";
-  for (const cat of ISSUES) {
+  for (const cat of allCategories()) {
     cat.issues.forEach(it => { it.__category = cat; });
     const stats = categoryStats(cat);
+    // When filter mode is not "all", hide categories whose issues all fail the filter.
+    if (panelFilterMode !== "all" && stats.shown === 0) continue;
     const catEl = document.createElement("div");
     catEl.className = `ip-cat sev-${cat.severity}`;
     if (issueOpenCategories.has(cat.category_id)) catEl.classList.add("open");
 
     const header = document.createElement("div");
     header.className = "ip-cat-header";
+    const countLabel = panelFilterMode === "all"
+      ? `${stats.remain}/${stats.total}`
+      : `${stats.shown}`;
     header.innerHTML = `
       <span class="arrow">▶</span>
       <span style="flex:1;">${escapeHtml(cat.title)}</span>
-      <span class="count">${stats.remain}/${stats.total}</span>
+      <span class="count">${countLabel}</span>
     `;
     header.addEventListener("click", () => {
       if (issueOpenCategories.has(cat.category_id)) issueOpenCategories.delete(cat.category_id);
@@ -1640,17 +2306,23 @@ function renderIssuePanel() {
     }
     for (const issue of cat.issues) {
       issue.__category = cat;
+      if (!matchesPanelFilter(issue)) continue;
       const resolved = isResolved(issue);
+      const status = getStatus(issue.id);
       const it = document.createElement("div");
       it.className = "ip-issue";
-      if (resolved) it.classList.add("resolved");
+      if (resolved && status !== "open") it.classList.add("resolved");
       if (issue.id === activeIssueId) it.classList.add("active");
-      const label = issue.serial || `row ${issue.row_index ?? "?"}`;
+      const label = issue.serial
+        || (issue.row_index != null ? `row ${issue.row_index}` : "general");
       const colHint = issue.target_column ? `→ ${issue.target_column}` : "";
+      const pill = (status && status !== "open")
+        ? `<span class="ip-status-pill status-${status}">${STATUS_LABEL[status]}</span>`
+        : "";
       it.innerHTML = `
         <span><span class="ip-issue-key">${escapeHtml(label)}</span>
-              <span style="color:#888;font-size:11px;"> ${escapeHtml(colHint)}</span></span>
-        <span class="ip-issue-state">${resolved ? "✓" : ""}</span>
+              <span style="color:#888;font-size:11px;"> ${escapeHtml(colHint)}</span>${pill}</span>
+        <span class="ip-issue-state">${resolved && status === "open" ? "✓" : ""}</span>
       `;
       it.addEventListener("click", () => focusIssue(issue));
       body.appendChild(it);
@@ -1658,10 +2330,37 @@ function renderIssuePanel() {
     catEl.appendChild(body);
     list.appendChild(catEl);
   }
-  $("ip-total").textContent = totalIssues();
-  $("ip-remaining").textContent = totalUnresolved();
-  $("ip-resolved").textContent = totalIssues() - totalUnresolved();
-  if ($("review-count")) $("review-count").textContent = totalUnresolved();
+  // ---- Practical decisions remaining (the meaningful workload count) ----
+  // = (Claude questions with status open) + (QC categories with >=1 open item)
+  let claudeOpen = 0;
+  let qcCategoriesOpen = 0;
+  let totalAnswered = 0;
+  for (const cat of allCategories()) {
+    let catHasOpen = false;
+    for (const it of cat.issues) {
+      it.__category = cat;
+      const status = getStatus(it.id);
+      if (status === "open") {
+        if (cat.category_id === "_claude_questions") claudeOpen++;
+        else catHasOpen = true;
+      } else if (status === "answered" || status === "needs_more_data") {
+        totalAnswered++;
+      } else if (status === "decided_keep" || status === "fixed_in_xlsx") {
+        totalAnswered++;
+      }
+    }
+    if (catHasOpen && cat.category_id !== "_claude_questions") qcCategoriesOpen++;
+  }
+  const decisionsRemaining = claudeOpen + qcCategoriesOpen;
+  if ($("ip-decisions-remaining")) {
+    $("ip-decisions-remaining").textContent = decisionsRemaining;
+    $("ip-decisions-remaining").title =
+      `${claudeOpen} Claude questions still open + ${qcCategoriesOpen} QC categories with open items`;
+  }
+  if ($("ip-answered")) $("ip-answered").textContent = totalAnswered;
+  if ($("ip-items-total")) $("ip-items-total").textContent = totalIssues();
+  if ($("review-count")) $("review-count").textContent = decisionsRemaining;
+  refreshPanelTabCounts();
   applyCellBadges();
 }
 
@@ -1676,7 +2375,7 @@ function applyCellBadges() {
     });
   });
   if (!isAdmin) return;
-  for (const cat of ISSUES) {
+  for (const cat of allCategories()) {
     for (const issue of cat.issues) {
       issue.__category = cat;
       if (isResolved(issue)) continue;
@@ -1685,8 +2384,10 @@ function applyCellBadges() {
       if (issue.target_column) {
         const cell = r.getCells().find(c => c.getColumn().getField() === issue.target_column);
         if (!cell) continue;
-        const sevClass = cat.severity === "errors" ? "cell-issue-error"
-          : cat.severity === "warnings" ? "cell-issue-warning" : "cell-issue-info";
+        // Claude's questions use a per-issue severity hint; QC categories use cat.severity
+        const sev = issue.__is_claude ? (issue.__severity_hint || "info") : cat.severity;
+        const sevClass = sev === "errors" ? "cell-issue-error"
+          : sev === "warnings" ? "cell-issue-warning" : "cell-issue-info";
         cell.getElement().classList.add(sevClass);
         if (issue.id === activeIssueId) {
           cell.getElement().classList.add("cell-issue-active");
@@ -1709,24 +2410,70 @@ function showActiveIssueCard(issue) {
   const card = $("ip-active-card");
   card.classList.add("show");
   const cat = issue.__category;
-  $("ip-active-title").textContent =
-    `${cat.title} — ${issue.serial || `row ${issue.row_index}`}`;
-  let detailHtml = `<strong>Hint:</strong> ${escapeHtml(cat.hint || "(no hint)")}`;
-  if (issue.details) {
-    const lines = [];
-    for (const [k, v] of Object.entries(issue.details)) {
-      if (k.startsWith("_") || k === "row_index") continue;
-      lines.push(`<strong>${escapeHtml(k)}:</strong> <code>${escapeHtml(String(v).slice(0,90))}</code>`);
+  const status = getStatus(issue.id);
+  const statusPill = (status && status !== "open")
+    ? ` <span class="ip-status-pill status-${status}">${STATUS_LABEL[status]}</span>`
+    : "";
+  const titleAnchor = issue.serial
+    ? issue.serial
+    : (issue.row_index != null ? `row ${issue.row_index}` : "general");
+  $("ip-active-title").innerHTML =
+    `${escapeHtml(cat.title)} — ${escapeHtml(titleAnchor)}${statusPill}`;
+
+  // ----- Detail block -----
+  let detailHtml = "";
+  if (issue.__is_claude) {
+    // Claude's questions: prominent question text + evidence + hint
+    detailHtml += `<div class="ip-question-text">${escapeHtml(issue.details.question || "")}</div>`;
+    if (issue.details.evidence) {
+      detailHtml += `<div class="ip-question-evidence">${escapeHtml(issue.details.evidence)}</div>`;
     }
-    if (lines.length) detailHtml += "<br><br>" + lines.join("<br>");
+    if (issue.details.kind === "general") {
+      detailHtml += `<div style="font-size:11px;color:#888;margin-top:4px;">(general methodology question — not tied to a single row)</div>`;
+    }
+  } else {
+    detailHtml = `<strong>Hint:</strong> ${escapeHtml(cat.hint || "(no hint)")}`;
+    if (issue.details) {
+      const lines = [];
+      for (const [k, v] of Object.entries(issue.details)) {
+        if (k.startsWith("_") || k === "row_index") continue;
+        lines.push(`<strong>${escapeHtml(k)}:</strong> <code>${escapeHtml(String(v).slice(0,90))}</code>`);
+      }
+      if (lines.length) detailHtml += "<br><br>" + lines.join("<br>");
+    }
   }
   $("ip-active-detail").innerHTML = detailHtml;
 
+  // ----- Clarification block: status dropdown + textarea -----
+  const statusSelect = $("ip-status-select");
+  if (statusSelect) statusSelect.value = status;
+  const commentBox = $("ip-comment");
+  if (commentBox) commentBox.value = getComment(issue.id);
+  const updatedEl = $("ip-updated");
+  if (updatedEl) {
+    const ts = getUpdatedAt(issue.id);
+    updatedEl.textContent = ts ? `last updated: ${fmtTimestamp(ts)}` : "—";
+  }
+
+  // ----- Action buttons -----
   const actionsEl = $("ip-active-actions");
   actionsEl.innerHTML = "";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "primary";
+  saveBtn.textContent = "💾 Save comment";
+  saveBtn.addEventListener("click", () => saveActiveClarification(issue, false));
+  actionsEl.appendChild(saveBtn);
+
+  if (status !== "answered") {
+    const answeredBtn = document.createElement("button");
+    answeredBtn.textContent = "✓ Mark answered";
+    answeredBtn.addEventListener("click", () => saveActiveClarification(issue, "answered"));
+    actionsEl.appendChild(answeredBtn);
+  }
+
   if (issue.target_column) {
     const editBtn = document.createElement("button");
-    editBtn.className = "primary";
     editBtn.textContent = `✏ Edit "${issue.target_column}"`;
     editBtn.addEventListener("click", () => editTargetCell(issue));
     actionsEl.appendChild(editBtn);
@@ -1737,19 +2484,41 @@ function showActiveIssueCard(issue) {
     btn.addEventListener("click", () => executeRowAction(cat, issue, ra));
     actionsEl.appendChild(btn);
   }
-  const okBtn = document.createElement("button");
-  okBtn.textContent = "✓ Mark as correct";
-  okBtn.addEventListener("click", () => {
-    issueDecisions[issue.id] = "decided_keep";
-    saveIssueState();
-    renderIssuePanel();
-  });
-  actionsEl.appendChild(okBtn);
+  if (!issue.__is_claude) {
+    // QC-only legacy quick action; Claude questions use status dropdown instead
+    const okBtn = document.createElement("button");
+    okBtn.textContent = "✓ Mark as correct";
+    okBtn.addEventListener("click", () => saveActiveClarification(issue, "decided_keep"));
+    actionsEl.appendChild(okBtn);
+  }
 
   const skipBtn = document.createElement("button");
   skipBtn.textContent = "Skip ▶";
   skipBtn.addEventListener("click", () => nextIssue(1));
   actionsEl.appendChild(skipBtn);
+}
+
+// Save the active card's status dropdown + comment textarea to clarifications.
+// `forceStatus` accepted forms:
+//   false / undefined  → use dropdown's current value
+//   string             → override status to this value
+function saveActiveClarification(issue, forceStatus) {
+  const statusSelect = $("ip-status-select");
+  const commentBox = $("ip-comment");
+  const status = (typeof forceStatus === "string" && forceStatus)
+    ? forceStatus
+    : (statusSelect ? statusSelect.value : "open");
+  const comment = commentBox ? commentBox.value : "";
+  setClarification(issue.id, { status, comment });
+  // Visual confirmation
+  const flash = $("ip-save-flash");
+  if (flash) {
+    flash.classList.add("show");
+    setTimeout(() => flash.classList.remove("show"), 900);
+  }
+  renderIssuePanel();
+  // Re-render the active card so the button list / pill / timestamp reflect the new state
+  showActiveIssueCard(issue);
 }
 
 function editTargetCell(issue) {
@@ -1882,12 +2651,24 @@ function addReporterColumn() {
   onChange();
 }
 
+function findActiveIssue() {
+  if (!activeIssueId) return null;
+  for (const cat of allCategories()) {
+    for (const it of cat.issues) {
+      if (it.id === activeIssueId) { it.__category = cat; return it; }
+    }
+  }
+  return null;
+}
+
 function nextIssue(direction) {
   const flat = [];
-  for (const cat of ISSUES) {
+  for (const cat of allCategories()) {
     for (const it of cat.issues) {
       it.__category = cat;
-      if (!isResolved(it)) flat.push(it);
+      if (!matchesPanelFilter(it)) continue;
+      if (panelFilterMode === "all" && isResolved(it)) continue;
+      flat.push(it);
     }
   }
   if (flat.length === 0) {
@@ -1921,14 +2702,26 @@ function init() {
 
   baselineRows = JSON.parse(JSON.stringify(PAYLOAD.rows));
 
-  // Restore unsaved edits if present
+  // Restore unsaved edits if present — but only prompt when the stored data
+  // actually differs from the baseline. Past builds wrote the baseline to
+  // localStorage on every tableBuilt, causing a phantom popup on every reload.
   let initialData = JSON.parse(JSON.stringify(PAYLOAD.rows));
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        if (confirm("Found unsaved edits in this browser from a previous session. Restore them?")) {
+        // Compare cell-by-cell against the baseline; if identical, silently drop.
+        const identical = parsed.length === baselineRows.length && parsed.every((row, i) => {
+          const base = baselineRows[i] || {};
+          for (const c of PAYLOAD.columns) {
+            if (String(row[c] ?? "") !== String(base[c] ?? "")) return false;
+          }
+          return true;
+        });
+        if (identical) {
+          localStorage.removeItem(STORAGE_KEY);
+        } else if (confirm("Found unsaved edits in this browser from a previous session. Restore them?")) {
           initialData = parsed;
         } else {
           localStorage.removeItem(STORAGE_KEY);
@@ -1944,9 +2737,23 @@ function init() {
     height: "calc(100vh - 280px)",
     movableColumns: true,
     rowFormatter: rowFormatter,
-    cellEdited: () => onChange(),
-    rowAdded: () => onChange(),
-    rowDeleted: () => onChange(),
+    cellEdited: (cell) => {
+      onChange();
+      // Live-sync: push this cell change directly to wolves_data.xlsx
+      if (syncActive) {
+        const d = cell.getRow().getData();
+        const col = cell.getColumn().getField();
+        // Skip internal/computed fields
+        if (col === "_row_index" || col === "_status") return;
+        syncPost("/api/save_cell", {
+          row_index: d._row_index,
+          column: col,
+          value: cell.getValue() ?? "",
+        });
+      }
+    },
+    rowAdded: () => { onChange(); syncPushXlsxBulkDebounced(); },
+    rowDeleted: () => { onChange(); syncPushXlsxBulkDebounced(); },
     dataFiltered: () => refreshStats(),
   });
   table.on("tableBuilt", () => { applyFilters(); refreshStats(); onChange(); });
@@ -2028,6 +2835,7 @@ function init() {
   });
   $("logout-btn").addEventListener("click", () => setMode(false));
   $("save-btn").addEventListener("click", saveAsXlsx);
+  $("save-table-btn").addEventListener("click", saveTableNow);
   $("discard-btn").addEventListener("click", discardChanges);
   $("add-row-btn").addEventListener("click", () => {
     const empty = {};
@@ -2045,6 +2853,43 @@ function init() {
   if ($("ip-close")) $("ip-close").addEventListener("click", () => toggleIssuePanel(false));
   if ($("ip-prev")) $("ip-prev").addEventListener("click", () => nextIssue(-1));
   if ($("ip-next")) $("ip-next").addEventListener("click", () => nextIssue(1));
+
+  // Fix & Clarify mode: filter tabs, comment textarea blur-save, status select,
+  // download/load buttons.
+  document.querySelectorAll(".ip-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".ip-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      panelFilterMode = tab.dataset.mode || "all";
+      renderIssuePanel();
+    });
+  });
+  if ($("ip-comment")) {
+    $("ip-comment").addEventListener("blur", () => {
+      if (!activeIssueId) return;
+      const issue = findActiveIssue();
+      if (issue) saveActiveClarification(issue, false);
+    });
+  }
+  if ($("ip-status-select")) {
+    $("ip-status-select").addEventListener("change", () => {
+      if (!activeIssueId) return;
+      const issue = findActiveIssue();
+      if (issue) saveActiveClarification(issue, false);
+    });
+  }
+  if ($("ip-download")) {
+    $("ip-download").addEventListener("click", downloadDecisionsJson);
+  }
+  if ($("ip-load")) {
+    $("ip-load").addEventListener("click", () => $("ip-load-file").click());
+    $("ip-load-file").addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) loadDecisionsJson(f);
+      e.target.value = "";
+    });
+  }
+
   // Initial counter (works pre-admin so the button shows the right number once revealed)
   if ($("review-count")) $("review-count").textContent = totalUnresolved();
 
@@ -2061,6 +2906,8 @@ function init() {
   }
   // Initial chip counts (run after the table is built so getData() works)
   table.on("tableBuilt", () => { refreshStatusChipCounts(); });
+  // Probe the local sync server (no-op if it's not running)
+  syncProbe();
   // Render chart (Plotly is async-loaded via CDN; check)
   if (window.Plotly) {
     renderRegionDistributionChart();

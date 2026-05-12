@@ -24,8 +24,10 @@ Checks performed:
 
 from __future__ import annotations
 
+import json
 import sys
 from io import StringIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -42,6 +44,8 @@ from wolf_lib import (
     shannon_entropy_bits,
     split_asymmetric,
 )
+
+DECISIONS_PATH = Path(__file__).parent / "data_decisions.json"
 
 
 # ---------------------------------------------------------------------------
@@ -323,11 +327,64 @@ def main() -> None:
     else:
         out("  ALL CHECKS PASSED. No data inconsistencies detected.")
 
+    # ----- 7. Clarifications from data owner (read from data_decisions.json) -----
+    clarifications_md = render_clarifications_section()
+
     # Save report to file
     report_path = OUTPUT_DIR / "audit_report.md"
-    report_text = "# Wolf Pelt Analysis — Audit Report\n\n```\n" + tee.get_report() + "\n```\n"
+    report_text = (
+        "# Wolf Pelt Analysis — Audit Report\n\n"
+        "```\n" + tee.get_report() + "\n```\n"
+        + clarifications_md
+    )
     report_path.write_text(report_text, encoding="utf-8")
     print(f"\n📄 Report saved: {report_path}")
+
+
+def render_clarifications_section() -> str:
+    """Read data_decisions.json and render a markdown 'Clarifications' section
+    appended to the audit report. Returns empty string if no decisions found.
+
+    Items with status='answered' or 'needs_more_data' and a non-empty comment
+    are surfaced (these are user clarifications worth reading alongside the
+    audit). Suppressed (decided_keep) items and pure status changes without
+    comments are omitted to keep the section focused on substance.
+    """
+    if not DECISIONS_PATH.exists():
+        return ""
+    try:
+        raw = json.loads(DECISIONS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+    decisions = raw.get("decisions") if isinstance(raw, dict) else None
+    if not decisions:
+        return ""
+
+    surfaced: list[tuple[str, str, str, str]] = []
+    for issue_id, dec in decisions.items():
+        if not isinstance(dec, dict):
+            continue
+        status = (dec.get("status") or "").strip()
+        comment = (dec.get("comment") or "").strip()
+        if status in {"answered", "needs_more_data"} and comment:
+            updated = dec.get("updated_at", "")
+            surfaced.append((issue_id, status, comment, updated))
+
+    if not surfaced:
+        return ""
+
+    surfaced.sort(key=lambda t: t[3], reverse=True)
+    lines = ["\n---\n", "## Clarifications from data owner\n",
+             f"*From `data_decisions.json` — {len(surfaced)} comment(s) "
+             f"(status=answered or needs_more_data).*\n"]
+    for issue_id, status, comment, updated in surfaced:
+        ts = updated[:10] if updated else "—"
+        lines.append(f"- **`{issue_id}`** · status=`{status}` · {ts}")
+        # Indent the comment as a quote block for readability
+        for cl in comment.splitlines() or [comment]:
+            lines.append(f"  > {cl}")
+        lines.append("")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
