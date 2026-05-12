@@ -1485,6 +1485,7 @@ function rebuildTable() {
     movableColumns: true,
     rowFormatter: rowFormatter,
     cellEdited: () => onChange(),
+    cellClick: (e, cell) => focusIssueFromCell(cell),
     rowAdded: () => onChange(),
     rowDeleted: () => onChange(),
     dataFiltered: () => { refreshStats(); if (isAdmin) applyCellBadges(); },
@@ -1916,6 +1917,8 @@ let clarifications = {};
 let activeIssueId = null;
 let issueOpenCategories = new Set();
 let panelFilterMode = "all"; // all | needs_reply | answered | resolved
+// Reverse index for click-from-table: key = `${rowIndex}__${columnField}` → issue
+let cellIssueMap = new Map();
 
 function escapeHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
@@ -2366,7 +2369,7 @@ function renderIssuePanel() {
 
 function applyCellBadges() {
   if (!table) return;
-  // Clear existing decoration
+  // Clear existing decoration AND the click-target index
   table.getRows().forEach(row => {
     row.getElement().classList.remove("row-issue-active");
     row.getCells().forEach(cell => {
@@ -2374,6 +2377,7 @@ function applyCellBadges() {
         "cell-issue-info", "cell-issue-active");
     });
   });
+  cellIssueMap = new Map();
   if (!isAdmin) return;
   for (const cat of allCategories()) {
     for (const issue of cat.issues) {
@@ -2389,6 +2393,9 @@ function applyCellBadges() {
         const sevClass = sev === "errors" ? "cell-issue-error"
           : sev === "warnings" ? "cell-issue-warning" : "cell-issue-info";
         cell.getElement().classList.add(sevClass);
+        // Build reverse index: first issue per (row, column) wins
+        const key = `${issue.row_index}__${issue.target_column}`;
+        if (!cellIssueMap.has(key)) cellIssueMap.set(key, issue);
         if (issue.id === activeIssueId) {
           cell.getElement().classList.add("cell-issue-active");
           r.getElement().classList.add("row-issue-active");
@@ -2396,6 +2403,22 @@ function applyCellBadges() {
       }
     }
   }
+}
+
+// Called from Tabulator's cellClick. If the clicked cell has a flagged issue,
+// open the side panel (if closed) and focus that issue in the active card.
+function focusIssueFromCell(cell) {
+  if (!isAdmin) return;
+  const data = cell.getRow().getData();
+  const col = cell.getColumn().getField();
+  if (data._row_index == null || !col) return;
+  const key = `${data._row_index}__${col}`;
+  const issue = cellIssueMap.get(key);
+  if (!issue) return;
+  if (!$("issue-panel").classList.contains("show")) toggleIssuePanel(true);
+  // Make sure the category is expanded so the side list highlight is visible
+  if (issue.__category) issueOpenCategories.add(issue.__category.category_id);
+  focusIssue(issue);
 }
 
 function focusIssue(issue) {
@@ -2752,6 +2775,7 @@ function init() {
         });
       }
     },
+    cellClick: (e, cell) => focusIssueFromCell(cell),
     rowAdded: () => { onChange(); syncPushXlsxBulkDebounced(); },
     rowDeleted: () => { onChange(); syncPushXlsxBulkDebounced(); },
     dataFiltered: () => refreshStats(),

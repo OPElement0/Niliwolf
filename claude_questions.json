@@ -12,6 +12,272 @@
     },
 
     {
+      "id": "cq_pack_inference_summary",
+      "kind": "general",
+      "question": "📍 NAVIGATION — Pack-inference results, 36 wolves with discrepancies, broken out by category. Each row below points to the dedicated question with the actual wolf list + my reasoning. Mark THIS one 'answered' once you've reviewed all 10 — it's informational only. ▸ 8 wolves: lone → algorithm says pack*/group* (within threshold) → cq_lone_wolves_within_threshold (H15m, Y101, Y28, Y46, Sh59, Sl65, O66, Y37). ▸ 12 wolves: empty social dynamic → algorithm proposes lone/group → cq_inferred_lone_empty_classifications (F104, F22, Sn85, Sl103, In89, In91, In94-98, In105, Mg90, In92, In93). ▸ 3 wolves: unknown → candidates for Makhfi original → cq_makhfi_original_candidates (M3, M6H, M10). ▸ 2 wolves: unknown → candidates for Shaal west* → cq_shaal_west_star_candidates (Sh51, Sh54). ▸ 2 wolves: unknown → candidates for Odem packs → cq_odem_candidates (O73→Odem South, O77→Odem East). ▸ 8 wolves: Indian cohort, separate study? → cq_indian_cohort_separate_study (In89-98, Mg90, In105). ▸ 1 wolf: circular dark pack* reference → cq_y102_dark_pack_star_circular (Y102). ▸ 1 wolf: sole 'member' of Shaal west* → cq_sh57_sole_shaal_west_star (Sh57). ▸ 5 packs: single-member 'packs' that aren't really packs → cq_single_member_pack_names. Full computed report: pack_inference_report.md.",
+      "evidence": {"report_file": "pack_inference_report.md", "discrepancies": 36, "packs_found": 14, "co_occurrence_edges": 21, "observation_events": 14, "navigation": "see linked cq_* questions for each wolf list"},
+      "severity_hint": "info"
+    },
+
+    {
+      "id": "cq_y102_dark_pack_star_circular",
+      "kind": "row",
+      "serial": "Y102",
+      "target_column": "pack name",
+      "question": "Y102 has pack_name=`dark pack*` and social dynamic=`pack*`. But Y102 is the ONLY wolf with `dark pack*` — making a circular 'I'm a possible member of myself' situation. The intent was probably 'Y102 is a possible member of dark pack' (the real 9-member pack). Should I change pack_name to `dark pack` (so it correctly points to the real pack as candidate) and keep social dynamic=`pack*`? Or is `dark pack*` a deliberate distinct entity I'm missing?",
+      "evidence": {"current_pack_name": "dark pack*", "current_social_dynamic": "pack*", "real_dark_pack_members": 9, "Y102_co_occurrence_partners_in_dark_pack": "none"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_single_member_pack_names",
+      "kind": "general",
+      "question": "🔄 RE-CHECKED 2026-05-13 + corrected. After your `*`=same-pack rule, 2 packs are GENUINELY single-member, and you confirmed both are OK because they were expert-tagged: (A) `makhfi new` — only **M2k** (NOT H15m, I had the wrong wolf earlier; corrected). M2k current state: pack_name=`makhfi new`, social_dynamic=`group`, שיוך=`makhfi new`. (B) `marom golan` — only **Mg90**. Mg90 current state: pack_name=`marom golan`, social_dynamic=(empty), שיוך=(empty). Answered.",
+      "evidence": {"genuinely_single": "makhfi new (M2k), marom golan (Mg90)", "user_decision": "OK — expert-tagged based on local knowledge of those specific packs"},
+      "severity_hint": "info"
+    },
+
+    {
+      "id": "cq_indian_cohort_separate_study",
+      "kind": "general",
+      "question": "8 wolves (In89, Mg90, In91-In98, In105) form a distinct cohort: all from external photographers (cams_spotted = names not numbers), partial dates (m.yyyy only), dates span 2011-2025 (vs everyone else's 2020), most have empty social_dynamic and pack_name. Notable: In92+In93 are seen together (so they're a pair). Algorithm classifies them all as `lone` (no pack in their polygons). Are these a SEPARATE COHORT for the paper (e.g., a different region / time / collaboration), or should they be merged into the main analysis? If separate, should they get a marker (e.g., `cohort = external`)?",
+      "evidence": {"affected_serials": "In89, Mg90, In91, In92, In93, In94, In95, In96, In97, In98, In105", "all_have_external_cameras": true, "all_have_partial_dates": true, "In92_In93_seen_together": "2.2017 with ariel shamir"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_makhfi_original_candidates",
+      "kind": "general",
+      "question": "🔄 RE-CHECKED 2026-05-13 with strict same-camera rule. Original 3 candidates dropped to 1: M3 and M6H — STRICT CHECK FAILS (they were on different cameras than Makhfi original members). Algorithm now confirms `lone` for both — no further action needed for them. ONLY M10 still qualifies as `pack*` candidate (matched M9 on camera 30). Should M10 be assigned `pack*` + `Makhfi original`, or stay unknown?",
+      "evidence": {"now_lone": "M3, M6H", "still_candidate": "M10 (cam 30, matched M9)"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_shaal_west_star_candidates",
+      "kind": "general",
+      "question": "🔄 RE-CHECKED 2026-05-13 with strict same-camera rule. SURPRISE: Sh51 and Sh54 actually qualify as candidates of **shaal east** (5-member real pack), NOT Shaal west* as I originally suggested. Reason: both were at camera 17, and shaal east has members (Sh52, Sh53, Sh109) photographed at camera 17 in overlapping date ranges. Sh51: range matched start=Sh109 + end=Sh53 at cam 17. Sh54: single obs matched Sh52 at cam 17. So → `pack*` + `shaal east`? Or do you want them as a different assignment given the camera-17 evidence?",
+      "evidence": {"new_candidates": "shaal east (5-member pack)", "Sh51": "start=Sh109@17, end=Sh53@17", "Sh54": "single obs matched Sh52@17"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_odem_candidates",
+      "kind": "general",
+      "question": "🔄 RE-CHECKED 2026-05-13 with strict same-camera rule. Candidates shifted: O73 — actually qualifies for **Odem west** (NOT Odem South as I originally said), matched O67 on cam 33. So O73 → `pack*` + Odem west? O77 — has TWO valid candidates at cam 34: Odem East (matched O76) AND Odem South (matched O75). Both are valid same-camera matches; which is right, or both possible?",
+      "evidence": {"O73": "Odem west via O67 on cam 33", "O77": "ambiguous between Odem East (O76) and Odem South (O75), both at cam 34"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_pack_candidate_m10",
+      "kind": "row",
+      "serial": "M10",
+      "target_column": "pack name",
+      "question": "M10 — POSSIBLE PACK MEMBER (Makhfi original). Currently: social dynamic=unknown, pack name=(empty). Deviation: strict same-camera rule says pack* candidate. Evidence: M10 single observation at camera 30; M9 (confirmed member of Makhfi original, a 6-wolf pack) was also at camera 30 in an overlapping window — qualifies for pack* under your criteria. Decision: edit pack name to `Makhfi original` and social dynamic to `pack*` if accepting, or leave as unknown.",
+      "evidence": {"camera": 30, "candidate_pack": "Makhfi original (6 members)", "matched_member": "M9", "wolf_obs_type": "single date"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_pack_candidate_sh51",
+      "kind": "row",
+      "serial": "Sh51",
+      "target_column": "pack name",
+      "question": "Sh51 — POSSIBLE PACK MEMBER (shaal east). Currently: social dynamic=unknown, pack name=unknown. Deviation: strict same-camera rule says pack* candidate. Evidence: Sh51 has a date range, both endpoints match shaal east members on camera 17 (start matches Sh109, end matches Sh53). shaal east is a real 5-member pack at cams 16-17. Decision: edit pack name to `shaal east` + social dynamic to `pack*`, or keep unknown.",
+      "evidence": {"camera": 17, "candidate_pack": "shaal east (5 members)", "start_match": "Sh109@cam17", "end_match": "Sh53@cam17"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_pack_candidate_sh54",
+      "kind": "row",
+      "serial": "Sh54",
+      "target_column": "pack name",
+      "question": "Sh54 — POSSIBLE PACK MEMBER (shaal east). Currently: social dynamic=unknown, pack name=unknown. Deviation: strict same-camera rule says pack* candidate. Evidence: Sh54 single observation at camera 17; Sh52 (confirmed shaal east member) was at camera 17 in an overlapping window. Decision: edit pack name to `shaal east` + social dynamic to `pack*`, or keep unknown.",
+      "evidence": {"camera": 17, "candidate_pack": "shaal east (5 members)", "matched_member": "Sh52", "wolf_obs_type": "single date"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_pack_candidate_o73",
+      "kind": "row",
+      "serial": "O73",
+      "target_column": "pack name",
+      "question": "O73 — POSSIBLE PACK MEMBER (Odem west). Currently: social dynamic=unknown, pack name=unknown. Deviation: strict same-camera rule says pack* candidate. Evidence: O73 single observation at camera 33; O67 (confirmed Odem west member, a 6-wolf pack) was at camera 33 in an overlapping window. NOTE: I originally suggested Odem South but the strict same-camera check actually matches Odem west. Decision: edit pack name to `Odem west` + social dynamic to `pack*`, or keep unknown.",
+      "evidence": {"camera": 33, "candidate_pack": "Odem west (6 members)", "matched_member": "O67", "wolf_obs_type": "single date"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_pack_candidate_o77",
+      "kind": "row",
+      "serial": "O77",
+      "target_column": "pack name",
+      "question": "O77 — POSSIBLE PACK MEMBER (AMBIGUOUS — 2 candidates). Currently: social dynamic=unknown, pack name=unknown. Deviation: strict same-camera rule says pack* candidate, but TWO valid candidates at camera 34: (A) Odem East (5-member pack) — matched O76 at cam 34; (B) Odem South (2-member group) — matched O75 at cam 34. Both are same-camera + same-window matches. Decision: edit pack name to either `Odem East` or `Odem South` based on which is more likely (or leave unknown if you have other evidence).",
+      "evidence": {"camera": 34, "candidates": ["Odem East (O76)", "Odem South (O75)"], "wolf_obs_type": "single date"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_inferred_lone_f104",
+      "kind": "row",
+      "serial": "F104",
+      "target_column": "social dynamic",
+      "question": "F104 — INFERRED LONE. Currently: social dynamic=(empty), pack name=(empty). Deviation: no current classification. Evidence: F104 has no co-occurrence partners in `seen with`; under the strict rule, no pack-member observation matches at the same camera within threshold. Algorithm proposes `lone`. Decision: edit social dynamic to `lone` (and pack name to `lone`) if accepting, or fill with another value if you have evidence.",
+      "evidence": {"co_occurrence": "none", "pack_at_same_camera": "none within threshold"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_inferred_lone_f22",
+      "kind": "row",
+      "serial": "F22",
+      "target_column": "social dynamic",
+      "question": "F22 — INFERRED LONE. Currently: social dynamic=unknown, pack name=unknown (was '?'). Deviation: not classified as lone but algorithm says lone. Evidence: no co-occurrence; no pack-member observation at the same camera within threshold. Decision: edit social dynamic to `lone` + pack name to `lone`, or keep unknown.",
+      "evidence": {"co_occurrence": "none", "pack_at_same_camera": "none within threshold"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_inferred_lone_sn85",
+      "kind": "row",
+      "serial": "Sn85",
+      "target_column": "social dynamic",
+      "question": "Sn85 — INFERRED LONE. Currently: social dynamic=unknown, pack name=(empty). Deviation: not classified as lone but algorithm says lone. Evidence: no co-occurrence; no pack-member observation at the same camera within threshold. Decision: edit social dynamic to `lone` + pack name to `lone`, or fill with another value.",
+      "evidence": {"co_occurrence": "none", "pack_at_same_camera": "none within threshold"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_inferred_lone_sl103",
+      "kind": "row",
+      "serial": "Sl103",
+      "target_column": "social dynamic",
+      "question": "Sl103 — INFERRED LONE. Currently: social dynamic=unknown, pack name=(empty). Deviation: not classified as lone but algorithm says lone. Evidence: no co-occurrence; closest pack (slopes*) at different camera. Decision: edit social dynamic to `lone` + pack name to `lone`, or fill with another value.",
+      "evidence": {"co_occurrence": "none", "nearest_pack": "slopes* (different camera)"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_mg90_single_member_pack",
+      "kind": "row",
+      "serial": "Mg90",
+      "target_column": "social dynamic",
+      "question": "Mg90 — EXPERT-TAGGED MEMBER of marom golan, but social_dynamic is empty. You accepted that marom golan is OK as a 1-identified-wolf pack (expert-tagged). For consistency with M2k (the sole identified member of makhfi new, currently social_dynamic=`group`), should Mg90's social_dynamic also be `group`? Or `pack*` (probable member of a larger unseen pack)? Or something else?",
+      "evidence": {"current_social_dynamic": "(empty)", "current_pack_name": "marom golan", "M2k_for_comparison": "social_dynamic=group, pack_name=makhfi new"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_pair_in92",
+      "kind": "row",
+      "serial": "In92",
+      "target_column": "pack name",
+      "question": "In92 — GROUP OF 2 WITH In93. Currently: social dynamic=(empty), pack name=(empty). Deviation: paired with In93 via 'seen together' (2.2017 photographer ariel shamir) — qualifies as a group of size 2 per your definition (group = 2-4 wolves). Evidence: co-occurred with In93 in one observation. NOTE: this is part of the external-photographer Indian cohort (see cq_indian_cohort_separate_study). Decision: edit social dynamic to `group`. Pack name — is there a shared pack identity, or leave empty since this is a single-event observation?",
+      "evidence": {"co_occurrence_partner": "In93", "observation": "2.2017 photographer ariel shamir", "cohort": "Indian"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_pair_in93",
+      "kind": "row",
+      "serial": "In93",
+      "target_column": "pack name",
+      "question": "In93 — GROUP OF 2 WITH In92. Currently: social dynamic=(empty), pack name=(empty). Deviation: paired with In92 via 'seen together' (2.2017 photographer ariel shamir) — qualifies as a group of size 2 per your definition. Evidence: co-occurred with In92 in one observation. NOTE: external-photographer Indian cohort (see cq_indian_cohort_separate_study). Decision: edit social dynamic to `group`. Pack name — shared pack identity or leave empty?",
+      "evidence": {"co_occurrence_partner": "In92", "observation": "2.2017 photographer ariel shamir", "cohort": "Indian"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_y46_two_pack_candidates",
+      "kind": "row",
+      "serial": "Y46",
+      "target_column": "pack name",
+      "question": "Y46 (currently social dynamic=lone, pack name=lone). Single observation 2020-10-11 at camera 10 in Yehudia. Under your stricter same-camera + same-date rule (2026-05-13), Y46 has TWO valid pack candidates because camera 10 was used by members of two different packs around that date: (A) golden pack — Y39 was at cam 10 with range overlapping 2020-10-11; (B) yehodiya trio — Y47 was also at cam 10 in the same window. Which pack is the right candidate, or should Y46 stay lone because we have only ONE observation (start == end, so we can't really verify both endpoints)?",
+      "evidence": {"cam": 10, "date": "2020-10-11", "single_observation": true, "candidates": ["golden pack via Y39", "yehodiya trio via Y47"], "current_classification": "lone"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_y37_two_pack_candidates",
+      "kind": "row",
+      "serial": "Y37",
+      "target_column": "pack name",
+      "question": "Y37 (currently social dynamic=empty, pack name=empty). Single observation 2020-11-05 at camera 7 in Yehudia. Under your stricter same-camera + same-date rule, Y37 has TWO valid pack candidates at camera 7: (A) dark pack — Y29 at cam 7 in this window; (B) yehodiya trio — Y48 at cam 7. Same caveat as Y46 (only one observation date, can't verify two endpoints). Which pack candidate, or should Y37 be classified `lone` (or `unknown`) due to insufficient data?",
+      "evidence": {"cam": 7, "date": "2020-11-05", "single_observation": true, "candidates": ["dark pack via Y29", "yehodiya trio via Y48"], "current_classification": "(empty)"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_lone_wolves_within_threshold",
+      "kind": "general",
+      "question": "8 wolves you currently classify as `lone` are within the time threshold of a pack in the same polygon (your rule says lone requires ≥10 days, or ≥14 days in Yehudia). My algorithm reclassifies them as `pack*` / `group*`. The 8: H15m (lone → group* Makhfi new, 8d), Y101 (lone → group* yehodiya trio, 0d!), Y28 (lone → pack* golden pack, 12d in Yehudia ⇒ borderline), Y46 (lone → pack* dark pack, 0d), Sh59 (lone → group* Shaal west*, 0d), Sl65 (lone → group* slopes*, 8d), O66 (lone → pack* Odem East, 0d), Y37 (empty → pack* dark pack, 0d). The 0d cases are particularly clear-cut. Override your classification to the algorithm's, keep `lone` (with behavioral evidence I don't have), or review per-row?",
+      "evidence": {"wolves": "H15m, Y101, Y28, Y46, Sh59, Sl65, O66, Y37", "key_observation": "Y101 has 0-day gap from yehodiya trio — same date, same polygon"},
+      "severity_hint": "errors"
+    },
+
+    {
+      "id": "cq_inferred_lone_empty_classifications",
+      "kind": "general",
+      "question": "🔄 RE-CHECKED 2026-05-13 with strict same-camera rule. CONFIRMED (no change): F104, F22, Sn85, Sl103 → lone (no co-occurrence, no same-camera pack overlap). The Indian cohort (In89, In91, In94-98, In105) → all lone — see cq_indian_cohort_separate_study for cohort-level decision. CONFIRMED non-lone: Mg90 → `group` of `marom golan` (only member of that pack name, so it's a 1-wolf 'group'); In92+In93 → `group` together (paired by 'seen together' on 2.2017 with photographer ariel shamir). Should I apply these inferences as official assignments? You can answer separately for: (A) the obviously-lone wolves (F104, F22, Sn85, Sl103) — accept as lone; (B) the Indian cohort — see linked question; (C) Mg90 — is it really a 'group' if it's the only member? (D) In92+In93 — pair without a pack name, accept as `group` with no pack_name?",
+      "evidence": {"confirmed_lone": "F104, F22, Sn85, Sl103, In89, In91, In94-98, In105", "Mg90": "alone marom golan (1 wolf)", "In92_In93": "paired via seen together"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_sh57_sole_shaal_west_star",
+      "kind": "row",
+      "serial": "Sh57",
+      "target_column": "pack name",
+      "question": "Sh57 is the ONLY wolf with pack_name=`Shaal west*` (= 'probable Shaal west member'). But there's also a `Shaal west` value (Sh51 has it) and they don't co-occur. Is Sh57 actually a probable member of a `Shaal west` pack that has only 1 confirmed member (Sh51), making it: 'Sh57 is probable second member, Sh51 is confirmed sole member'? Or are these two separate single-wolf entries that should be merged?",
+      "evidence": {"Sh57_pack_name": "Shaal west*", "Sh51_pack_name": "Shaal west", "co_occurrence": "none"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_standalone_question_mark",
+      "kind": "general",
+      "question": "Per your ruling, suffix `?` becomes `*`. But 5 wolves have `pack name = '?'` standalone (F22, Sh51, Sh54, O73, O77 — all have social dynamic = 'unknown'), and 3 wolves have `seen with = '?'` standalone (Y32, Y102, Sl60). A standalone `*` doesn't carry meaning (the `*` modifies a base value). Three options: (A) leave standalone `?` as-is — it's a placeholder for 'don't know'; (B) convert to empty cell (since social dynamic already says 'unknown' anyway); (C) convert to 'unknown' explicitly. Which?",
+      "evidence": {"pack_name_standalone_q": "F22, Sh51, Sh54, O73, O77", "seen_with_standalone_q": "Y32, Y102, Sl60"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_seen_with_F21s_alias",
+      "kind": "general",
+      "question": "F23 and F24 both have `seen with` references to `F21s`. F21s is not a serial in the current sheet, but F21 is. Is `F21s` an alias / old name for F21 (so I should treat the ref as F21), or is it a different wolf that we don't have full data for (so I should treat as '1 unrecognized')?",
+      "evidence": {"from_serials": "F23, F24", "broken_ref": "F21s", "F21_exists_as_separate_wolf": true},
+      "severity_hint": "errors"
+    },
+
+    {
+      "id": "cq_seen_with_Sh37y_alias",
+      "kind": "general",
+      "question": "Sh49 and Sh50 have `seen with` references to `Sh37y`. Sh37y is not a serial in the current sheet, but Sh37 is. Is `Sh37y` an alias / old name for Sh37 (treat as Sh37), or a different wolf without full data (treat as unrecognized)?",
+      "evidence": {"from_serials": "Sh49, Sh50", "broken_ref": "Sh37y", "Sh37_exists_as_separate_wolf": true},
+      "severity_hint": "errors"
+    },
+
+    {
+      "id": "cq_sh50_text_annotation",
+      "kind": "row",
+      "serial": "Sh50",
+      "target_column": "seen with",
+      "question": "Sh50's `seen with` reads `7 min after Sh49+Sh37y` — that's a free-text annotation describing a NEAR-co-occurrence in time, not a simple list of serials. For the network graph, should I (A) treat as 'co-occurred with Sh49 and Sh37y' (drop the time delta), (B) treat as 'no direct co-occurrence' (7 min is too long), (C) keep the text but flag it as a special temporal-near-co-occurrence relationship?",
+      "evidence": {"raw_value": "7 min after Sh49+Sh37y"},
+      "severity_hint": "warnings"
+    },
+
+    {
+      "id": "cq_partial_dates_external_sources",
+      "kind": "general",
+      "question": "11 wolves have `time on camera` as month/year only (no day): In89, Mg90, In91, In92, In93, In94, In95, In96, In97, In98, plus the In91 range '12.2016-1.2019'. These all look like external-photographer sources (no day-level info). Acceptable as-is for temporal analysis (with the caveat 'precision = 1 month'), or do you have actual day info you can fill in?",
+      "evidence": {"affected_serials": "In89, Mg90, In91, In92, In93, In94, In95, In96, In97, In98", "format": "m.yyyy or m.yyyy-m.yyyy"},
+      "severity_hint": "info"
+    },
+
+    {
       "id": "cq_y39_b5_extra_digit",
       "kind": "row",
       "serial": "Y39",

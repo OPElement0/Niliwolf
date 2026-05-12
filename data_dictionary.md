@@ -47,7 +47,7 @@ single primary in `main poligon`.
 
 | Column | Type | Meaning | Use in analysis |
 |---|---|---|---|
-| `social dynamic` | `pack` / `group` / `unknown` | The user's own size-category classification. Will be explained in the paper as part of methodology. | Pass through; **do not aggregate/visualize** without confirming with user. |
+| `social dynamic` | `pack` / `group` / `lone` / `unknown`, each optionally suffixed `*` for "probable but not certain" | The user's own size-category classification. The `*` suffix is a confidence marker (per 2026-05-12 ruling). Empty = not classified yet. | Aggregate by base category; treat `*` as a "probable" annotation (alongside, not separate). |
 | `pack name` | text | User's manual sorting category. Currently messy. | **IGNORE for now.** Will be cleaned with the user before being used. |
 | `שיוך` (Hebrew: "association") | text | Same purpose as `pack name`, currently overlapping. Will eventually merge to one column. | **IGNORE for now.** |
 

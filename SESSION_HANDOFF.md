@@ -6,7 +6,104 @@
 
 ---
 
-## Last session — 2026-05-12 (evening, most recent)
+## Last session — 2026-05-13 (most recent)
+
+### What landed in this session
+
+1. **Pack-inference engine** (`pack_inference.py`, ~280 lines): parses
+   `cams_spotted`, `time on camera`, `seen with`, builds pack signatures,
+   classifies each wolf. Implements Nili's formal criteria
+   (`feedback_pack_inference_criteria.md`).
+2. **Cell-click feature in `data_table.html`** — clicking a flagged cell
+   in the table now auto-opens the related question in the side panel.
+   `applyCellBadges` builds a reverse `(row, column) → issue` index;
+   Tabulator's `cellClick` looks it up.
+3. **Scrollable active card** (max-height 55vh, overflow-y auto, custom
+   scrollbar) — fixes the issue where long questions hid the action
+   buttons.
+4. **"Decisions remaining" counter** in the panel — practical count
+   (open Claude questions + open QC categories) instead of raw 200+
+   item count.
+5. **Strict pack-membership rule** (Nili 2026-05-13): for a wolf to
+   qualify as `pack*`/`group*`, BOTH date endpoints must match a pack
+   member at the SAME CAMERA within threshold. Previously checked only
+   polygon overlap. Applied retroactively — 8 borderline `lone`
+   classifications shrunk to 2 actual disagreements (Y46, Y37).
+6. **`*` = same-pack rule** (Nili 2026-05-13): `dark pack` and
+   `dark pack*` are the SAME pack identity (the `*` just marks
+   individual wolves as probable members). Algorithm now normalises
+   pack names (`rstrip('*').strip().lower()`). Effect:
+   - `dark pack` grew from 9 → 10 members (Y102 folded in as probable)
+   - `Shaal west` grew from 1 → 2 members (Sh57 folded in)
+   - `dark pack*` and `Shaal west*` no longer exist as separate packs
+   - Single-member packs collapsed from 5 to 2 (`makhfi new`/M2k and
+     `marom golan`/Mg90 are genuinely single-identified, expert-tagged)
+7. **8 → 12 per-wolf Claude questions** for pack candidates
+   (`cq_pack_candidate_*`, `cq_inferred_lone_*`, `cq_pair_*`,
+   `cq_mg90_single_member_pack`). Each has `target_column` set so
+   cell-click works.
+8. **Indian cohort decisions applied** (Nili explicit instruction): In92
+   + In93 → `social_dynamic = group`; In89, In91, In94-98, In105 →
+   `social_dynamic = unknown`. 10 cell edits committed.
+9. **34 user decisions total** committed to `data_decisions.json`:
+   - 18 `fixed_in_xlsx` (region cells / code fields)
+   - 12 `answered` (substantive comments, e.g. methodology + cohort)
+   - 1 `needs_more_data` (B-region missing contrast suffix)
+   - 3 `decided_keep` (closed batch questions split into per-wolf)
+10. **Reports**: `pack_inference_report.md` (algorithmic discrepancies),
+    `pack_membership_report.md` (per-pack confirmed + probable counts),
+    `missing_data_report.md`, `b_regions_missing_contrast_suffix.md`.
+
+### Project-memory rules added this session
+
+- `feedback_social_dynamic_grammar.md` — 4 canonical categories + `*` =
+  probable. EXTENDED 2026-05-13: `X` and `X*` are the same identity in
+  any column (`pack name`, `social dynamic`, `שיוך`).
+- `feedback_cams_spotted_external.md` — numeric cams (1-60) are spatial;
+  reporter names are valid alt-source but NOT spatial; never split into
+  a `reporter` column.
+- `feedback_pack_inference_criteria.md` — formal criteria for pack /
+  group / lone / `pack*` / `group*`. EXTENDED 2026-05-13: strict rule
+  requires SAME-CAMERA match at BOTH endpoints.
+- `feedback_no_auto_edit_pack_data.md` — pack inference is surface-only;
+  `pack name` / `social dynamic` / `שיוך` writes require explicit
+  per-row user approval.
+
+### Pack composition at end of session
+
+- 12 packs/groups: dark pack (10), golden pack (7), Makhfi original (6),
+  Odem west (6), Odem East (5), shaal east (5), slopes (4 probable),
+  yehodiya trio (3), Shaal west (2), Odem South (2), makhfi new (1),
+  marom golan (1).
+- 46 confirmed pack members + 6 probable (with `*`).
+- 23 `lone` wolves.
+- 25 wolves still unassigned (pack name unknown/empty) — 5 are explicit
+  group members without a pack name (F21, F23, F24, In92, In93); 19
+  unknown; 1 fully empty (Y37).
+
+### One clarification still pending at session end
+
+- **Mg90 social_dynamic** — expert-tagged as `marom golan` (sole
+  identified member) but social_dynamic is empty. For consistency with
+  M2k (sole identified member of makhfi new, social_dynamic=`group`),
+  Mg90 should probably also be `group`. Surfaced as
+  `cq_mg90_single_member_pack` awaiting user decision.
+
+### Next session — likely starting points
+
+- Open Claude questions awaiting user input (≈22):
+  - 12 per-wolf pack-candidate questions (M10, Sh51, Sh54, O73, O77,
+    Y46, Y37, F104, F22, Sn85, Sl103, Mg90, In92, In93)
+  - cq_y39_b5_extra_digit
+  - cq_extra_midletter_3_wolves (already answered but verify)
+  - 7 methodology / cohort-level questions
+- QC items: 132 flagged rows across 9 categories (most batchable).
+- The 4 substantive non-`lone` cohort assignments (F21, F23, F24,
+  In92, In93) need pack-name decisions.
+
+---
+
+## Earlier session — 2026-05-12 (evening)
 
 ### What landed in this session
 

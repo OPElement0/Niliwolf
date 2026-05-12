@@ -1,11 +1,11 @@
 {
   "summary": {
     "n_errors_categories": 2,
-    "n_warnings_categories": 3,
+    "n_warnings_categories": 2,
     "n_info_categories": 5,
-    "n_error_rows": 28,
-    "n_warning_rows": 38,
-    "n_info_rows": 96,
+    "n_error_rows": 32,
+    "n_warning_rows": 14,
+    "n_info_rows": 86,
     "source_rows": 100,
     "source_cols": 28,
     "decisions_applied": {
@@ -40,8 +40,14 @@
       "category": "seen with references unknown wolf",
       "category_id": "seen_with_references_unknown_wolf",
       "severity": "errors",
-      "description": "26 reference(s) point to a serial not present in the table",
+      "description": "30 reference(s) point to a serial not present in the table",
       "rows": [
+        {
+          "from_serial": "M7",
+          "seen_with": "1 unrecognized*",
+          "missing_reference": "1 unrecognized*",
+          "_id": "seen_with_references_unknown_wolf__M7__1_unrecognized*"
+        },
         {
           "from_serial": "F23",
           "seen_with": "F21s, F24",
@@ -83,6 +89,18 @@
           "seen_with": "seen together",
           "missing_reference": "seen together",
           "_id": "seen_with_references_unknown_wolf__Y107__seen_together"
+        },
+        {
+          "from_serial": "Y32",
+          "seen_with": "unknown",
+          "missing_reference": "unknown",
+          "_id": "seen_with_references_unknown_wolf__Y32__unknown"
+        },
+        {
+          "from_serial": "Y102",
+          "seen_with": "unknown",
+          "missing_reference": "unknown",
+          "_id": "seen_with_references_unknown_wolf__Y102__unknown"
         },
         {
           "from_serial": "Y33",
@@ -176,9 +194,15 @@
         },
         {
           "from_serial": "Sh57",
-          "seen_with": "seen together?",
-          "missing_reference": "seen together",
-          "_id": "seen_with_references_unknown_wolf__Sh57__seen_together"
+          "seen_with": "seen together*",
+          "missing_reference": "seen together*",
+          "_id": "seen_with_references_unknown_wolf__Sh57__seen_together*"
+        },
+        {
+          "from_serial": "Sl60",
+          "seen_with": "unknown",
+          "missing_reference": "unknown",
+          "_id": "seen_with_references_unknown_wolf__Sl60__unknown"
         },
         {
           "from_serial": "Sn85",
@@ -202,134 +226,6 @@
     }
   ],
   "warnings": [
-    {
-      "category": "social dynamic out of {pack, group, unknown}",
-      "category_id": "social_dynamic_out_of_pack_group_unknown",
-      "severity": "warnings",
-      "description": "24 row(s): unexpected value",
-      "rows": [
-        {
-          "serial": "H12",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__H12__"
-        },
-        {
-          "serial": "H13S",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__H13S__"
-        },
-        {
-          "serial": "H99",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__H99__"
-        },
-        {
-          "serial": "H14",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__H14__"
-        },
-        {
-          "serial": "H15m",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__H15m__"
-        },
-        {
-          "serial": "K16",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__K16__"
-        },
-        {
-          "serial": "K106",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__K106__"
-        },
-        {
-          "serial": "K17f",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__K17f__"
-        },
-        {
-          "serial": "S18",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__S18__"
-        },
-        {
-          "serial": "S100",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__S100__"
-        },
-        {
-          "serial": "S19",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__S19__"
-        },
-        {
-          "serial": "S20",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__S20__"
-        },
-        {
-          "serial": "F26",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__F26__"
-        },
-        {
-          "serial": "Y101",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Y101__"
-        },
-        {
-          "serial": "Y28",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Y28__"
-        },
-        {
-          "serial": "Y102",
-          "value": "'pack*'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Y102__"
-        },
-        {
-          "serial": "Y46",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Y46__"
-        },
-        {
-          "serial": "Sh59",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Sh59__"
-        },
-        {
-          "serial": "Sl65",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Sl65__"
-        },
-        {
-          "serial": "O66",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__O66__"
-        },
-        {
-          "serial": "Sn83",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Sn83__"
-        },
-        {
-          "serial": "Sn84",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Sn84__"
-        },
-        {
-          "serial": "Ma87sn",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Ma87sn__"
-        },
-        {
-          "serial": "Ma88",
-          "value": "'lone'",
-          "_id": "social_dynamic_out_of_pack_group_unknown__Ma88__"
-        }
-      ]
-    },
     {
       "category": "cams_spotted: non-numeric token",
       "category_id": "cams_spotted_non_numeric_token",
@@ -462,7 +358,7 @@
         },
         {
           "serial": "F22",
-          "pack name": "?",
+          "pack name": "unknown",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__F22__"
         },
@@ -630,7 +526,7 @@
         },
         {
           "serial": "Sh51",
-          "pack name": "?",
+          "pack name": "unknown",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sh51__"
         },
@@ -648,7 +544,7 @@
         },
         {
           "serial": "Sh54",
-          "pack name": "?",
+          "pack name": "unknown",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sh54__"
         },
@@ -660,7 +556,7 @@
         },
         {
           "serial": "Sh57",
-          "pack name": "Shaal west?",
+          "pack name": "Shaal west*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sh57__"
         },
@@ -672,25 +568,25 @@
         },
         {
           "serial": "Sl60",
-          "pack name": "slopes?",
+          "pack name": "slopes*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sl60__"
         },
         {
           "serial": "Sl61",
-          "pack name": "slopes?",
+          "pack name": "slopes*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sl61__"
         },
         {
           "serial": "Sl62",
-          "pack name": "slopes?",
+          "pack name": "slopes*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sl62__"
         },
         {
           "serial": "Sl64",
-          "pack name": "slopes?",
+          "pack name": "slopes*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sl64__"
         },
@@ -744,7 +640,7 @@
         },
         {
           "serial": "O73",
-          "pack name": "?",
+          "pack name": "unknown",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__O73__"
         },
@@ -768,7 +664,7 @@
         },
         {
           "serial": "O77",
-          "pack name": "?",
+          "pack name": "unknown",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__O77__"
         },
@@ -884,55 +780,15 @@
       "category": "missing 'social dynamic' (in analysis pool)",
       "category_id": "missing_social_dynamic_in_analysis_pool",
       "severity": "info",
-      "description": "12 analysed wolf(ves) have empty 'social dynamic'",
+      "description": "2 analysed wolf(ves) have empty 'social dynamic'",
       "rows": [
         {
           "serial": "Y37",
           "_id": "missing_social_dynamic_in_analysis_pool__Y37__"
         },
         {
-          "serial": "In89",
-          "_id": "missing_social_dynamic_in_analysis_pool__In89__"
-        },
-        {
           "serial": "Mg90",
           "_id": "missing_social_dynamic_in_analysis_pool__Mg90__"
-        },
-        {
-          "serial": "In91",
-          "_id": "missing_social_dynamic_in_analysis_pool__In91__"
-        },
-        {
-          "serial": "In92",
-          "_id": "missing_social_dynamic_in_analysis_pool__In92__"
-        },
-        {
-          "serial": "In93",
-          "_id": "missing_social_dynamic_in_analysis_pool__In93__"
-        },
-        {
-          "serial": "In94",
-          "_id": "missing_social_dynamic_in_analysis_pool__In94__"
-        },
-        {
-          "serial": "In95",
-          "_id": "missing_social_dynamic_in_analysis_pool__In95__"
-        },
-        {
-          "serial": "In96",
-          "_id": "missing_social_dynamic_in_analysis_pool__In96__"
-        },
-        {
-          "serial": "In97",
-          "_id": "missing_social_dynamic_in_analysis_pool__In97__"
-        },
-        {
-          "serial": "In98",
-          "_id": "missing_social_dynamic_in_analysis_pool__In98__"
-        },
-        {
-          "serial": "In105",
-          "_id": "missing_social_dynamic_in_analysis_pool__In105__"
         }
       ]
     },

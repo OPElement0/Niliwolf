@@ -35,7 +35,11 @@ DECISIONS_PATH = Path(__file__).parent / "data_decisions.json"
 
 # Allowed values
 GENDER_ALLOWED = {"m", "f"}
-SOCIAL_DYN_ALLOWED = {"pack", "group", "unknown"}
+SOCIAL_DYN_BASE = {"pack", "group", "lone", "unknown"}
+# Per Nili 2026-05-12: `*` suffix on any of the 4 canonical categories means
+# "high probability but not certain". So {pack*, group*, lone*, unknown*} are
+# all valid alongside the bare forms.
+SOCIAL_DYN_ALLOWED = SOCIAL_DYN_BASE | {f"{x}*" for x in SOCIAL_DYN_BASE}
 CAMERA_RANGE = (1, 60)
 
 # Patterns
@@ -252,8 +256,9 @@ def check_social_dynamic(df: pd.DataFrame, f: Findings) -> None:
         if s not in SOCIAL_DYN_ALLOWED:
             bad.append({"serial": get_serial(df, idx), "value": repr(val)})
     if bad:
-        f.add("warnings", "social dynamic out of {pack, group, unknown}",
-              f"{len(bad)} row(s): unexpected value",
+        f.add("warnings", "social dynamic outside official set",
+              f"{len(bad)} row(s): value not in {{pack, group, lone, unknown}} "
+              f"with optional `*` suffix for 'probable'",
               bad)
 
 

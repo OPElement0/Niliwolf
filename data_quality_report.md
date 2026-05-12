@@ -1,15 +1,15 @@
 # Data Quality Report — `wolves_data.xlsx`
 
-**Generated:** 2026-05-12 03:30  
+**Generated:** 2026-05-13 02:25  
 **Source sheet:** `נתוני זיהוי זאבים (2)` (100 rows × 28 cols)
 
 ## Summary
 
 | Severity | Categories | Total rows flagged |
 |---|---:|---:|
-| ❌ Errors (must fix) | 2 | 28 |
-| ⚠ Warnings (likely issues) | 3 | 38 |
-| ℹ Info (FYI) | 5 | 96 |
+| ❌ Errors (must fix) | 2 | 32 |
+| ⚠ Warnings (likely issues) | 2 | 14 |
+| ℹ Info (FYI) | 5 | 86 |
 
 
 ## ❌ Errors
@@ -23,10 +23,11 @@
 | O68 | 29.8-29 | unparseable |
 
 ### seen with references unknown wolf
-26 reference(s) point to a serial not present in the table
+30 reference(s) point to a serial not present in the table
 
 | from_serial | seen_with | missing_reference |
 |---|---|---|
+| M7 | 1 unrecognized* | 1 unrecognized* |
 | F23 | F21s, F24 | F21s |
 | F24 | F23, F21s | F21s |
 | Y27 | seen together | seen together |
@@ -34,6 +35,8 @@
 | Y30 | seen together | seen together |
 | Y31 | seen together | seen together |
 | Y107 | seen together | seen together |
+| Y32 | unknown | unknown |
+| Y102 | unknown | unknown |
 | Y33 | seen together | seen together |
 | Y34 | seen together | seen together |
 | Y35 | seen together | seen together |
@@ -49,43 +52,14 @@
 | Sh52 | Sh53+1 unrecognized | Sh53+1 unrecognized |
 | Sh53 | Sh52+1 unrecognized | Sh52+1 unrecognized |
 | Sh55 | seen together | seen together |
-| Sh57 | seen together? | seen together |
+| Sh57 | seen together* | seen together* |
+| Sl60 | unknown | unknown |
 | Sn85 | seen together | seen together |
 | In92 | seen together | seen together |
 | In93 | seen together | seen together |
 
 
 ## ⚠ Warnings
-
-### social dynamic out of {pack, group, unknown}
-24 row(s): unexpected value
-
-| serial | value |
-|---|---|
-| H12 | 'lone' |
-| H13S | 'lone' |
-| H99 | 'lone' |
-| H14 | 'lone' |
-| H15m | 'lone' |
-| K16 | 'lone' |
-| K106 | 'lone' |
-| K17f | 'lone' |
-| S18 | 'lone' |
-| S100 | 'lone' |
-| S19 | 'lone' |
-| S20 | 'lone' |
-| F26 | 'lone' |
-| Y101 | 'lone' |
-| Y28 | 'lone' |
-| Y102 | 'pack*' |
-| Y46 | 'lone' |
-| Sh59 | 'lone' |
-| Sl65 | 'lone' |
-| O66 | 'lone' |
-| Sn83 | 'lone' |
-| Sn84 | 'lone' |
-| Ma87sn | 'lone' |
-| Ma88 | 'lone' |
 
 ### cams_spotted: non-numeric token
 12 entry(ies) contain a token that is not a camera ID
@@ -124,7 +98,7 @@
 | M3 | (blank) | makhfi unknown |
 | M6H | (blank) | makhfi unknown |
 | M10 | (blank) | makhfi unknown |
-| F22 | ? | (blank) |
+| F22 | unknown | (blank) |
 | F26 | lone | (blank) |
 | Y27 | dark pack | (blank) |
 | Y101 | lone | (blank) |
@@ -172,22 +146,12 @@
 | In105 |
 
 ### missing 'social dynamic' (in analysis pool)
-12 analysed wolf(ves) have empty 'social dynamic'
+2 analysed wolf(ves) have empty 'social dynamic'
 
 | serial |
 |---|
 | Y37 |
-| In89 |
 | Mg90 |
-| In91 |
-| In92 |
-| In93 |
-| In94 |
-| In95 |
-| In96 |
-| In97 |
-| In98 |
-| In105 |
 
 ### more cameras than pictures
 1 wolf(ves): listed in more cameras than #pictures (worth a sanity check)
