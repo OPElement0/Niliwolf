@@ -1309,8 +1309,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     /* Visualization tabs wrap on small screens */
     .viz-tabs { flex-wrap: wrap; gap: 2px; }
     .viz-tab { padding: 7px 12px; font-size: 12px; flex: 1 1 auto; text-align: center; }
-    /* Chart hosts shrink (Plotly is responsive but height is fixed) */
-    #region-distribution-chart { height: 460px; min-height: 380px; }
+    /* Chart hosts: keep the main distribution chart tall on mobile so the
+       9 stacked bars + wrapping 12-item legend + icons all fit. */
+    #region-distribution-chart { height: 620px; min-height: 540px; }
     .idpower-card .chart-host, .social-card .chart-host { height: 360px; min-height: 300px; }
     .social-card .chart-host.tall { height: 440px; min-height: 380px; }
     .social-card .chart-host.short { height: 280px; min-height: 240px; }
@@ -2621,8 +2622,12 @@ function renderRegionDistributionChart() {
     };
   });
 
+  // Detect narrow viewport so we can compact margins / icons / fonts.
+  const isMobile = (typeof window.matchMedia === "function")
+                    && window.matchMedia("(max-width: 768px)").matches;
+
   // Region icons placed above each bar (replaces the anatomical-group colour
-  // stripe). Falls back to the colour stripe if an icon is missing.
+  // stripe). On mobile they shrink so the bars get more vertical room.
   const icons = A.region_icons || {};
   const images = [];
   const shapes = [];
@@ -2631,8 +2636,8 @@ function renderRegionDistributionChart() {
       images.push({
         source: icons[r],
         xref: "x", yref: "paper",
-        x: i, y: 1.20,
-        sizex: 0.90, sizey: 0.18,
+        x: i, y: isMobile ? 1.14 : 1.20,
+        sizex: 0.90, sizey: isMobile ? 0.11 : 0.18,
         xanchor: "center", yanchor: "top",
         sizing: "contain",
         layer: "above",
@@ -2653,29 +2658,42 @@ function renderRegionDistributionChart() {
   const ticktext = regions.map(r => {
     const grp = A.region_group[r];
     const c = A.group_colors[grp];
-    return `<span style="color:${c}; font-weight:700;">${r}</span>`;
+    const size = isMobile ? "12" : "13";
+    return `<span style="color:${c}; font-weight:700; font-size:${size}px;">${r}</span>`;
   });
 
   Plotly.newPlot("region-distribution-chart", traces, {
     barmode: "stack",
     bargap: 0.18,
-    margin: { l: 56, r: 16, t: 88, b: 56 },
+    margin: {
+      l: isMobile ? 40 : 56,
+      r: isMobile ? 8 : 16,
+      t: isMobile ? 56 : 88,
+      b: isMobile ? 110 : 56,   // bigger bottom on mobile so the legend can wrap
+    },
     yaxis: {
-      title: { text: "% of analysed wolves", font: { size: 12 } },
+      title: { text: "% of analysed wolves", font: { size: isMobile ? 10 : 12 } },
       range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
       fixedrange: true,
+      tickfont: { size: isMobile ? 9 : 11 },
     },
     xaxis: {
-      title: { text: "Region (icon above each bar shows the anatomical area)", font: { size: 11, color: "#666" } },
+      title: isMobile ? "" : {
+        text: "Region (icon above each bar shows the anatomical area)",
+        font: { size: 11, color: "#666" },
+      },
       tickmode: "array",
       tickvals: regions,
       ticktext: ticktext,
-      tickfont: { size: 13 },
+      tickfont: { size: isMobile ? 11 : 13 },
       fixedrange: true,
     },
     legend: {
-      orientation: "h", x: 0.5, xanchor: "center", y: -0.22,
-      font: { size: 11 }, traceorder: "normal",
+      orientation: "h", x: 0.5, xanchor: "center",
+      y: isMobile ? -0.18 : -0.22,
+      font: { size: isMobile ? 9 : 11 },
+      traceorder: "normal",
+      itemwidth: isMobile ? 30 : undefined,
     },
     shapes: shapes,
     images: images,
@@ -4191,6 +4209,29 @@ function init() {
         renderRegionDistributionChart();
       }
     }, 80);
+  }
+
+  // Re-render charts when the mobile/desktop breakpoint flips (orientation
+  // change, resizing browser, etc.) so the isMobile-aware margins / icon
+  // sizes / legend fonts stay correct.
+  if (typeof window.matchMedia === "function") {
+    const mql = window.matchMedia("(max-width: 768px)");
+    let lastIsMobile = mql.matches;
+    const onBreakpoint = () => {
+      if (mql.matches === lastIsMobile) return;
+      lastIsMobile = mql.matches;
+      if (window.Plotly) {
+        if (document.getElementById("region-distribution-chart")) {
+          renderRegionDistributionChart();
+        }
+        // The other tabs are lazy-rendered; reset their flags so the next
+        // tab activation rebuilds them with the new breakpoint values.
+        idpowerRendered = false;
+        socialRendered = false;
+      }
+    };
+    if (mql.addEventListener) mql.addEventListener("change", onBreakpoint);
+    else if (mql.addListener) mql.addListener(onBreakpoint);  // older Safari
   }
 }
 
