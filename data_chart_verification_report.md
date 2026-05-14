@@ -1,8 +1,8 @@
 # Data-integrity Report — `data_table.html` chart vs. table
 
-**Generated:** 2026-05-13 02:25  
+**Generated:** 2026-05-14 03:24  
 **Source:** `wolves_data.xlsx`, sheet `נתוני זיהוי זאבים (2)`  
-**HTML:** `data_table.html` (build_iso: `2026-05-13 02:25`)
+**HTML:** `data_table.html` (build_iso: `2026-05-14 03:24`)
 
 ## 1. Headline
 
@@ -88,7 +88,7 @@ Reference (per region, status counts, all confirmed):
 | Y31 | B4 | Rb1aLc2a | b1a | c2a |
 | Y39 | B4 | Rb1aLd | b1a | d |
 | Y47 | B4 | Rb2bLN | b2b | N |
-| F104 | B5 | Ra1bLa2b | a1b | a2b |
+| S104 | B5 | Ra1bLa2b | a1b | a2b |
 | Y31 | B5 | Ra1aLc2a | a1a | c2a |
 | Y39 | B5 | Ra2bLd | a2b | d |
 

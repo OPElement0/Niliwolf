@@ -2,14 +2,14 @@
   "summary": {
     "n_errors_categories": 2,
     "n_warnings_categories": 2,
-    "n_info_categories": 5,
-    "n_error_rows": 32,
-    "n_warning_rows": 14,
-    "n_info_rows": 86,
+    "n_info_categories": 4,
+    "n_error_rows": 30,
+    "n_warning_rows": 3,
+    "n_info_rows": 89,
     "source_rows": 100,
     "source_cols": 28,
     "decisions_applied": {
-      "suppressed_decided_keep": 0,
+      "suppressed_decided_keep": 11,
       "suppressed_fixed_in_xlsx": 0,
       "annotated_with_comment": 0,
       "fixed_but_still_detected": 0
@@ -20,19 +20,13 @@
       "category": "time on camera unparseable",
       "category_id": "time_on_camera_unparseable",
       "severity": "errors",
-      "description": "2 entry(ies) don't match any accepted format (dd.mm.yy / d-d.mm.yy / d.m-d.m.yy / dd.mm.yy-dd.mm.yy / m.yyyy / m.yyyy-m.yyyy)",
+      "description": "1 entry(ies) don't match any accepted format (dd.mm.yy / d-d.mm.yy / d.m-d.m.yy / dd.mm.yy-dd.mm.yy / m.yyyy / m.yyyy-m.yyyy)",
       "rows": [
         {
           "serial": "Y42",
           "value": "30.9.20-27.10",
           "reason": "unparseable",
           "_id": "time_on_camera_unparseable__Y42__"
-        },
-        {
-          "serial": "O68",
-          "value": "29.8-29",
-          "reason": "unparseable",
-          "_id": "time_on_camera_unparseable__O68__"
         }
       ]
     },
@@ -40,7 +34,7 @@
       "category": "seen with references unknown wolf",
       "category_id": "seen_with_references_unknown_wolf",
       "severity": "errors",
-      "description": "30 reference(s) point to a serial not present in the table",
+      "description": "29 reference(s) point to a serial not present in the table",
       "rows": [
         {
           "from_serial": "M7",
@@ -50,15 +44,15 @@
         },
         {
           "from_serial": "F23",
-          "seen_with": "F21s, F24",
-          "missing_reference": "F21s",
-          "_id": "seen_with_references_unknown_wolf__F23__F21s"
+          "seen_with": "unknown, F24",
+          "missing_reference": "unknown",
+          "_id": "seen_with_references_unknown_wolf__F23__unknown"
         },
         {
           "from_serial": "F24",
-          "seen_with": "F23, F21s",
-          "missing_reference": "F21s",
-          "_id": "seen_with_references_unknown_wolf__F24__F21s"
+          "seen_with": "F23, unknown",
+          "missing_reference": "unknown",
+          "_id": "seen_with_references_unknown_wolf__F24__unknown"
         },
         {
           "from_serial": "Y27",
@@ -163,16 +157,10 @@
           "_id": "seen_with_references_unknown_wolf__Y45__seen_together"
         },
         {
-          "from_serial": "Sh49",
-          "seen_with": "Sh37y",
-          "missing_reference": "Sh37y",
-          "_id": "seen_with_references_unknown_wolf__Sh49__Sh37y"
-        },
-        {
           "from_serial": "Sh50",
-          "seen_with": "7 min after Sh49+Sh37y",
-          "missing_reference": "7 min after Sh49+Sh37y",
-          "_id": "seen_with_references_unknown_wolf__Sh50__7_min_after_Sh49+Sh37y"
+          "seen_with": "7 min after Sh49+Sh109",
+          "missing_reference": "7 min after Sh49+Sh109",
+          "_id": "seen_with_references_unknown_wolf__Sh50__7_min_after_Sh49+Sh109"
         },
         {
           "from_serial": "Sh52",
@@ -206,9 +194,9 @@
         },
         {
           "from_serial": "Sn85",
-          "seen_with": "seen together",
-          "missing_reference": "seen together",
-          "_id": "seen_with_references_unknown_wolf__Sn85__seen_together"
+          "seen_with": "unknown",
+          "missing_reference": "unknown",
+          "_id": "seen_with_references_unknown_wolf__Sn85__unknown"
         },
         {
           "from_serial": "In92",
@@ -233,76 +221,10 @@
       "description": "12 entry(ies) contain a token that is not a camera ID",
       "rows": [
         {
-          "serial": "O66",
-          "value": "31, omer weiner",
-          "non_numeric_token": "omer weiner",
-          "_id": "cams_spotted_non_numeric_token__O66__"
-        },
-        {
-          "serial": "In89",
+          "serial": "In90",
           "value": "omer weiner",
           "non_numeric_token": "omer weiner",
-          "_id": "cams_spotted_non_numeric_token__In89__"
-        },
-        {
-          "serial": "Mg90",
-          "value": "omer weiner",
-          "non_numeric_token": "omer weiner",
-          "_id": "cams_spotted_non_numeric_token__Mg90__"
-        },
-        {
-          "serial": "In91",
-          "value": "ariel shamir",
-          "non_numeric_token": "ariel shamir",
-          "_id": "cams_spotted_non_numeric_token__In91__"
-        },
-        {
-          "serial": "In92",
-          "value": "ariel shamir",
-          "non_numeric_token": "ariel shamir",
-          "_id": "cams_spotted_non_numeric_token__In92__"
-        },
-        {
-          "serial": "In93",
-          "value": "ariel shamir",
-          "non_numeric_token": "ariel shamir",
-          "_id": "cams_spotted_non_numeric_token__In93__"
-        },
-        {
-          "serial": "In94",
-          "value": "ariel shamir",
-          "non_numeric_token": "ariel shamir",
-          "_id": "cams_spotted_non_numeric_token__In94__"
-        },
-        {
-          "serial": "In95",
-          "value": "omer weiner",
-          "non_numeric_token": "omer weiner",
-          "_id": "cams_spotted_non_numeric_token__In95__"
-        },
-        {
-          "serial": "In96",
-          "value": "omer weiner",
-          "non_numeric_token": "omer weiner",
-          "_id": "cams_spotted_non_numeric_token__In96__"
-        },
-        {
-          "serial": "In97",
-          "value": "elimelech",
-          "non_numeric_token": "elimelech",
-          "_id": "cams_spotted_non_numeric_token__In97__"
-        },
-        {
-          "serial": "In98",
-          "value": "moshe_neeman",
-          "non_numeric_token": "moshe_neeman",
-          "_id": "cams_spotted_non_numeric_token__In98__"
-        },
-        {
-          "serial": "In105",
-          "value": "nevo_",
-          "non_numeric_token": "nevo_",
-          "_id": "cams_spotted_non_numeric_token__In105__"
+          "_id": "cams_spotted_non_numeric_token__In90__"
         }
       ]
     },
@@ -336,7 +258,7 @@
       "category": "'pack name' vs 'שיוך' diverge",
       "category_id": "pack_name_vs_diverge",
       "severity": "info",
-      "description": "64 row(s) differ between the two columns — for user's manual cleanup",
+      "description": "69 row(s) differ between the two columns — for user's manual cleanup",
       "rows": [
         {
           "serial": "M3",
@@ -357,9 +279,21 @@
           "_id": "pack_name_vs_diverge__M10__"
         },
         {
+          "serial": "S21",
+          "pack name": "(blank)",
+          "שיוך": "unknown",
+          "_id": "pack_name_vs_diverge__S21__"
+        },
+        {
+          "serial": "S104",
+          "pack name": "(blank)",
+          "שיוך": "unknown",
+          "_id": "pack_name_vs_diverge__S104__"
+        },
+        {
           "serial": "F22",
-          "pack name": "unknown",
-          "שיוך": "(blank)",
+          "pack name": "(blank)",
+          "שיוך": "group*",
           "_id": "pack_name_vs_diverge__F22__"
         },
         {
@@ -507,6 +441,12 @@
           "_id": "pack_name_vs_diverge__Y48__"
         },
         {
+          "serial": "Y37",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Y37__"
+        },
+        {
           "serial": "Sh109",
           "pack name": "shaal east",
           "שיוך": "(blank)",
@@ -526,7 +466,7 @@
         },
         {
           "serial": "Sh51",
-          "pack name": "unknown",
+          "pack name": "shaal east*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sh51__"
         },
@@ -544,7 +484,7 @@
         },
         {
           "serial": "Sh54",
-          "pack name": "unknown",
+          "pack name": "shaal east*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sh54__"
         },
@@ -583,6 +523,12 @@
           "pack name": "slopes*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Sl62__"
+        },
+        {
+          "serial": "Sl103",
+          "pack name": "lone*",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sl103__"
         },
         {
           "serial": "Sl64",
@@ -640,7 +586,7 @@
         },
         {
           "serial": "O73",
-          "pack name": "unknown",
+          "pack name": "Odem west*",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__O73__"
         },
@@ -705,6 +651,12 @@
           "_id": "pack_name_vs_diverge__Sn84__"
         },
         {
+          "serial": "Sn85",
+          "pack name": "snir*",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__Sn85__"
+        },
+        {
           "serial": "Ma87sn",
           "pack name": "lone",
           "שיוך": "(blank)",
@@ -717,10 +669,10 @@
           "_id": "pack_name_vs_diverge__Ma88__"
         },
         {
-          "serial": "Mg90",
+          "serial": "In90",
           "pack name": "marom golan",
           "שיוך": "(blank)",
-          "_id": "pack_name_vs_diverge__Mg90__"
+          "_id": "pack_name_vs_diverge__In90__"
         }
       ]
     },
@@ -735,8 +687,8 @@
           "_id": "missing_main_poligon_in_analysis_pool__In89__"
         },
         {
-          "serial": "Mg90",
-          "_id": "missing_main_poligon_in_analysis_pool__Mg90__"
+          "serial": "In90",
+          "_id": "missing_main_poligon_in_analysis_pool__In90__"
         },
         {
           "serial": "In91",
@@ -773,22 +725,6 @@
         {
           "serial": "In105",
           "_id": "missing_main_poligon_in_analysis_pool__In105__"
-        }
-      ]
-    },
-    {
-      "category": "missing 'social dynamic' (in analysis pool)",
-      "category_id": "missing_social_dynamic_in_analysis_pool",
-      "severity": "info",
-      "description": "2 analysed wolf(ves) have empty 'social dynamic'",
-      "rows": [
-        {
-          "serial": "Y37",
-          "_id": "missing_social_dynamic_in_analysis_pool__Y37__"
-        },
-        {
-          "serial": "Mg90",
-          "_id": "missing_social_dynamic_in_analysis_pool__Mg90__"
         }
       ]
     },

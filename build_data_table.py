@@ -321,6 +321,416 @@ CATEGORY_META = {
 }
 
 
+# Land-use classification of each polygon (Nili 2026-05-14).
+# Keys are canonical lower-case polygon names; values are the formal land-use
+# category used in the paper. The Social Dynamics tab restricts itself to the
+# camera-survey pool (wolves with a known polygon); photographer-sourced wolves
+# without a location are EXCLUDED there.
+LAND_USE_BY_POLYGON: dict[str, str] = {
+    "yehodiya":       "Nature Reserve",
+    "odem":           "Nature Reserve",
+    "makhfi":         "Minefield",
+    "saki":           "Minefield",
+    "hazeka":         "Minefield",
+    "shaal":          "High Culling",
+    "snir":           "High Culling",
+    "keshet-yonatan": "High Culling",
+    "slopes":         "Low Culling",
+    "firing-zone":    "Low Culling",
+    "masade":         "Low Culling",   # added 2026-05-14 per Nili
+}
+
+# Plot ordering: Nature Reserve first (most "protected"), Low Culling last
+# (most "human-pressured"). Polygons without a land-use mapping fall through
+# to "Unclassified" so missing entries stay visible rather than silent.
+LAND_USE_ORDER: list[str] = [
+    "Nature Reserve",
+    "Minefield",
+    "High Culling",
+    "Low Culling",
+    "Unclassified",
+]
+
+# Land-use palette: matches the colour key Nili uses in the paper's land-use map.
+LAND_USE_COLORS: dict[str, str] = {
+    "Nature Reserve": "#1E88E5",   # blue
+    "Minefield":      "#FB8C00",   # orange
+    "High Culling":   "#D81B60",   # pink/magenta
+    "Low Culling":    "#7CB342",   # light green
+    "Unclassified":   "#BDBDBD",   # neutral gray
+}
+
+
+def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
+    """Pre-compute per-polygon and per-pack breakdowns for the Social Dynamics tab.
+
+    All canonicalisation matches the smart-filter rules:
+      * Polygon names are lower-cased (Hazeka / hazeka → 'hazeka' with display
+        form being the first-seen capitalisation).
+      * Pack and social-dynamic values with a trailing '*' (probable, not
+        certain) are merged with their non-'*' counterpart; ``probable``
+        records how many of the wolves entered via the '*' form.
+    """
+    from collections import Counter
+
+    SOC_ORDER = ["pack", "group", "lone", "unknown"]
+    NO_POLY = "(no polygon)"
+    NO_PACK = "(no pack)"
+
+    def _strip_star(v: str) -> tuple[str, bool]:
+        v = (v or "").strip()
+        if v.endswith("*"):
+            return v[:-1].strip(), True
+        return v, False
+
+    # Build per-wolf records with canonicalised metadata. We track the
+    # excluded "no-polygon" wolves separately — they're photographer-sourced
+    # and the Social Dynamics tab restricts to wolves with a known location.
+    records = []
+    excluded_no_polygon: list[str] = []
+    poly_display: dict[str, str] = {}  # canon (lower) -> first-seen cased form
+    for _, row in df_pool.iterrows():
+        serial = str(row["serial number"]).strip()
+        poly_raw = (str(row["main poligon"]) if pd.notna(row["main poligon"]) else "").strip()
+        if not poly_raw:
+            # Camera-survey filter: skip wolves whose location is unknown.
+            excluded_no_polygon.append(serial)
+            continue
+        poly_canon = poly_raw.lower()
+        if poly_canon not in poly_display:
+            poly_display[poly_canon] = poly_raw
+        pack_raw = (str(row["pack name"]) if pd.notna(row["pack name"]) else "").strip()
+        pack_canon, pack_probable = _strip_star(pack_raw) if pack_raw else ("", False)
+        if not pack_canon:
+            pack_canon = NO_PACK
+        social_raw = (str(row["social dynamic"]) if pd.notna(row["social dynamic"]) else "").strip()
+        social_canon, social_probable = _strip_star(social_raw) if social_raw else ("", False)
+        if not social_canon:
+            social_canon = "unknown"  # blanks treated as 'unknown' for grouping
+        records.append({
+            "serial": serial,
+            "poly_canon": poly_canon,
+            "poly_display": poly_display.get(poly_canon, poly_canon),
+            "pack_canon": pack_canon,
+            "pack_raw": pack_raw,
+            "pack_probable": pack_probable,
+            "social_canon": social_canon,
+            "social_probable": social_probable,
+        })
+
+    # -------------------------------------------------------------------------
+    # (1) Per-polygon × social breakdown for the stacked bar chart.
+    # Each polygon → {pack: {total, probable}, group: {...}, lone: {...}, unknown: {...}}
+    polygon_social: dict[str, dict] = {}
+    for rec in records:
+        p = rec["poly_canon"]
+        s = rec["social_canon"]
+        if s not in SOC_ORDER:
+            s = "unknown"
+        bucket = polygon_social.setdefault(p, {
+            "display": poly_display.get(p, p),
+            "total": 0,
+            "by_social": {k: {"total": 0, "probable": 0} for k in SOC_ORDER},
+        })
+        bucket["total"] += 1
+        bucket["by_social"][s]["total"] += 1
+        if rec["social_probable"]:
+            bucket["by_social"][s]["probable"] += 1
+    polygons_sorted = sorted(polygon_social.values(),
+                              key=lambda x: (-x["total"], x["display"]))
+
+    # -------------------------------------------------------------------------
+    # (2) Per-pack inventory: each canonical pack with totals + members.
+    pack_inventory: dict[str, dict] = {}
+    for rec in records:
+        pc = rec["pack_canon"]
+        bucket = pack_inventory.setdefault(pc, {
+            "name": pc,
+            "total": 0,
+            "certain": 0,
+            "probable": 0,
+            "polygons": Counter(),
+            "members": [],
+            "probable_members": [],
+        })
+        bucket["total"] += 1
+        if rec["pack_probable"]:
+            bucket["probable"] += 1
+            bucket["probable_members"].append(rec["serial"])
+        else:
+            bucket["certain"] += 1
+        bucket["members"].append(rec["serial"])
+        bucket["polygons"][rec["poly_display"]] += 1
+
+    # Convert Counter to sorted list, pick primary polygon (mode) for coloring
+    for pc, b in pack_inventory.items():
+        mode = b["polygons"].most_common(1)[0]
+        b["primary_polygon"] = mode[0]
+        b["polygon_breakdown"] = dict(b["polygons"])
+        del b["polygons"]
+        b["members"].sort()
+        b["probable_members"].sort()
+
+    # Ordering: real packs (not 'lone' / 'unknown' / NO_PACK), then sentinels
+    sentinels = {"lone", "unknown", NO_PACK}
+    real_packs = sorted(
+        [b for pc, b in pack_inventory.items() if pc not in sentinels],
+        key=lambda x: (-x["total"], x["name"]),
+    )
+    sentinel_packs = sorted(
+        [b for pc, b in pack_inventory.items() if pc in sentinels],
+        key=lambda x: (-x["total"], x["name"]),
+    )
+
+    # -------------------------------------------------------------------------
+    # (3) Overall social-dynamic counts (for the donut)
+    social_totals = {k: {"total": 0, "probable": 0} for k in SOC_ORDER}
+    for rec in records:
+        s = rec["social_canon"] if rec["social_canon"] in SOC_ORDER else "unknown"
+        social_totals[s]["total"] += 1
+        if rec["social_probable"]:
+            social_totals[s]["probable"] += 1
+
+    # -------------------------------------------------------------------------
+    # (4) Per-LAND-USE aggregates. Each wolf is mapped from its polygon to a
+    # land-use category via LAND_USE_BY_POLYGON; polygons missing from that
+    # map fall through to "Unclassified" so coverage gaps stay visible.
+    landuse_data: dict[str, dict] = {}
+    for rec in records:
+        lu = LAND_USE_BY_POLYGON.get(rec["poly_canon"], "Unclassified")
+        bucket = landuse_data.setdefault(lu, {
+            "land_use": lu,
+            "color": LAND_USE_COLORS.get(lu, "#888"),
+            "total": 0,
+            "polygons": Counter(),
+            "by_social": {k: {"total": 0, "probable": 0} for k in SOC_ORDER},
+        })
+        bucket["total"] += 1
+        bucket["polygons"][rec["poly_display"]] += 1
+        s = rec["social_canon"] if rec["social_canon"] in SOC_ORDER else "unknown"
+        bucket["by_social"][s]["total"] += 1
+        if rec["social_probable"]:
+            bucket["by_social"][s]["probable"] += 1
+    for lu, b in landuse_data.items():
+        b["polygon_breakdown"] = dict(b["polygons"])
+        del b["polygons"]
+    landuse_sorted = sorted(
+        landuse_data.values(),
+        key=lambda b: (LAND_USE_ORDER.index(b["land_use"])
+                        if b["land_use"] in LAND_USE_ORDER else 99),
+    )
+
+    # Mapping for use by JS — polygon → land use (display-cased polygon key)
+    polygon_to_landuse: dict[str, str] = {}
+    for rec in records:
+        polygon_to_landuse[rec["poly_display"]] = LAND_USE_BY_POLYGON.get(
+            rec["poly_canon"], "Unclassified")
+
+    return {
+        "n_pool": len(records),
+        "n_excluded_no_polygon": len(excluded_no_polygon),
+        "excluded_no_polygon_serials": excluded_no_polygon,
+        "soc_order": SOC_ORDER,
+        "polygons": polygons_sorted,                  # list of dicts
+        "real_packs": real_packs,                     # list of pack inventory dicts
+        "sentinel_packs": sentinel_packs,             # lone / unknown / no-pack
+        "social_totals": social_totals,
+        "no_polygon_label": NO_POLY,
+        "no_pack_label": NO_PACK,
+        "landuse_data": landuse_sorted,
+        "landuse_colors": LAND_USE_COLORS,
+        "polygon_to_landuse": polygon_to_landuse,
+    }
+
+
+def _build_identification_power(processed: pd.DataFrame) -> dict:
+    """Compute identification-power data under Nili's strict fingerprint rule
+    (2026-05-14).
+
+    A wolf's fingerprint on a region set S is the tuple of (region, code) for
+    every region in S where the wolf has *some* visible information. Status
+    contributions:
+        unambiguous       → "U:<cleaned>"      (full info)
+        asymmetric        → "A:<right>|<left>" (full info, both sides)
+        partial_ambiguous → "P:<cleaned>"      (partial info — still useful)
+        P  (pure)         → "P:--"             ("pattern present, unidentified")
+        N / empty         → not in fingerprint  (no info)
+
+    Wolf X is *identifiable* on S iff its fingerprint is non-empty AND no
+    other wolf has the same fingerprint.
+    """
+    from collections import Counter
+    from itertools import combinations
+
+    regions = REGIONS
+
+    # Build per-wolf visible dict (None where the region offers no info)
+    wolves: list[dict] = []
+    for _, row in processed.iterrows():
+        w: dict[str, str | None] = {}
+        for r in regions:
+            s = str(row.get(f"{r}_status", "") or "")
+            if s == "unambiguous":
+                w[r] = f"U:{row[f'{r}_cleaned']}"
+            elif s == "asymmetric":
+                w[r] = f"A:{row[f'{r}_right']}|{row[f'{r}_left']}"
+            elif s == "partial_ambiguous":
+                w[r] = f"P:{row[f'{r}_cleaned']}"
+            elif s == "P":
+                w[r] = "P:--"
+            else:
+                w[r] = None  # N, empty, or anything unexpected
+        wolves.append(w)
+
+    def n_identifiable(S: list[str]) -> int:
+        sigs = []
+        for w in wolves:
+            sig = tuple((r, w[r]) for r in S if w[r] is not None)
+            sigs.append(sig)
+        counts = Counter(sigs)
+        return sum(1 for s in sigs if len(s) > 0 and counts[s] == 1)
+
+    # ---- Single-region (k=1) ----
+    single = [{"region": r, "identifiable": n_identifiable([r])} for r in regions]
+    single.sort(key=lambda x: -x["identifiable"])
+
+    # ---- Greedy ladder ----
+    remaining = set(regions)
+    chosen: list[str] = []
+    greedy: list[dict] = []
+    prev = 0
+    while remaining:
+        best, best_n = None, -1
+        for r in sorted(remaining):  # deterministic on ties
+            n = n_identifiable(chosen + [r])
+            if n > best_n:
+                best, best_n = r, n
+        chosen.append(best)
+        remaining.remove(best)
+        greedy.append({
+            "k": len(chosen),
+            "region": best,
+            "cumulative": best_n,
+            "delta": best_n - prev,
+            "set_so_far": list(chosen),
+        })
+        prev = best_n
+
+    # ---- Envelope: distribution across all C(9,k) subsets ----
+    envelope: list[dict] = []
+    for k in range(1, len(regions) + 1):
+        vals = sorted(n_identifiable(list(s)) for s in combinations(regions, k))
+        envelope.append({
+            "k": k,
+            "min": vals[0],
+            "q25": vals[max(0, len(vals) // 4)],
+            "median": vals[len(vals) // 2],
+            "q75": vals[min(len(vals) - 1, 3 * len(vals) // 4)],
+            "max": vals[-1],
+            "n_subsets": len(vals),
+        })
+
+    # ---- Pairs heatmap (k=2 only; diagonal = single-region) ----
+    pairs: dict[str, dict[str, int]] = {}
+    for r1 in regions:
+        pairs[r1] = {}
+        for r2 in regions:
+            S = [r1] if r1 == r2 else [r1, r2]
+            pairs[r1][r2] = n_identifiable(S)
+
+    return {
+        "single": single,
+        "greedy": greedy,
+        "envelope": envelope,
+        "pairs": pairs,
+        "n_pool": len(wolves),
+        "definition_note": (
+            "Strict fingerprint rule: a wolf is identifiable on S iff its tuple of "
+            "(region, visible_code) entries — where 'visible' means status is "
+            "unambiguous, asymmetric, partial_ambiguous, or P (pure) — is unique "
+            "across the pool and non-empty. N / empty cells contribute no information."
+        ),
+    }
+
+
+def _build_filter_options(df_pool: pd.DataFrame) -> dict:
+    """Build the option lists for the viewer's smart filters.
+
+    Returns a dict with three keys: ``polygon``, ``pack``, ``social``. Each
+    value is a list of ``{value, label, count, [probable], [is_empty]}`` dicts
+    sorted by count desc (then label).
+
+    Canonicalisation rules:
+      * Polygon names are lower-cased (so ``Hazeka`` and ``hazeka`` collapse).
+        The display label uses the first-seen capitalisation.
+      * Pack / social values with a trailing ``*`` (probable, not certain) are
+        merged with their non-``*`` counterpart. ``probable`` records how many
+        of the wolves in that option came in via the ``*`` form.
+      * Empty cells become an ``__empty__`` option labelled "(empty)".
+    """
+
+    def _opts(series: pd.Series, *, lower: bool, strip_star: bool,
+              forced_order: list[str] | None = None) -> list[dict]:
+        raw_vals = series.fillna("").astype(str).str.strip()
+
+        def _canon(v: str) -> str:
+            x = v
+            if strip_star and x.endswith("*"):
+                x = x[:-1].strip()
+            if lower:
+                x = x.lower()
+            return x
+
+        # First-seen display form for each canonical key
+        display_for: dict[str, str] = {}
+        for v in raw_vals:
+            k = _canon(v)
+            if k and k not in display_for:
+                # Display: use the non-canonical form (strip * if relevant, keep case)
+                disp = v
+                if strip_star and disp.endswith("*"):
+                    disp = disp[:-1].strip()
+                display_for[k] = disp
+
+        canon_series = raw_vals.apply(_canon)
+        counts = canon_series.value_counts()
+
+        # Probable count: how many wolves came in via the * form per canonical key
+        probable: dict[str, int] = {}
+        if strip_star:
+            for raw in raw_vals:
+                if raw.endswith("*"):
+                    probable[_canon(raw)] = probable.get(_canon(raw), 0) + 1
+
+        opts: list[dict] = []
+        for k, n in counts.items():
+            if not k:
+                continue
+            opt = {"value": k, "label": display_for.get(k, k), "count": int(n)}
+            if probable.get(k, 0) > 0:
+                opt["probable"] = int(probable[k])
+            opts.append(opt)
+
+        if forced_order:
+            order_idx = {v: i for i, v in enumerate(forced_order)}
+            opts.sort(key=lambda o: (order_idx.get(o["value"], 99), o["label"].lower()))
+        else:
+            opts.sort(key=lambda o: (-o["count"], o["label"].lower()))
+
+        empty_count = int((canon_series == "").sum())
+        if empty_count:
+            opts.append({"value": "__empty__", "label": "(empty)",
+                          "count": empty_count, "is_empty": True})
+        return opts
+
+    return {
+        "polygon": _opts(df_pool["main poligon"], lower=True, strip_star=False),
+        "pack":    _opts(df_pool["pack name"],    lower=False, strip_star=True),
+        "social":  _opts(df_pool["social dynamic"], lower=False, strip_star=True,
+                          forced_order=["pack", "group", "lone", "unknown"]),
+    }
+
+
 def build_issues_payload(findings, df) -> dict:
     """Convert Findings into a UI-ready issue tree."""
     serial_to_idx = {}
@@ -385,7 +795,11 @@ def _encode_image_b64(path: Path) -> tuple[str, str]:
     if not path.exists():
         return ("", "")
     suffix = path.suffix.lower().lstrip(".")
-    mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif", "webp": "webp"}.get(suffix, "octet-stream")
+    mime = {
+        "jpg": "jpeg", "jpeg": "jpeg",
+        "png": "png", "gif": "gif", "webp": "webp",
+        "svg": "svg+xml",
+    }.get(suffix, "octet-stream")
     b64 = base64.b64encode(path.read_bytes()).decode("ascii")
     return (f"data:image/{mime};base64,", b64)
 
@@ -470,6 +884,17 @@ def main() -> None:
             for code, count in code_counts.items()
         ]
 
+    # ----- Smart-filter option lists: polygon, pack, social dynamic -----
+    # All three filters operate on the analysis pool (df_pool) so counts
+    # reflect what the viewer can actually see by default.
+    filter_options = _build_filter_options(df_pool)
+
+    # ----- Identification-power analysis (Nili's strict fingerprint rule) -----
+    identification_power = _build_identification_power(processed)
+
+    # ----- Social dynamics: per-polygon × social + per-pack inventory -----
+    social_dynamics = _build_social_dynamics(df_pool)
+
     # ----- Build per-row records -----
     rows: list[dict] = []
     for idx, row in df.iterrows():
@@ -501,6 +926,27 @@ def main() -> None:
     claude_questions = build_claude_questions_payload(df)
     prefilled_decisions = load_prefilled_decisions()
 
+    # Per-region icons used above each bar in the distribution chart.
+    # Drop a file named <REGION>.<ext> into assets/regions/ (e.g. A1.png).
+    # Recognised extensions, in priority order: svg, png, webp, jpg, jpeg.
+    # First match wins, so an SVG (vector, smallest payload) will override a PNG.
+    # Convention for the replacement art Nili will provide: a wolf-face profile
+    # with ONLY the relevant region painted in the anatomical-group colour;
+    # background transparent or white; landscape orientation works best.
+    region_icons: dict[str, str] = {}
+    icon_dir = OUTPUT_DIR / "assets" / "regions"
+    icon_extensions = ("svg", "png", "webp", "jpg", "jpeg")
+    region_icon_sources: dict[str, str] = {}  # for the build log
+    for region in REGIONS:
+        for ext in icon_extensions:
+            candidate = icon_dir / f"{region}.{ext}"
+            if candidate.exists():
+                prefix, b64 = _encode_image_b64(candidate)
+                if b64:
+                    region_icons[region] = prefix + b64
+                    region_icon_sources[region] = candidate.name
+                    break
+
     # Anatomy / region metadata for the JS side
     anatomy = {
         "regions": REGIONS,
@@ -516,6 +962,9 @@ def main() -> None:
         "id_bucket_colors": ID_BUCKET_COLORS,
         "bucket_dist": bucket_dist,
         "codes_per_region": codes_per_region,
+        "region_icons": region_icons,
+        "identification_power": identification_power,
+        "social_dynamics": social_dynamics,
     }
 
     payload = {
@@ -530,6 +979,7 @@ def main() -> None:
         "claude_questions": claude_questions,
         "prefilled_decisions": prefilled_decisions,
         "anatomy": anatomy,
+        "filter_options": filter_options,
     }
 
     payload_json = json.dumps(payload, ensure_ascii=False, default=str)
@@ -549,6 +999,17 @@ def main() -> None:
     print(f"  pool : {len(df_pool)} wolves processed for status / buckets")
     print(f"  imgs : schematic={'yes' if schematic_b64 else 'MISSING'}  "
           f"deftable={'yes' if deftable_b64 else 'MISSING'}")
+    if region_icon_sources:
+        # Show which file backed each region icon, grouped by extension (useful
+        # to confirm SVG replacements landed without falling back to PNG).
+        from collections import Counter
+        ext_counts = Counter(name.rsplit(".", 1)[-1].lower() for name in region_icon_sources.values())
+        ext_summary = ", ".join(f"{ext}={n}" for ext, n in ext_counts.most_common())
+        missing = [r for r in REGIONS if r not in region_icon_sources]
+        miss_str = f"  MISSING: {','.join(missing)}" if missing else ""
+        print(f"  icons: {len(region_icon_sources)}/{len(REGIONS)} loaded  ({ext_summary}){miss_str}")
+    else:
+        print(f"  icons: 0/{len(REGIONS)}  — drop files into assets/regions/<REGION>.{{svg,png,webp,jpg}}")
     print(f"  issues: {issues_payload['totals']['errors_categories']}E / "
           f"{issues_payload['totals']['warnings_categories']}W / "
           f"{issues_payload['totals']['info_categories']}I categories, "
@@ -561,6 +1022,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a1a">
 <title>Wolves Data — Interactive Table</title>
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_simple.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
@@ -646,6 +1109,64 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
   .status-chip:not(.active) .count { background: rgba(0,0,0,0.08); color: #555; }
 
+  /* ----- Smart filters (polygon / pack / social) ----- */
+  .smart-filter-bar {
+    background: #fff; padding: 8px 14px; border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .smart-filter-bar .label {
+    font-size: 12px; color: #555; font-weight: 600; margin-right: 4px;
+  }
+  .smart-filter-dropdown { position: relative; display: inline-block; }
+  .smart-filter-btn {
+    padding: 5px 12px; font-size: 12.5px; cursor: pointer;
+    background: #f0f0f0; color: #333; border: 1.5px solid #ddd;
+    border-radius: 14px; font-weight: 500; transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .smart-filter-btn:hover { background: #e8e8e8; transform: translateY(-1px); }
+  .smart-filter-btn.has-selection {
+    background: #2e7d32; color: white; border-color: #2e7d32;
+  }
+  .smart-filter-btn .sel-count {
+    background: rgba(255,255,255,0.35); padding: 0 6px; border-radius: 8px;
+    font-size: 10.5px; font-weight: 700; margin-left: 2px;
+  }
+  .smart-filter-btn:not(.has-selection) .sel-count { display: none; }
+  .smart-filter-menu {
+    display: none; position: absolute; top: 100%; left: 0; margin-top: 4px;
+    background: #fff; border: 1px solid #ccc; border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 200;
+    min-width: 240px; max-height: 60vh; overflow: auto; padding: 6px;
+  }
+  .smart-filter-menu .smart-opt {
+    display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+    border-radius: 3px; cursor: pointer; user-select: none; font-size: 12.5px;
+  }
+  .smart-filter-menu .smart-opt:hover { background: #f0f0f0; }
+  .smart-filter-menu .smart-opt input { margin: 0; cursor: pointer; }
+  .smart-filter-menu .smart-opt .opt-label { color: #222; }
+  .smart-filter-menu .smart-opt[data-empty="1"] .opt-label {
+    color: #999; font-style: italic;
+  }
+  .smart-filter-menu .smart-opt .opt-probable {
+    color: #ef6c00; font-size: 10.5px; margin-left: 2px;
+    background: rgba(239,108,0,0.10); padding: 1px 6px; border-radius: 8px;
+  }
+  .smart-filter-menu .smart-opt .opt-count {
+    margin-left: auto; color: #777; font-size: 11.5px;
+    background: #eee; border-radius: 9px; padding: 1px 8px; font-weight: 600;
+  }
+  .smart-filter-menu .smart-opt input:checked ~ .opt-count {
+    background: #c8e6c9; color: #2e7d32;
+  }
+  .smart-filter-menu .menu-header {
+    font-size: 10.5px; color: #999; text-transform: uppercase;
+    letter-spacing: 0.5px; padding: 2px 6px 6px; border-bottom: 1px solid #eee;
+    margin-bottom: 4px;
+  }
+
   /* Status badges inside region cells (admin or hover only) */
   .tabulator .tabulator-cell.region-cell { position: relative; }
   .tabulator .tabulator-cell.region-cell::before {
@@ -703,7 +1224,52 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
 
   /* Plotly chart container */
-  #region-distribution-chart { width: 100%; height: 480px; min-height: 380px; }
+  #region-distribution-chart { width: 100%; height: 540px; min-height: 420px; }
+
+  /* ----- Visualization tabs ----- */
+  .viz-tabs {
+    display: flex; gap: 4px; margin-top: 16px;
+    border-bottom: 2px solid #ccc; padding-left: 4px;
+  }
+  .viz-tab {
+    padding: 9px 18px; font-size: 13.5px; font-weight: 600;
+    background: #ececec; color: #666; border: 1px solid #d4d4d4;
+    border-bottom: none; border-radius: 8px 8px 0 0;
+    cursor: pointer; transition: all 0.15s; margin-bottom: -2px;
+  }
+  .viz-tab:hover { background: #f5f5f5; color: #333; }
+  .viz-tab.active {
+    background: #fff; color: #1a1a1a;
+    border-color: #ccc; border-bottom: 2px solid #fff;
+  }
+  .viz-pane { margin-top: 0; border-top-left-radius: 0; }
+
+  /* Identification-power grid (currently 1 chart full-width) */
+  .idpower-grid, .social-grid {
+    display: grid; gap: 18px;
+    grid-template-columns: 1fr;
+  }
+  .idpower-card, .social-card {
+    background: #fafbfc; padding: 14px 16px 12px;
+    border-radius: 10px; border: 1px solid #eee;
+  }
+  .idpower-card h3, .social-card h3 {
+    margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #222;
+  }
+  .idpower-card .card-sub, .social-card .card-sub {
+    font-size: 11.5px; color: #888; margin-bottom: 8px; line-height: 1.4;
+  }
+  .idpower-card .chart-host, .social-card .chart-host {
+    width: 100%; height: 420px; min-height: 320px;
+  }
+  .social-card .chart-host.tall { height: 540px; min-height: 420px; }
+  .social-card .chart-host.short { height: 320px; min-height: 240px; }
+  .social-grid-2col {
+    display: grid; gap: 18px; grid-template-columns: 1fr;
+  }
+  @media (min-width: 980px) {
+    .social-grid-2col { grid-template-columns: 1.4fr 1fr; }
+  }
 
   /* Codes drill-down modal */
   #codes-modal .modal { min-width: min(520px, 90vw); max-width: 90vw; max-height: 80vh; overflow-y: auto; }
@@ -730,14 +1296,37 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     .controls { gap: 5px; margin-top: 8px; }
     .controls input[type="text"] { min-width: 100%; flex: 1; padding: 5px 8px; font-size: 12px; }
     .controls button, .controls label { font-size: 11px; padding: 4px 8px; }
-    .status-filter-bar {
+    .status-filter-bar, .smart-filter-bar {
       padding: 6px 10px; gap: 5px;
       flex-direction: column; align-items: flex-start;
     }
-    .status-filter-bar .label { font-size: 11px; margin-right: 0; }
+    .status-filter-bar .label, .smart-filter-bar .label { font-size: 11px; margin-right: 0; }
     .status-chip { font-size: 11px; padding: 3px 8px; }
     .status-chip .count { font-size: 9.5px; padding: 0 5px; }
-    .status-filter-bar > button { align-self: stretch; }
+    .status-filter-bar > button, .smart-filter-bar > button { align-self: stretch; }
+    .smart-filter-btn { font-size: 11.5px; padding: 4px 9px; }
+    .smart-filter-menu { min-width: 100%; max-width: 92vw; }
+    /* Visualization tabs wrap on small screens */
+    .viz-tabs { flex-wrap: wrap; gap: 2px; }
+    .viz-tab { padding: 7px 12px; font-size: 12px; flex: 1 1 auto; text-align: center; }
+    /* Chart hosts shrink (Plotly is responsive but height is fixed) */
+    #region-distribution-chart { height: 460px; min-height: 380px; }
+    .idpower-card .chart-host, .social-card .chart-host { height: 360px; min-height: 300px; }
+    .social-card .chart-host.tall { height: 440px; min-height: 380px; }
+    .social-card .chart-host.short { height: 280px; min-height: 240px; }
+    .social-card, .idpower-card { padding: 10px 12px 8px; }
+    .social-card h3, .idpower-card h3 { font-size: 13px; }
+    .social-card .card-sub, .idpower-card .card-sub { font-size: 11px; }
+    /* Tabulator: enable touch-friendly horizontal scroll */
+    .tabulator { font-size: 11.5px !important; }
+    .tabulator-tableholder { -webkit-overflow-scrolling: touch; }
+    /* Issue panel takes full width on mobile so the table stays usable */
+    body.with-issue-panel { padding-right: 14px !important; }
+    .issue-panel { width: 100vw !important; max-width: 100vw !important; }
+    /* Section padding tighter */
+    .section { padding: 10px 12px; }
+    /* Footer text smaller */
+    .footer { font-size: 11px; padding: 10px; }
     .anatomy-grid { grid-template-columns: 1fr; gap: 12px; }
     .anatomy-grid img { max-width: 100%; }
     .region-table th, .region-table td { padding: 4px 6px; font-size: 11.5px; }
@@ -1011,6 +1600,36 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
 </header>
 
+<div class="smart-filter-bar" id="smart-filter-bar">
+  <span class="label">Smart filters:</span>
+  <div class="smart-filter-dropdown" id="filter-polygon-wrap">
+    <button type="button" class="smart-filter-btn" id="filter-polygon-btn">
+      📍 Polygon
+      <span class="sel-count" id="filter-polygon-count"></span>
+      <span style="font-size:10px;">▼</span>
+    </button>
+    <div class="smart-filter-menu" id="filter-polygon-menu"></div>
+  </div>
+  <div class="smart-filter-dropdown" id="filter-pack-wrap">
+    <button type="button" class="smart-filter-btn" id="filter-pack-btn">
+      🐺 Pack
+      <span class="sel-count" id="filter-pack-count"></span>
+      <span style="font-size:10px;">▼</span>
+    </button>
+    <div class="smart-filter-menu" id="filter-pack-menu"></div>
+  </div>
+  <div class="smart-filter-dropdown" id="filter-social-wrap">
+    <button type="button" class="smart-filter-btn" id="filter-social-btn">
+      👥 Social
+      <span class="sel-count" id="filter-social-count"></span>
+      <span style="font-size:10px;">▼</span>
+    </button>
+    <div class="smart-filter-menu" id="filter-social-menu"></div>
+  </div>
+  <span style="flex:1;"></span>
+  <button id="smart-filter-clear" style="padding:4px 10px; font-size:11.5px;">Clear smart filters</button>
+</div>
+
 <div class="status-filter-bar" id="status-filter-bar">
   <span class="label">Filter by region status (any of 9 regions):</span>
   <span class="status-chip" data-status="unambiguous"   style="--c:#43A047;"><span class="dot" style="background:#43A047;"></span>Full <span class="count" id="cnt-unambiguous">0</span></span>
@@ -1122,8 +1741,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
 </div>
 
+<!-- ============= Visualization tabs ============= -->
+<div class="viz-tabs">
+  <button class="viz-tab active" data-target="distribution-section">🎨 Region Distribution</button>
+  <button class="viz-tab" data-target="idpower-section">🎯 Identification Power</button>
+  <button class="viz-tab" data-target="social-section">🐺 Social Dynamics</button>
+</div>
+
 <!-- ============= Per-region status distribution chart ============= -->
-<div class="section" id="distribution-section">
+<div class="section viz-pane" id="distribution-section">
   <h2><span class="swatch"></span>Per-region identification breakdown</h2>
   <div class="section-sub">
     Each column represents one region. Each bar holds 100% of the analysed wolves
@@ -1136,6 +1762,79 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     Hover any segment for exact counts. Use Plotly's camera icon to download as PNG.
   </div>
   <div id="region-distribution-chart"></div>
+</div>
+
+<!-- ============= Identification Power (Nili's strict fingerprint rule) ============= -->
+<div class="section viz-pane" id="idpower-section" style="display:none;">
+  <h2><span class="swatch"></span>Identification Power</h2>
+  <div class="section-sub" id="idpower-definition">
+    <!-- Filled in by JS from PAYLOAD.anatomy.identification_power.definition_note -->
+  </div>
+
+  <div class="idpower-grid idpower-grid-single">
+    <div class="idpower-card">
+      <h3>Single-region power — bars sorted by ID power</h3>
+      <div class="card-sub">
+        For each region alone (k=1), how many wolves get a unique fingerprint?
+        Bar colour follows the anatomical group.
+      </div>
+      <div class="chart-host" id="idpower-single-chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============= Social Dynamics (polygon + pack + social) ============= -->
+<div class="section viz-pane" id="social-section" style="display:none;">
+  <h2><span class="swatch"></span>Social Dynamics — where the wolves live and how they group</h2>
+  <div class="section-sub">
+    <strong>Camera-survey pool only</strong> &nbsp;·&nbsp;
+    <span id="social-pool-n">?</span> wolves analysed
+    <span id="social-excluded-note" style="color:#999;"></span>.
+    Three views: spatial (which polygon), structural (which pack), and
+    behavioural (pack / group / lone / unknown).
+    Wolves marked with <strong>*</strong> are <em>probable</em>, not certain.
+  </div>
+
+  <div class="social-grid">
+    <div class="social-card">
+      <h3>1. Per-polygon stacked by social dynamic</h3>
+      <div class="card-sub">
+        Each polygon's bar shows how its wolves split among pack / group / lone /
+        unknown. Polygon name colour = land-use class. Hover for breakdown.
+      </div>
+      <div class="chart-host tall" id="social-polygon-chart"></div>
+    </div>
+
+    <div class="social-card">
+      <h3>2. Pack inventory — sizes and home polygons</h3>
+      <div class="card-sub">
+        Each row is one identified pack. Solid bar = certain members,
+        lighter hatched extension = probable members (asterisk).
+        Bar colour = <strong>land-use class</strong> of the pack's home polygon
+        (blue=Nature Reserve, orange=Minefield, pink=High Culling, green=Low Culling).
+        Lone / no-pack wolves shown below the divider in neutral grey.
+      </div>
+      <div class="chart-host tall" id="social-pack-chart"></div>
+    </div>
+
+    <div class="social-card">
+      <h3>3. Land-use class — wolves per category, stacked by social</h3>
+      <div class="card-sub">
+        Polygons grouped by land-use class (per the paper's key).
+        <strong>Nature Reserve</strong> = Yehodiya + Odem (most protected).
+        <strong>Minefield</strong> = Makhfi + Saki + Hazeka (no humans).
+        <strong>High Culling</strong> = Shaal + Snir + Keshet-Yonatan.
+        <strong>Low Culling</strong> = Slopes + Firing-Zone + Masade.
+      </div>
+      <div class="chart-host" id="social-landuse-chart"></div>
+    </div>
+
+    <div class="social-card">
+      <h3>4. Overall social-dynamic mix</h3>
+      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category.</div>
+      <div class="chart-host" id="social-donut-chart"></div>
+    </div>
+  </div>
 </div>
 
 <div class="footer">
@@ -1428,16 +2127,36 @@ function rowFormatter(row) {
   else row.getElement().classList.remove("row-empty-code");
 }
 
+// Smart filter state. Each set holds the *canonical* values currently selected
+// (so e.g. selecting "dark pack" filters both `dark pack` and `dark pack*`).
+window._smartFilters = { polygon: new Set(), pack: new Set(), social: new Set() };
+
+// Canonicalisation must mirror _build_filter_options() in the Python side.
+function _canonPolygon(v) {
+  v = String(v || "").trim();
+  return v ? v.toLowerCase() : "__empty__";
+}
+function _canonStarStripped(v) {
+  v = String(v || "").trim();
+  if (v.endsWith("*")) v = v.slice(0, -1).trim();
+  return v || "__empty__";
+}
+
 function applyFilters() {
   if (!table) return;
   const showEmpty = isAdmin || $("show-empty-code").checked;
   const q = ($("search-input").value || "").trim().toLowerCase();
   const activeStatuses = window._activeStatuses || new Set();
+  const sf = window._smartFilters;
   table.setFilter(row => {
     if (!showEmpty) {
       const code = row["code"];
       if (code === undefined || code === null || code === "") return false;
     }
+    // Smart filters (AND between dimensions, OR within each dimension)
+    if (sf.polygon.size > 0 && !sf.polygon.has(_canonPolygon(row["main poligon"]))) return false;
+    if (sf.pack.size    > 0 && !sf.pack.has(_canonStarStripped(row["pack name"])))   return false;
+    if (sf.social.size  > 0 && !sf.social.has(_canonStarStripped(row["social dynamic"]))) return false;
     if (activeStatuses.size > 0) {
       // Row passes if ANY of its 9 region statuses is in the active set.
       const st = row._status || {};
@@ -1684,6 +2403,114 @@ function refreshStatusChipCounts() {
   return counts;
 }
 
+// ---- Smart filter dropdowns (polygon / pack / social) ----
+function populateSmartFilters() {
+  const opts = (PAYLOAD && PAYLOAD.filter_options) || {};
+  populateSmartFilterMenu("polygon", opts.polygon || [], "Main polygon");
+  populateSmartFilterMenu("pack",    opts.pack    || [], "Pack name (incl. * = probable)");
+  populateSmartFilterMenu("social",  opts.social  || [], "Social dynamic (incl. * = probable)");
+}
+
+function populateSmartFilterMenu(key, list, header) {
+  const menu = $(`filter-${key}-menu`);
+  if (!menu) return;
+  menu.innerHTML = "";
+  if (header) {
+    const h = document.createElement("div");
+    h.className = "menu-header";
+    h.textContent = header;
+    menu.appendChild(h);
+  }
+  if (list.length === 0) {
+    const empty = document.createElement("div");
+    empty.style.padding = "6px";
+    empty.style.color = "#999";
+    empty.textContent = "(no values)";
+    menu.appendChild(empty);
+    return;
+  }
+  list.forEach(o => {
+    const label = document.createElement("label");
+    label.className = "smart-opt";
+    if (o.is_empty) label.dataset.empty = "1";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = o.value;
+    cb.addEventListener("change", () => {
+      const set = window._smartFilters[key];
+      if (cb.checked) set.add(o.value);
+      else set.delete(o.value);
+      updateSmartFilterButton(key);
+      applyFilters();
+    });
+    label.appendChild(cb);
+    const lab = document.createElement("span");
+    lab.className = "opt-label";
+    lab.textContent = o.label;
+    label.appendChild(lab);
+    if (o.probable) {
+      const prob = document.createElement("span");
+      prob.className = "opt-probable";
+      prob.title = `${o.probable} of these are marked with * (probable, not certain)`;
+      prob.textContent = `*${o.probable}`;
+      label.appendChild(prob);
+    }
+    const cnt = document.createElement("span");
+    cnt.className = "opt-count";
+    cnt.textContent = o.count;
+    label.appendChild(cnt);
+    menu.appendChild(label);
+  });
+}
+
+function updateSmartFilterButton(key) {
+  const set = window._smartFilters[key];
+  const btn = $(`filter-${key}-btn`);
+  const cnt = $(`filter-${key}-count`);
+  if (!btn || !cnt) return;
+  if (set.size > 0) {
+    btn.classList.add("has-selection");
+    cnt.textContent = String(set.size);
+  } else {
+    btn.classList.remove("has-selection");
+    cnt.textContent = "";
+  }
+}
+
+function clearSmartFilters() {
+  ["polygon", "pack", "social"].forEach(k => {
+    window._smartFilters[k].clear();
+    const menu = $(`filter-${k}-menu`);
+    if (menu) menu.querySelectorAll("input[type=checkbox]").forEach(x => { x.checked = false; });
+    updateSmartFilterButton(k);
+  });
+  applyFilters();
+}
+
+function setupSmartFilters() {
+  populateSmartFilters();
+  // Open / close menus
+  ["polygon", "pack", "social"].forEach(key => {
+    const btn = $(`filter-${key}-btn`);
+    const menu = $(`filter-${key}-menu`);
+    if (!btn || !menu) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = menu.style.display === "block";
+      document.querySelectorAll(".smart-filter-menu").forEach(m => m.style.display = "none");
+      menu.style.display = isOpen ? "none" : "block";
+    });
+    menu.addEventListener("click", (e) => e.stopPropagation());
+  });
+  // Click anywhere else closes
+  document.addEventListener("click", () => {
+    document.querySelectorAll(".smart-filter-menu").forEach(m => m.style.display = "none");
+  });
+  // Clear button
+  const clr = $("smart-filter-clear");
+  if (clr) clr.addEventListener("click", clearSmartFilters);
+}
+
 function setupStatusChips() {
   const chips = document.querySelectorAll(".status-chip");
   chips.forEach(chip => {
@@ -1767,7 +2594,8 @@ function renderRegionDistributionChart() {
     return lum > 165 ? "#222" : "#fff";
   }
 
-  // One trace per bucket — labels appear only when segment >= 10%
+  // One trace per bucket — labels appear only when segment >= 10%.
+  // Label format: "N, P%"  (wolf count, then percentage of analysed wolves).
   const traces = buckets.map(b => {
     const ys = regions.map(r => totals[r] ? (100 * (dist[r][b] || 0) / totals[r]) : 0);
     const counts = regions.map(r => dist[r][b] || 0);
@@ -1777,7 +2605,7 @@ function renderRegionDistributionChart() {
       x: regions,
       y: ys,
       customdata: counts,
-      // Show "12%" inside any segment >= 10%
+      // Show "P%" inside any segment >= 10%  (with n_pool = 100, count == %)
       text: ys.map(y => y >= 10 ? `${y.toFixed(0)}%` : ""),
       textposition: "inside",
       insidetextanchor: "middle",
@@ -1793,15 +2621,32 @@ function renderRegionDistributionChart() {
     };
   });
 
-  // Region annotation: anatomical group colour bar above each x label
-  const shapes = regions.map((r, i) => {
-    const grp = A.region_group[r];
-    return {
-      type: "rect",
-      xref: "x", yref: "paper",
-      x0: i - 0.4, x1: i + 0.4, y0: 1.005, y1: 1.028,
-      line: { width: 0 }, fillcolor: A.group_colors[grp],
-    };
+  // Region icons placed above each bar (replaces the anatomical-group colour
+  // stripe). Falls back to the colour stripe if an icon is missing.
+  const icons = A.region_icons || {};
+  const images = [];
+  const shapes = [];
+  regions.forEach((r, i) => {
+    if (icons[r]) {
+      images.push({
+        source: icons[r],
+        xref: "x", yref: "paper",
+        x: i, y: 1.20,
+        sizex: 0.90, sizey: 0.18,
+        xanchor: "center", yanchor: "top",
+        sizing: "contain",
+        layer: "above",
+      });
+    } else {
+      // Fallback: keep the original coloured stripe so the chart still renders
+      const grp = A.region_group[r];
+      shapes.push({
+        type: "rect",
+        xref: "x", yref: "paper",
+        x0: i - 0.4, x1: i + 0.4, y0: 1.005, y1: 1.028,
+        line: { width: 0 }, fillcolor: A.group_colors[grp],
+      });
+    }
   });
 
   // Coloured x-axis tick labels using inline HTML (Plotly supports <span>)
@@ -1814,33 +2659,28 @@ function renderRegionDistributionChart() {
   Plotly.newPlot("region-distribution-chart", traces, {
     barmode: "stack",
     bargap: 0.18,
-    margin: { l: 56, r: 16, t: 36, b: 56 },
+    margin: { l: 56, r: 16, t: 88, b: 56 },
     yaxis: {
       title: { text: "% of analysed wolves", font: { size: 12 } },
       range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
+      fixedrange: true,
     },
     xaxis: {
-      title: { text: "Region (anatomical group colour shown both above and on the label)", font: { size: 11, color: "#666" } },
+      title: { text: "Region (icon above each bar shows the anatomical area)", font: { size: 11, color: "#666" } },
       tickmode: "array",
       tickvals: regions,
       ticktext: ticktext,
       tickfont: { size: 13 },
+      fixedrange: true,
     },
     legend: {
       orientation: "h", x: 0.5, xanchor: "center", y: -0.22,
       font: { size: 11 }, traceorder: "normal",
     },
     shapes: shapes,
+    images: images,
     plot_bgcolor: "#fff", paper_bgcolor: "#fff",
-  }, {
-    displaylogo: false,
-    toImageButtonOptions: {
-      format: "png", filename: "wolf_region_distribution",
-      height: 720, width: 1280, scale: 2,
-    },
-    modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"],
-    responsive: true,
-  });
+  }, plotlyConfig("wolf_region_distribution"));
 
   // Click-to-drill-down on Shared buckets
   const chartEl = document.getElementById("region-distribution-chart");
@@ -1851,6 +2691,413 @@ function renderRegionDistributionChart() {
     const bucket = p.data.name;
     if (!DRILLDOWN_BUCKETS.has(bucket)) return;
     showCodesForBucket(region, bucket);
+  });
+}
+
+// ============================================================================
+// Identification Power tab — single-region bar chart (Nili's strict fingerprint
+// rule). Other graphs were considered earlier and removed at user request; the
+// underlying data (greedy / envelope / pairs) is still computed in Python and
+// available in PAYLOAD.anatomy.identification_power for future use.
+// ============================================================================
+
+let idpowerRendered = false;
+
+function renderIdentificationPowerTab() {
+  if (idpowerRendered || !window.Plotly) return;
+  const A = PAYLOAD.anatomy;
+  const ip = A && A.identification_power;
+  if (!ip) return;
+  idpowerRendered = true;
+
+  // Definition note above the chart (no headline claim about a specific k)
+  const defEl = $("idpower-definition");
+  if (defEl) defEl.innerHTML = ip.definition_note || "";
+
+  renderSingleRegionBar(ip);
+}
+
+function renderSingleRegionBar(ip) {
+  const N = ip.n_pool;
+  const data = ip.single.slice();  // already sorted desc by Python
+  const regions = data.map(d => d.region);
+  const counts = data.map(d => d.identifiable);
+  const colors = regions.map(r => {
+    const grp = PAYLOAD.anatomy.region_group[r];
+    return PAYLOAD.anatomy.group_colors[grp];
+  });
+  const labels = counts.map(c => c > 0 ? `${c}` : "");
+  const trace = {
+    y: regions, x: counts,
+    type: "bar", orientation: "h",
+    marker: { color: colors, line: { color: "rgba(0,0,0,0.1)", width: 0.5 } },
+    text: labels, textposition: "outside",
+    textfont: { size: 11, color: "#222" },
+    hovertemplate: "<b>%{y} alone</b><br>%{x}/" + N + " wolves identifiable<extra></extra>",
+  };
+  Plotly.newPlot("idpower-single-chart", [trace], {
+    margin: { l: 36, r: 38, t: 18, b: 40 },
+    yaxis: {
+      autorange: "reversed", tickfont: { size: 12, family: "sans-serif" },
+      fixedrange: true,
+    },
+    xaxis: {
+      title: { text: "Wolves identifiable (k=1)", font: { size: 11 } },
+      range: [0, N + 6], gridcolor: "#eee", fixedrange: true,
+    },
+    plot_bgcolor: "#fff", paper_bgcolor: "#fafbfc",
+    showlegend: false,
+  }, plotlyConfig("wolf_identification_power"));
+}
+
+// ============================================================================
+// Social Dynamics tab — polygon × social, pack inventory, social mix.
+// ============================================================================
+
+// Social-category palette (kept in sync between the three charts)
+const SOCIAL_COLORS = {
+  pack:    "#1B5E20",   // dark green
+  group:   "#43A047",   // medium green
+  lone:    "#FB8C00",   // orange
+  unknown: "#9E9E9E",   // gray
+};
+const SOCIAL_LABELS = {
+  pack:    "pack",
+  group:   "group",
+  lone:    "lone",
+  unknown: "unknown",
+};
+
+// Polygon palette (12 colours, fixed so the per-pack chart and any future
+// per-polygon visual stay consistent). The "(no polygon)" label maps to gray.
+const POLYGON_COLORS = {
+  "Yehodiya":       "#2E7D32",
+  "Odem":           "#5E35B1",
+  "Makhfi":         "#00838F",
+  "makhfi":         "#00838F",   // case-insensitive fallback
+  "Shaal":          "#6D4C41",
+  "Slopes":         "#FB8C00",
+  "Saki":           "#EC407A",
+  "Hazeka":         "#1565C0",
+  "hazeka":         "#1565C0",
+  "Firing-Zone":    "#C62828",
+  "Keshet-Yonatan": "#AFB42B",
+  "Snir":           "#0097A7",
+  "Masade":         "#6A1B9A",
+  "masade":         "#6A1B9A",
+  "(no polygon)":   "#9E9E9E",
+};
+function polyColor(name) {
+  return POLYGON_COLORS[name]
+      || POLYGON_COLORS[(name || "").trim()]
+      || "#888";
+}
+// Display normalisation (Title-case polygon names)
+function polyDisplay(name) {
+  if (!name || name === "(no polygon)") return name || "(no polygon)";
+  return name.split("-").map(p =>
+    p.length ? p[0].toUpperCase() + p.slice(1).toLowerCase() : p
+  ).join("-");
+}
+
+let socialRendered = false;
+
+function renderSocialDynamicsTab() {
+  if (socialRendered || !window.Plotly) return;
+  const sd = PAYLOAD.anatomy && PAYLOAD.anatomy.social_dynamics;
+  if (!sd) return;
+  socialRendered = true;
+  // Header counters: how many in this tab vs. how many excluded.
+  const nEl = $("social-pool-n");
+  if (nEl) nEl.textContent = String(sd.n_pool);
+  const exEl = $("social-excluded-note");
+  if (exEl && sd.n_excluded_no_polygon > 0) {
+    exEl.innerHTML =
+      ` &nbsp;·&nbsp; ${sd.n_excluded_no_polygon} wolves excluded (photographer-sourced, no known location)`;
+  }
+  renderSocialPolygonChart(sd);
+  renderSocialPackChart(sd);
+  renderLandUseChart(sd);
+  renderSocialDonut(sd);
+}
+
+// Helper: colour-code each polygon name by its land-use class (HTML inside Plotly ticks).
+function landUseColorFor(polygonDisplay, sd) {
+  const lu = (sd.polygon_to_landuse || {})[polygonDisplay];
+  if (!lu) return null;
+  return (sd.landuse_colors || {})[lu] || null;
+}
+function polyTickHtml(polygonDisplay, sd) {
+  const c = landUseColorFor(polygonDisplay, sd);
+  if (!c) return polyDisplay(polygonDisplay);
+  return `<span style="color:${c}; font-weight:700;">${polyDisplay(polygonDisplay)}</span>`;
+}
+
+// 1. Per-polygon stacked by social dynamic
+function renderSocialPolygonChart(sd) {
+  // Reverse the order so the largest polygon ends up at the top.
+  const polys = sd.polygons.slice().reverse();
+  const yPlain = polys.map(p => polyDisplay(p.display));
+  const yColored = polys.map(p => polyTickHtml(p.display, sd));
+  const traces = sd.soc_order.map(s => ({
+    name: SOCIAL_LABELS[s],
+    type: "bar", orientation: "h",
+    y: yPlain,
+    x: polys.map(p => p.by_social[s].total),
+    customdata: polys.map(p => [p.by_social[s].total, p.by_social[s].probable]),
+    text: polys.map(p => {
+      const t = p.by_social[s].total;
+      return t >= 1 ? `${t}` : "";
+    }),
+    textposition: "inside", insidetextanchor: "middle",
+    textfont: { color: "#fff", size: 11 },
+    marker: { color: SOCIAL_COLORS[s], line: { color: "rgba(0,0,0,0.15)", width: 0.5 } },
+    hovertemplate:
+      "<b>%{y}</b><br>" +
+      SOCIAL_LABELS[s] + ": %{customdata[0]}" +
+      " <i>(%{customdata[1]} probable)</i><extra></extra>",
+  }));
+  Plotly.newPlot("social-polygon-chart", traces, {
+    barmode: "stack",
+    margin: { l: 130, r: 32, t: 36, b: 36 },
+    xaxis: {
+      title: { text: "Wolves", font: { size: 11 } },
+      gridcolor: "#eee", fixedrange: true,
+    },
+    yaxis: {
+      fixedrange: true, tickfont: { size: 12 },
+      tickmode: "array", tickvals: yPlain, ticktext: yColored,
+    },
+    legend: {
+      orientation: "h", y: 1.05, yanchor: "bottom",
+      x: 0.5, xanchor: "center", font: { size: 11 },
+    },
+    plot_bgcolor: "#fff", paper_bgcolor: "#fafbfc",
+  }, plotlyConfig("wolf_social_polygon"));
+}
+
+// 3. Land-use class — absolute counts, stacked by social
+function renderLandUseChart(sd) {
+  const lu = (sd.landuse_data || []).slice().reverse();
+  if (!lu.length) return;
+  const yPlain = lu.map(b => b.land_use);
+  const yColored = lu.map(b => {
+    const c = (sd.landuse_colors || {})[b.land_use] || "#666";
+    return `<span style="color:${c}; font-weight:700;">${b.land_use}</span>`;
+  });
+  const traces = sd.soc_order.map(s => ({
+    name: SOCIAL_LABELS[s],
+    type: "bar", orientation: "h",
+    y: yPlain,
+    x: lu.map(b => b.by_social[s].total),
+    customdata: lu.map(b => [
+      b.by_social[s].total, b.by_social[s].probable,
+      Object.entries(b.polygon_breakdown).map(([p, n]) => `${p}=${n}`).join(", "),
+    ]),
+    text: lu.map(b => {
+      const t = b.by_social[s].total;
+      return t >= 1 ? `${t}` : "";
+    }),
+    textposition: "inside", insidetextanchor: "middle",
+    textfont: { color: "#fff", size: 11 },
+    marker: { color: SOCIAL_COLORS[s], line: { color: "rgba(0,0,0,0.15)", width: 0.5 } },
+    hovertemplate:
+      "<b>%{y}</b><br>" +
+      SOCIAL_LABELS[s] + ": %{customdata[0]}" +
+      " <i>(%{customdata[1]} probable)</i><br>" +
+      "Polygons: %{customdata[2]}<extra></extra>",
+  }));
+  Plotly.newPlot("social-landuse-chart", traces, {
+    barmode: "stack",
+    margin: { l: 130, r: 64, t: 32, b: 36 },
+    xaxis: {
+      title: { text: "Wolves", font: { size: 11 } },
+      gridcolor: "#eee", fixedrange: true,
+    },
+    yaxis: {
+      fixedrange: true, tickfont: { size: 12 },
+      tickmode: "array", tickvals: yPlain, ticktext: yColored,
+    },
+    legend: {
+      orientation: "h", y: 1.05, yanchor: "bottom",
+      x: 0.5, xanchor: "center", font: { size: 11 },
+    },
+    plot_bgcolor: "#fff", paper_bgcolor: "#fafbfc",
+    // Total count annotations to the right of each bar
+    annotations: lu.map((b, i) => ({
+      xref: "x", yref: "y", x: b.total, y: yPlain[i],
+      xanchor: "left", yanchor: "middle",
+      text: ` ${b.total}`, showarrow: false,
+      font: { size: 12, color: "#444", family: "sans-serif" },
+    })),
+  }, plotlyConfig("wolf_landuse_absolute"));
+}
+
+// (chart 4 — Land-use % normalised — removed at user request, redundant with chart 3)
+
+// 2. Pack inventory (real packs at top, sentinels at bottom).
+// Bar colour = land-use class of the pack's home polygon.
+function renderSocialPackChart(sd) {
+  const all = [];
+  sd.real_packs.forEach(p => all.push({ ...p, _kind: "real" }));
+  // Add a visual gap row (Plotly doesn't support dividers — we use a blank Y)
+  if (sd.sentinel_packs.length) {
+    all.push({
+      name: "──────",
+      total: 0, certain: 0, probable: 0,
+      primary_polygon: "(no polygon)", _kind: "sep",
+    });
+    sd.sentinel_packs.forEach(p => all.push({ ...p, _kind: "sentinel" }));
+  }
+  // Reverse so the biggest pack is at the top
+  const items = all.slice().reverse();
+  const ys = items.map(p => p.name);
+  const certain = items.map(p => p._kind === "sep" ? 0 : p.certain);
+  const probable = items.map(p => p._kind === "sep" ? 0 : p.probable);
+  // Map each pack to its land-use colour via polygon→landuse
+  const landuseFor = p => {
+    if (p._kind === "sep") return "#e0e0e0";
+    if (p._kind === "sentinel") return "#9E9E9E"; // sentinel rows = neutral
+    const lu = (sd.polygon_to_landuse || {})[p.primary_polygon] || "Unclassified";
+    return (sd.landuse_colors || {})[lu] || "#888";
+  };
+  const colors = items.map(landuseFor);
+  const colorsLight = items.map(p => landuseFor(p) + "60");  // ~38% alpha
+
+  const certainTrace = {
+    name: "certain", type: "bar", orientation: "h", y: ys, x: certain,
+    customdata: items.map(p => [p.total, p.certain, p.probable, p.primary_polygon]),
+    text: certain.map(v => v ? String(v) : ""),
+    textposition: "inside", insidetextanchor: "middle",
+    textfont: { color: "#fff", size: 11 },
+    marker: { color: colors, line: { color: "rgba(0,0,0,0.15)", width: 0.5 } },
+    hovertemplate:
+      "<b>%{y}</b><br>" +
+      "Total: %{customdata[0]} (certain=%{customdata[1]}, probable*=%{customdata[2]})<br>" +
+      "Polygon: %{customdata[3]}<extra></extra>",
+  };
+  const probableTrace = {
+    name: "probable*", type: "bar", orientation: "h", y: ys, x: probable,
+    text: probable.map(v => v ? `${v}*` : ""),
+    textposition: "inside", insidetextanchor: "middle",
+    textfont: { color: "#fff", size: 11 },
+    marker: {
+      color: colorsLight,
+      line: { color: "rgba(0,0,0,0.20)", width: 0.5 },
+      pattern: { shape: "/", size: 6, solidity: 0.35 },
+    },
+    hovertemplate:
+      "<b>%{y}</b><br>" +
+      "probable*: %{x}<extra></extra>",
+  };
+  Plotly.newPlot("social-pack-chart", [certainTrace, probableTrace], {
+    barmode: "stack",
+    margin: { l: 130, r: 32, t: 10, b: 44 },
+    xaxis: {
+      title: { text: "Wolves in pack (solid = certain, hatched = probable*)", font: { size: 11 } },
+      gridcolor: "#eee", fixedrange: true,
+    },
+    yaxis: { fixedrange: true, tickfont: { size: 11 }, automargin: true },
+    legend: { orientation: "h", y: -0.10, x: 0.5, xanchor: "center", font: { size: 11 } },
+    plot_bgcolor: "#fff", paper_bgcolor: "#fafbfc",
+  }, plotlyConfig("wolf_pack_inventory"));
+}
+
+// 3a. Social donut (overall)
+function renderSocialDonut(sd) {
+  const labels = sd.soc_order.map(s => SOCIAL_LABELS[s]);
+  const values = sd.soc_order.map(s => sd.social_totals[s].total);
+  const probables = sd.soc_order.map(s => sd.social_totals[s].probable);
+  const colors = sd.soc_order.map(s => SOCIAL_COLORS[s]);
+  const trace = {
+    type: "pie", hole: 0.55,
+    labels: labels, values: values,
+    customdata: probables,
+    marker: { colors: colors, line: { color: "#fff", width: 2 } },
+    textinfo: "label+percent+value",
+    texttemplate: "%{label}<br>%{value} (%{percent})",
+    textfont: { size: 12, color: "#fff", family: "sans-serif" },
+    hovertemplate:
+      "<b>%{label}</b><br>%{value} wolves (%{percent})<br>" +
+      "<i>(%{customdata} probable)</i><extra></extra>",
+    sort: false,
+  };
+  Plotly.newPlot("social-donut-chart", [trace], {
+    margin: { l: 8, r: 8, t: 10, b: 10 },
+    showlegend: false,
+    annotations: [{
+      text: `<b>${sd.n_pool}</b><br><span style="font-size:11px;color:#888;">wolves</span>`,
+      x: 0.5, y: 0.5, showarrow: false,
+      font: { size: 22, color: "#333", family: "sans-serif" },
+    }],
+    paper_bgcolor: "#fafbfc", plot_bgcolor: "#fff",
+  }, plotlyConfig("wolf_social_donut"));
+}
+
+// (chart 5b — Per-polygon % — removed at user request, redundant with chart 1)
+
+// Shared Plotly config: image-export only, no zoom / pan / select.
+// Adds a JPEG download button next to the default PNG camera, so users can
+// pick whichever format their report / slide deck prefers.
+function plotlyConfig(filename) {
+  const safeName = filename || "wolf_chart";
+  // SVG path for a small "disk + J" icon, distinct from the camera icon used
+  // by the default PNG button. 1024×1024 coordinate space.
+  const jpegIcon = {
+    width: 1024, height: 1024, ascent: 850, descent: -150,
+    path:
+      "M192 64h512l128 128v640c0 35-29 64-64 64H192c-35 0-64-29-64-64V128c0-35 29-64 64-64z " +
+      "M256 64v192h384V64H256z " +
+      "M400 96h64v160h-64V96z " +
+      "M384 512h256v320H384V512z " +
+      // 'J' glyph centered inside the bottom panel
+      "M512 560v176c0 35-29 64-64 64s-64-29-64-64v-32h32v32c0 18 14 32 32 32s32-14 32-32V560h32z",
+  };
+  return {
+    displaylogo: false,
+    responsive: true,
+    modeBarButtonsToRemove: [
+      "lasso2d", "select2d", "autoScale2d",
+      "zoom2d", "zoomIn2d", "zoomOut2d", "pan2d", "resetScale2d",
+    ],
+    modeBarButtonsToAdd: [{
+      name: "downloadJpeg",
+      title: "Download as JPEG (smaller file size)",
+      icon: jpegIcon,
+      click: function (gd) {
+        Plotly.downloadImage(gd, {
+          format: "jpeg",
+          width: 1280, height: 720, scale: 2,
+          filename: safeName + "_jpeg",
+        });
+      },
+    }],
+    toImageButtonOptions: {
+      format: "png", filename: safeName,
+      width: 1280, height: 720, scale: 2,
+    },
+  };
+}
+
+function setupVizTabs() {
+  const tabs = document.querySelectorAll(".viz-tab");
+  if (!tabs.length) return;
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      const targetId = tab.dataset.target;
+      tabs.forEach(t => t.classList.toggle("active", t === tab));
+      document.querySelectorAll(".viz-pane").forEach(p => {
+        p.style.display = (p.id === targetId) ? "" : "none";
+      });
+      // Lazy-init tabs on first open (Plotly charts are expensive to build)
+      if (targetId === "idpower-section") {
+        renderIdentificationPowerTab();
+      } else if (targetId === "social-section") {
+        renderSocialDynamicsTab();
+      }
+      // Trigger Plotly resize so charts use full container width on tab switch
+      window.dispatchEvent(new Event("resize"));
+    });
   });
 }
 
@@ -2788,7 +4035,7 @@ function init() {
     $("search-input").value = "";
     $("show-empty-code").checked = false;
     table.clearHeaderFilter();
-    applyFilters();
+    clearSmartFilters();   // also clears polygon / pack / social and re-applies
   });
 
   // Column-visibility menu
@@ -2919,8 +4166,10 @@ function init() {
 
   // ---- Anatomy reference + status filter chips + distribution chart ----
   populateRegionRefTable();
+  setupSmartFilters();
   setupStatusChips();
   setupStatusBarsToggle();
+  setupVizTabs();
   // Codes modal close
   if ($("codes-modal-close")) {
     $("codes-modal-close").addEventListener("click", () => $("codes-modal").classList.remove("show"));

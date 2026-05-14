@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-13T02:20:43.609197Z",
+  "generated_at": "2026-05-14T01:06:34.169886Z",
   "schema_version": 1,
   "decisions": {
     "cq_a1_singletons_methodology": {
@@ -95,7 +95,7 @@
     "cq_extra_midletter_3_wolves": {
       "status": "answered",
       "comment": "טעות. תיקנתי ושמרתי.\n",
-      "updated_at": "2026-05-12T00:24:26.454Z"
+      "updated_at": "2026-05-13T22:05:53.970Z"
     },
     "cq_gender_question_mark": {
       "status": "answered",
@@ -104,8 +104,8 @@
     },
     "cq_social_dynamic_lone": {
       "status": "answered",
-      "comment": "Official taxonomy: 4 categories are {pack, group, lone, unknown}. \"lone\" IS one of the canonical values from the start — the earlier docs that listed only 3 were incomplete. Saved as project-memory grammar rule. No rename needed; \"lone\" stays.",
-      "updated_at": "2026-05-12T14:30:00.000Z"
+      "comment": "כן זה קטגוריה חשובה זאב בודד.",
+      "updated_at": "2026-05-13T18:00:34.240Z"
     },
     "cq_social_dynamic_packstar": {
       "status": "answered",
@@ -118,9 +118,9 @@
       "updated_at": "2026-05-12T15:05:00.000Z"
     },
     "cq_pack_inference_summary": {
-      "status": "open",
+      "status": "answered",
       "comment": "",
-      "updated_at": "2026-05-12T22:31:37.716Z"
+      "updated_at": "2026-05-13T17:32:18.802Z"
     },
     "cq_lone_wolves_within_threshold": {
       "status": "answered",
@@ -171,6 +171,221 @@
       "status": "answered",
       "comment": "תיקנתי תודה.",
       "updated_at": "2026-05-12T23:16:30.503Z"
+    },
+    "cams_spotted_non_numeric_token__O66__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In89__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__Mg90__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In91__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In92__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In93__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In94__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In95__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In96__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In97__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In98__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cams_spotted_non_numeric_token__In105__": {
+      "status": "decided_keep",
+      "comment": "Confirmed by Nili 2026-05-13: this is intentional. Wolf was photographed by a person rather than a placed camera; reporter name is a valid alt-source ID, not spatial. See memory rule cams_spotted_external.",
+      "updated_at": "2026-05-13T17:22:58.511504Z"
+    },
+    "cq_pack_candidate_sh51": {
+      "status": "answered",
+      "comment": "תודה על תשומת הלב, תיקנתי",
+      "updated_at": "2026-05-13T17:34:09.516Z"
+    },
+    "cq_pack_candidate_sh54": {
+      "status": "answered",
+      "comment": "מעולה תיקנתי",
+      "updated_at": "2026-05-13T17:35:04.230Z"
+    },
+    "cq_pack_candidate_o73": {
+      "status": "answered",
+      "comment": "מעולה ששמת לב, תיקנתי",
+      "updated_at": "2026-05-13T17:36:51.078Z"
+    },
+    "cq_pack_candidate_o77": {
+      "status": "answered",
+      "comment": "זה לא ודאי מספיק. משאירה על לא ידוע.",
+      "updated_at": "2026-05-13T17:37:46.966Z"
+    },
+    "cq_inferred_lone_f104": {
+      "status": "answered",
+      "comment": "זה לא ידוע, משאירה ככה",
+      "updated_at": "2026-05-13T17:48:38.383Z"
+    },
+    "cq_inferred_lone_f22": {
+      "status": "answered",
+      "comment": "הוא נצפה באותה מצלמה באותו תאריך עם זאבים אחרים. מכניסה אותו לאפשרי בקבוצה.",
+      "updated_at": "2026-05-13T17:48:32.089Z"
+    },
+    "cq_inferred_lone_sn85": {
+      "status": "answered",
+      "comment": "הוא נצפה עם זאב אחר לא מזוהה-כלומר הוא כנראה שייך לקבוצה",
+      "updated_at": "2026-05-13T17:50:50.021Z"
+    },
+    "cq_inferred_lone_sl103": {
+      "status": "answered",
+      "comment": "צודק הוא כנראה בודד",
+      "updated_at": "2026-05-13T17:52:35.096Z"
+    },
+    "cq_mg90_single_member_pack": {
+      "status": "answered",
+      "comment": "אני לא יכולה להשתמש בתמונת מומחה הזו במאמר שלי אז משאירה את זה כלא ידוע.\nולכל הזאבים שצלמים צילמו ולא אני אין פוליגון כי לא ידוע מאיפה הם",
+      "updated_at": "2026-05-13T17:54:14.448Z"
+    },
+    "cq_pair_in92": {
+      "status": "answered",
+      "comment": "להשאיר ריק אין לי מושג מאיפה הם בגולן ולאן הם שייכים. לא יכולה לתת שם לקבוצה ככה.",
+      "updated_at": "2026-05-13T17:55:11.083Z"
+    },
+    "cq_pair_in93": {
+      "status": "answered",
+      "comment": "אותו דבר כמו הקודם.",
+      "updated_at": "2026-05-13T17:55:25.979Z"
+    },
+    "cq_y46_two_pack_candidates": {
+      "status": "answered",
+      "comment": "לא יודע. היא דומה נורא לזאבים בלהקה הכהה אבל אין חפיפה בתצפיות.",
+      "updated_at": "2026-05-13T17:57:19.048Z"
+    },
+    "cq_seen_with_F21s_alias": {
+      "status": "answered",
+      "comment": "תיקנתי זאת.",
+      "updated_at": "2026-05-13T17:57:43.188Z"
+    },
+    "cq_y37_two_pack_candidates": {
+      "status": "answered",
+      "comment": "היא לא ידועה. שמרתי זאת.",
+      "updated_at": "2026-05-13T17:58:28.006Z"
+    },
+    "cq_seen_with_Sh37y_alias": {
+      "status": "answered",
+      "comment": "צודק תיקנתי",
+      "updated_at": "2026-05-13T17:59:25.664Z"
+    },
+    "cq_sh50_text_annotation": {
+      "status": "answered",
+      "comment": "תוקן.",
+      "updated_at": "2026-05-13T17:59:38.847Z"
+    },
+    "cq_partial_dates_external_sources": {
+      "status": "answered",
+      "comment": "כן אין לי שם יום, רק חודש. זה בסדר. לא נתנו לי מידע של תאריך מדויק רק של באיזה חודש היתה התצפית",
+      "updated_at": "2026-05-13T18:00:17.385Z"
+    },
+    "cq_y42_time_on_camera": {
+      "status": "answered",
+      "comment": "כן זה אותה שנה זה בקטנה זה בסדר.",
+      "updated_at": "2026-05-13T18:00:52.181Z"
+    },
+    "cq_o68_time_on_camera": {
+      "status": "answered",
+      "comment": "תיקנתי",
+      "updated_at": "2026-05-13T18:01:46.808Z"
+    },
+    "cq_o80_pictures_zero": {
+      "status": "answered",
+      "comment": "תוקן.",
+      "updated_at": "2026-05-13T18:02:04.479Z"
+    },
+    "cq_seen_with_seen_together": {
+      "status": "answered",
+      "comment": "כשכמה שורות זאבים אחד אחרי השני עם התיוג הזה זה אומר שהם נראו יחד באותה התצפית. זה בסדר.",
+      "updated_at": "2026-05-13T18:02:38.974Z"
+    },
+    "cq_seen_with_unknown_serials": {
+      "status": "answered",
+      "comment": "סודר.",
+      "updated_at": "2026-05-13T18:03:06.870Z"
+    },
+    "cq_poor_data_wolves_paper_text": {
+      "status": "answered",
+      "comment": "זה בסדר כל עוד הקודים שכן יש להם יוצרים צירוף שלא חזר על עצמו באף זאב אחר.",
+      "updated_at": "2026-05-13T18:03:32.576Z"
+    },
+    "cq_asymmetric_in_rank_frequency": {
+      "status": "answered",
+      "comment": "זה מזהה ייחודי זה שהוא אסימטרי. אז כן.",
+      "updated_at": "2026-05-13T18:04:10.067Z"
+    },
+    "cq_bucket_boundaries_review": {
+      "status": "answered",
+      "comment": "זה יכול להיות נוח יותר. בוא נדבר על זה בצ'אט כשנערוך עוד את הגרף.",
+      "updated_at": "2026-05-13T18:04:46.320Z"
+    },
+    "cq_unambiguous_terminology_paper": {
+      "status": "answered",
+      "comment": "המושג הנוכחי בסדר גמור",
+      "updated_at": "2026-05-13T18:05:14.053Z"
+    },
+    "cq_color_letter_set_extension": {
+      "status": "answered",
+      "comment": "תבדוק אם זה תוקן כבר. אני חושבת שתיקנתי את זה",
+      "updated_at": "2026-05-13T18:05:46.074Z"
+    },
+    "cq_dna_validation_channel": {
+      "status": "answered",
+      "comment": "אין לי DNA שלהם. הלוואי והיה לי. אל תצא מנקודת הנחה שיש לי משהו בלי לוודא מולי במפורש. הדאטה במחקר הזה נובע מתמונות ונתוני תאריך/מיקום בלבד.",
+      "updated_at": "2026-05-13T18:06:50.592Z"
+    },
+    "cq_anatomy_schematic_credit": {
+      "status": "answered",
+      "comment": "האיור הזה כבבר נמצא במאמר. כאן אנחנו רוצים שהוא יוצג בצורה טובה מספיק לדאשבורד שלנו. עבורי הוא נראה ברור ככה.",
+      "updated_at": "2026-05-13T18:07:42.467Z"
+    },
+    "cq_publication_dataset_release": {
+      "status": "answered",
+      "comment": "זה יהיה כנספח",
+      "updated_at": "2026-05-13T18:08:05.730Z"
+    },
+    "cq_cams_per_wolf_distribution": {
+      "status": "answered",
+      "comment": "הממ זה גרף מעניין בוא נחשוב על זה",
+      "updated_at": "2026-05-13T22:06:34.154Z"
     }
   }
 }

@@ -1,35 +1,36 @@
 # Data Quality Report — `wolves_data.xlsx`
 
-**Generated:** 2026-05-13 02:25  
+**Generated:** 2026-05-14 01:09  
 **Source sheet:** `נתוני זיהוי זאבים (2)` (100 rows × 28 cols)
+
+> **From `data_decisions.json`:** 11 finding(s) suppressed (status=decided_keep), 0 carry a user comment, 0 marked `fixed_in_xlsx` but still detected.
 
 ## Summary
 
 | Severity | Categories | Total rows flagged |
 |---|---:|---:|
-| ❌ Errors (must fix) | 2 | 32 |
-| ⚠ Warnings (likely issues) | 2 | 14 |
-| ℹ Info (FYI) | 5 | 86 |
+| ❌ Errors (must fix) | 2 | 30 |
+| ⚠ Warnings (likely issues) | 2 | 3 |
+| ℹ Info (FYI) | 4 | 89 |
 
 
 ## ❌ Errors
 
 ### time on camera unparseable
-2 entry(ies) don't match any accepted format (dd.mm.yy / d-d.mm.yy / d.m-d.m.yy / dd.mm.yy-dd.mm.yy / m.yyyy / m.yyyy-m.yyyy)
+1 entry(ies) don't match any accepted format (dd.mm.yy / d-d.mm.yy / d.m-d.m.yy / dd.mm.yy-dd.mm.yy / m.yyyy / m.yyyy-m.yyyy)
 
 | serial | value | reason |
 |---|---|---|
 | Y42 | 30.9.20-27.10 | unparseable |
-| O68 | 29.8-29 | unparseable |
 
 ### seen with references unknown wolf
-30 reference(s) point to a serial not present in the table
+29 reference(s) point to a serial not present in the table
 
 | from_serial | seen_with | missing_reference |
 |---|---|---|
 | M7 | 1 unrecognized* | 1 unrecognized* |
-| F23 | F21s, F24 | F21s |
-| F24 | F23, F21s | F21s |
+| F23 | unknown, F24 | unknown |
+| F24 | F23, unknown | unknown |
 | Y27 | seen together | seen together |
 | Y29 | seen together | seen together |
 | Y30 | seen together | seen together |
@@ -47,14 +48,13 @@
 | Y43 | seen together | seen together |
 | Y44 | seen together | seen together |
 | Y45 | seen together | seen together |
-| Sh49 | Sh37y | Sh37y |
-| Sh50 | 7 min after Sh49+Sh37y | 7 min after Sh49+Sh37y |
+| Sh50 | 7 min after Sh49+Sh109 | 7 min after Sh49+Sh109 |
 | Sh52 | Sh53+1 unrecognized | Sh53+1 unrecognized |
 | Sh53 | Sh52+1 unrecognized | Sh52+1 unrecognized |
 | Sh55 | seen together | seen together |
 | Sh57 | seen together* | seen together* |
 | Sl60 | unknown | unknown |
-| Sn85 | seen together | seen together |
+| Sn85 | unknown | unknown |
 | In92 | seen together | seen together |
 | In93 | seen together | seen together |
 
@@ -66,18 +66,7 @@
 
 | serial | value | non_numeric_token |
 |---|---|---|
-| O66 | 31, omer weiner | omer weiner |
-| In89 | omer weiner | omer weiner |
-| Mg90 | omer weiner | omer weiner |
-| In91 | ariel shamir | ariel shamir |
-| In92 | ariel shamir | ariel shamir |
-| In93 | ariel shamir | ariel shamir |
-| In94 | ariel shamir | ariel shamir |
-| In95 | omer weiner | omer weiner |
-| In96 | omer weiner | omer weiner |
-| In97 | elimelech | elimelech |
-| In98 | moshe_neeman | moshe_neeman |
-| In105 | nevo_ | nevo_ |
+| In90 | omer weiner | omer weiner |
 
 ### polygon name casing inconsistency
 2 polygon(s) appear with multiple capitalisations
@@ -91,14 +80,16 @@
 ## ℹ Info
 
 ### 'pack name' vs 'שיוך' diverge
-64 row(s) differ between the two columns — for user's manual cleanup
+69 row(s) differ between the two columns — for user's manual cleanup
 
 | serial | pack name | שיוך |
 |---|---|---|
 | M3 | (blank) | makhfi unknown |
 | M6H | (blank) | makhfi unknown |
 | M10 | (blank) | makhfi unknown |
-| F22 | unknown | (blank) |
+| S21 | (blank) | unknown |
+| S104 | (blank) | unknown |
+| F22 | (blank) | group* |
 | F26 | lone | (blank) |
 | Y27 | dark pack | (blank) |
 | Y101 | lone | (blank) |
@@ -123,10 +114,8 @@
 | Y46 | lone | (blank) |
 | Y47 | yehodiya trio | (blank) |
 | Y48 | yehodiya trio | (blank) |
-| Sh109 | shaal east | (blank) |
-| Sh49 | shaal east | (blank) |
 
-*(showing first 30 of 64 rows)*
+*(showing first 30 of 69 rows)*
 
 ### missing 'main poligon' (in analysis pool)
 11 analysed wolf(ves) have empty 'main poligon'
@@ -134,7 +123,7 @@
 | serial |
 |---|
 | In89 |
-| Mg90 |
+| In90 |
 | In91 |
 | In92 |
 | In93 |
@@ -144,14 +133,6 @@
 | In97 |
 | In98 |
 | In105 |
-
-### missing 'social dynamic' (in analysis pool)
-2 analysed wolf(ves) have empty 'social dynamic'
-
-| serial |
-|---|
-| Y37 |
-| Mg90 |
 
 ### more cameras than pictures
 1 wolf(ves): listed in more cameras than #pictures (worth a sanity check)
