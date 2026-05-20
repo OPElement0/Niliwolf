@@ -31,6 +31,7 @@ from wolf_lib import (
     process_all_regions,
     identification_buckets,
     ID_BUCKET_ORDER,
+    split_color_pattern,
 )
 from step1d_dataqc import run_checks
 
@@ -401,6 +402,11 @@ def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
             poly_display[poly_canon] = poly_raw
         pack_raw = (str(row["pack name"]) if pd.notna(row["pack name"]) else "").strip()
         pack_canon, pack_probable = _strip_star(pack_raw) if pack_raw else ("", False)
+        # "makhfi unknown" is a meta-label (Nili 2026-05-20): pack identity within
+        # Makhfi is unclear — not a real pack. Route into the "(no pack)" sentinel
+        # so it doesn't render as a labeled pack above the divider.
+        if pack_canon and pack_canon.lower() == "makhfi unknown":
+            pack_canon = ""
         if not pack_canon:
             pack_canon = NO_PACK
         social_raw = (str(row["social dynamic"]) if pd.notna(row["social dynamic"]) else "").strip()
@@ -472,7 +478,7 @@ def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
         b["probable_members"].sort()
 
     # Ordering: real packs (not 'lone' / 'unknown' / NO_PACK), then sentinels
-    sentinels = {"lone", "unknown", NO_PACK}
+    sentinels = {"lone", "unknown", "indeterminate", NO_PACK}
     real_packs = sorted(
         [b for pc, b in pack_inventory.items() if pc not in sentinels],
         key=lambda x: (-x["total"], x["name"]),
@@ -540,6 +546,224 @@ def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
         "landuse_data": landuse_sorted,
         "landuse_colors": LAND_USE_COLORS,
         "polygon_to_landuse": polygon_to_landuse,
+    }
+
+
+def _build_pack_signatures(df_pool: pd.DataFrame, processed: pd.DataFrame) -> dict:
+    """Per-pack appearance breakdown for the Pack Signatures tab.
+
+    Splits each cleaned code into the axes the region grammar exposes:
+    colour + pattern for A1/A2/C6/D8; pattern + a/b contrast for B3/B4/B5;
+    contrast level for D9; pattern only for C7. Output feeds the
+    Pack Profile Cards, the cross-pack Colour Signature Matrix, and the
+    Region-Role Map. Only packs with n >= 2 are emitted.
+    """
+    from collections import Counter
+
+    def _canon_pack(v):
+        if pd.isna(v):
+            return None
+        s = str(v).strip().rstrip("*").strip().lower()
+        # "makhfi unknown" is a meta-label (Nili 2026-05-20): the wolf is in
+        # one of the two Makhfi packs but we don't know which — NOT a real pack.
+        # Treat as no-pack so it never appears as a pack in this tab.
+        if not s or s in {"lone", "unknown", "indeterminate", "makhfi unknown"}:
+            return None
+        return s
+
+    def _split_b(code):
+        if not code or code in {"N", "P", "—"}:
+            return (None, None)
+        if len(code) == 1 and code in {"b", "d"}:
+            return (code, None)
+        if code[-1] in {"a", "b"} and len(code) >= 2:
+            return (code[:-1], code[-1])
+        return (code, None)
+
+    CP = {"A1", "A2", "C6", "D8"}
+    BR = {"B3", "B4", "B5"}
+
+    pack_members: dict[str, list[str]] = {}
+    display_names: dict[str, str] = {}
+    polygon_count: dict[str, Counter] = {}
+    for _, row in df_pool.iterrows():
+        pc = _canon_pack(row.get("pack name"))
+        if pc is None:
+            continue
+        serial = str(row["serial number"]).strip()
+        pack_members.setdefault(pc, []).append(serial)
+        if pc not in display_names:
+            display_names[pc] = str(row["pack name"]).rstrip("*").strip()
+        poly_raw = row.get("main poligon")
+        if poly_raw is None or (isinstance(poly_raw, float) and pd.isna(poly_raw)):
+            poly = ""
+        else:
+            poly = str(poly_raw).strip()
+        polygon_count.setdefault(pc, Counter())[poly] += 1
+
+    proc_by_serial = {
+        str(rec["serial number"]).strip(): rec
+        for rec in processed.to_dict("records")
+    }
+
+    packs_out: list[dict] = []
+    for pc, members in pack_members.items():
+        n = len(members)
+        if n < 2:
+            continue
+        members = sorted(set(members))
+        main_poly = polygon_count[pc].most_common(1)[0][0] if polygon_count.get(pc) else ""
+
+        regions_data: dict[str, dict] = {}
+        identical_full = 0
+        pat_homog_pcts: list[float] = []
+        col_homog_pcts: list[float] = []
+
+        for region in REGIONS:
+            codes: list[str] = []
+            patterns: list[str] = []
+            colors: list[str] = []
+            contrasts: list[str] = []
+            n_NP = 0
+            for s in members:
+                rec = proc_by_serial.get(s)
+                if rec is None:
+                    continue
+                status = rec.get(f"{region}_status", "empty")
+                if status in {"N", "P", "empty"}:
+                    n_NP += 1
+                    continue
+                cleaned = rec.get(f"{region}_cleaned", "")
+                if cleaned is None or (isinstance(cleaned, float) and pd.isna(cleaned)) or cleaned in {"", "—"}:
+                    continue
+                cleaned = str(cleaned)
+                codes.append(cleaned)
+                if region in CP:
+                    cp = split_color_pattern(cleaned, region)
+                    if cp:
+                        col, pat = cp
+                        # Skip empty halves so the bars only reflect axes the
+                        # wolf actually contributed to. A single-letter A1 code
+                        # like 'f' (colour only, no pattern) appears in the
+                        # colour distribution only — not as a phantom ∅ in
+                        # the pattern bar.
+                        if col:
+                            colors.append(col)
+                        if pat:
+                            patterns.append(pat)
+                elif region in BR:
+                    p, c = _split_b(cleaned)
+                    if p:
+                        patterns.append(p)
+                    if c:
+                        contrasts.append(c)
+                elif region == "C7":
+                    patterns.append(cleaned)
+                elif region == "D9":
+                    contrasts.append(cleaned[1:] if cleaned.startswith("a") else cleaned)
+
+            n_obs = len(codes)
+            full_dist = dict(Counter(codes))
+            pat_dist = dict(Counter(patterns)) if patterns else {}
+            col_dist = dict(Counter(colors)) if colors else {}
+            con_dist = dict(Counter(contrasts)) if contrasts else {}
+
+            regions_data[region] = {
+                "n_obs": n_obs,
+                "n_NP": n_NP,
+                "codes": full_dist,
+                "patterns": pat_dist,
+                "colors": col_dist,
+                "contrasts": con_dist,
+            }
+
+            if n_obs > 0 and len(full_dist) == 1:
+                identical_full += 1
+            if pat_dist:
+                pat_homog_pcts.append(max(pat_dist.values()) / sum(pat_dist.values()))
+            if col_dist:
+                col_homog_pcts.append(max(col_dist.values()) / sum(col_dist.values()))
+
+        packs_out.append({
+            "canon": pc,
+            "display": display_names[pc],
+            "n": n,
+            "main_polygon": main_poly,
+            "members": members,
+            "regions": regions_data,
+            "summary": {
+                "identical_full": identical_full,
+                "avg_pattern_modal_pct": (sum(pat_homog_pcts) / len(pat_homog_pcts)) if pat_homog_pcts else 0,
+                "avg_color_modal_pct": (sum(col_homog_pcts) / len(col_homog_pcts)) if col_homog_pcts else 0,
+            },
+        })
+
+    packs_out.sort(key=lambda x: (-x["n"], x["display"].lower()))
+
+    role_map: dict[str, dict] = {}
+    for region in REGIONS:
+        pat_pcts: list[float] = []
+        col_pcts: list[float] = []
+        con_pcts: list[float] = []
+        for p in packs_out:
+            rd = p["regions"].get(region, {})
+            if rd.get("patterns"):
+                vals = list(rd["patterns"].values())
+                pat_pcts.append(max(vals) / sum(vals))
+            if rd.get("colors"):
+                vals = list(rd["colors"].values())
+                col_pcts.append(max(vals) / sum(vals))
+            if rd.get("contrasts"):
+                vals = list(rd["contrasts"].values())
+                con_pcts.append(max(vals) / sum(vals))
+        role_map[region] = {
+            "pattern_avg": (sum(pat_pcts) / len(pat_pcts)) if pat_pcts else None,
+            "color_avg": (sum(col_pcts) / len(col_pcts)) if col_pcts else None,
+            "contrast_avg": (sum(con_pcts) / len(con_pcts)) if con_pcts else None,
+            "n_packs_pattern": len(pat_pcts),
+            "n_packs_color": len(col_pcts),
+            "n_packs_contrast": len(con_pcts),
+        }
+
+    # Top 3 packs per region — ranking on the region's primary axis (colour for
+    # A1/A2/C6/D8; contrast for B3/B4/B5 and D9; pattern for C7). Small samples
+    # are filtered out (n_obs < 3) so trivial 100% modals on n=2 packs don't
+    # dominate the comparison.
+    PRIMARY_AXIS = {
+        "A1": "colors", "A2": "colors", "C6": "colors", "D8": "colors",
+        "B3": "contrasts", "B4": "contrasts", "B5": "contrasts",
+        "D9": "contrasts",
+        "C7": "patterns",
+    }
+    top_packs_per_region: dict[str, dict] = {}
+    for region in REGIONS:
+        axis = PRIMARY_AXIS.get(region, "patterns")
+        ranked = []
+        for p in packs_out:
+            rd = p["regions"].get(region, {})
+            dist = rd.get(axis, {})
+            if not dist:
+                continue
+            total = sum(dist.values())
+            if total < 3:
+                continue
+            modal_pct = max(dist.values()) / total
+            ranked.append({
+                "canon": p["canon"],
+                "display": p["display"],
+                "n_total": p["n"],
+                "n_obs": total,
+                "modal_pct": modal_pct,
+                "dist": dist,
+            })
+        ranked.sort(key=lambda x: (-x["modal_pct"], -x["n_obs"]))
+        top_packs_per_region[region] = {"axis": axis, "packs": ranked[:3]}
+
+    return {
+        "packs": packs_out,
+        "role_map": role_map,
+        "top_packs_per_region": top_packs_per_region,
+        "n_packs": len(packs_out),
     }
 
 
@@ -884,6 +1108,26 @@ def main() -> None:
             for code, count in code_counts.items()
         ]
 
+    # ----- Top regional code(s) per bucket — labeled directly on the distribution chart -----
+    def _bucket_for_count(n: int) -> str:
+        if n == 1: return "Unique (1)"
+        if n <= 3: return "Shared 2-3"
+        if n <= 6: return "Shared 4-6"
+        if n <= 10: return "Shared 7-10"
+        if n <= 20: return "Shared 11-20"
+        if n <= 35: return "Shared 21-35"
+        return "Shared 36+"
+
+    top_codes_by_bucket: dict[str, dict[str, list[str]]] = {}
+    for region in REGIONS:
+        cpr = codes_per_region[region]
+        if not cpr:
+            top_codes_by_bucket[region] = {}
+            continue
+        max_count = cpr[0]["count"]
+        top = [c["code"] for c in cpr if c["count"] == max_count]
+        top_codes_by_bucket[region] = {_bucket_for_count(max_count): top}
+
     # ----- Smart-filter option lists: polygon, pack, social dynamic -----
     # All three filters operate on the analysis pool (df_pool) so counts
     # reflect what the viewer can actually see by default.
@@ -894,6 +1138,9 @@ def main() -> None:
 
     # ----- Social dynamics: per-polygon × social + per-pack inventory -----
     social_dynamics = _build_social_dynamics(df_pool)
+
+    # ----- Pack signatures: per-pack appearance breakdown (cards / matrix / role-map) -----
+    pack_signatures = _build_pack_signatures(df_pool, processed)
 
     # ----- Build per-row records -----
     rows: list[dict] = []
@@ -962,9 +1209,11 @@ def main() -> None:
         "id_bucket_colors": ID_BUCKET_COLORS,
         "bucket_dist": bucket_dist,
         "codes_per_region": codes_per_region,
+        "top_codes_by_bucket": top_codes_by_bucket,
         "region_icons": region_icons,
         "identification_power": identification_power,
         "social_dynamics": social_dynamics,
+        "pack_signatures": pack_signatures,
     }
 
     payload = {
@@ -1067,6 +1316,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .admin-bar.show, .save-bar.show { display: flex; }
   .admin-bar { background: #fff8e1; border: 1px solid #fbc02d; }
   .save-bar  { background: #e8f5e9; border: 1px solid #43a047; }
+
+  .table-download-bar { display: none; justify-content: flex-end; margin-bottom: 8px; }
+  .table-download-bar.show { display: flex; }
+  #download-xlsx-btn { display: inline-flex; align-items: center; gap: 7px;
+                       padding: 8px 16px; font-size: 13px; font-weight: 600;
+                       color: #fff; background: #217346; border: 1px solid #217346;
+                       border-radius: 6px; cursor: pointer; }
+  #download-xlsx-btn:hover { background: #1a5c38; }
 
   #data-table { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
   .footer { font-size: 11.5px; color: #777; margin-top: 10px; padding: 8px 14px;
@@ -1463,6 +1720,106 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .ip-status-pill.status-answered      { background: #43a047; }
   .ip-status-pill.status-decided_keep  { background: #2563eb; }
   .ip-status-pill.status-fixed_in_xlsx { background: #7e57c2; }
+
+  /* Pack Signatures tab */
+  .sigs-container { display: flex; flex-direction: column; gap: 22px; margin-top: 8px; }
+  .sigs-block h3 { margin: 0 0 4px; font-size: 13px; color: #333; }
+  .sigs-block .sub { font-size: 11px; color: #777; margin-bottom: 10px; line-height: 1.4; }
+  .sigs-pack-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 12px; }
+  .sigs-pack-card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-size: 11.5px; }
+  .sigs-pack-card h4 { margin: 0; font-size: 14px; color: #222; }
+  .sigs-pack-card .meta { font-size: 10.5px; color: #888; margin: 2px 0 6px; line-height: 1.4; }
+  .sigs-summary-pills { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .sigs-pill { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: #eef0f3; color: #335; }
+  .sigs-pill.pat { background: #f3eef0; color: #762; }
+  .sigs-pill.col { background: #ecf3ec; color: #265; }
+  .sigs-region-row { display: grid; grid-template-columns: 34px 1fr; gap: 6px; align-items: center; padding: 5px 4px; border-top: 1px solid #f4f4f4; }
+  .sigs-region-row:first-of-type { border-top: none; }
+  .sigs-region-row.identical { background: rgba(67,160,71,0.08); border-radius: 4px; }
+  .sigs-region-name { font-weight: 700; font-size: 11px; }
+  .sigs-axes { display: flex; flex-direction: column; gap: 3px; }
+  .sigs-axis-row { display: grid; grid-template-columns: 56px 1fr; gap: 4px; align-items: center; }
+  .sigs-axis-label { font-size: 9.5px; color: #666; text-transform: uppercase; letter-spacing: 0.3px; }
+  .sigs-bar { display: flex; height: 16px; border-radius: 3px; overflow: hidden; background: #f3f3f3; }
+  .sigs-seg { display: flex; align-items: center; justify-content: center; font-size: 9.5px; min-width: 0; padding: 0 3px; overflow: hidden; white-space: nowrap; font-weight: 600; }
+  .sigs-empty { font-size: 10px; color: #aaa; font-style: italic; padding: 2px 0; }
+  .sigs-matrix { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .sigs-matrix th, .sigs-matrix td { border: 1px solid #e5e5e5; padding: 5px 8px; text-align: center; vertical-align: middle; }
+  .sigs-matrix th { background: #f7f7f7; font-weight: 700; font-size: 10.5px; }
+  .sigs-matrix .pack-name { text-align: left; font-weight: 700; background: #fafafa; }
+  .sigs-matrix .cell-content { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.1; }
+  .sigs-matrix .modal-letter { font-weight: 700; font-size: 14px; }
+  .sigs-matrix .modal-pct { font-size: 9.5px; opacity: 0.9; }
+  .sigs-matrix .secondary { font-size: 9px; opacity: 0.85; }
+  .sigs-role-map { width: 100%; max-width: 620px; border-collapse: collapse; font-size: 11.5px; }
+  .sigs-role-map th, .sigs-role-map td { border: 1px solid #e5e5e5; padding: 6px 10px; text-align: center; }
+  .sigs-role-map th { background: #f7f7f7; font-size: 10.5px; font-weight: 700; }
+  .sigs-role-map .region-cell { text-align: left; font-weight: 700; background: #fafafa; }
+  .sigs-role-tag { display: inline-block; padding: 3px 9px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+  .sigs-role-tag.individual { background: #e3f2fd; color: #1565c0; }
+  .sigs-role-tag.mixed { background: #fff8e1; color: #b67400; }
+  .sigs-role-tag.pack { background: #e8f5e9; color: #2e7d32; }
+  .sigs-role-tag.none { background: #f5f5f5; color: #aaa; }
+
+  /* Top-3 packs per region comparison */
+  .sigs-top3-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: 14px; margin-top: 8px; }
+  .sigs-top3-region { background: #fafafa; border: 1px solid #ddd; border-radius: 6px; padding: 10px 12px; }
+  .sigs-top3-region.empty { background: #fff; opacity: 0.55; }
+  .sigs-top3-region-header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 10px; border-left: 3px solid var(--gc, #888); padding-left: 8px; }
+  .sigs-top3-region-letter { font-weight: 700; color: var(--gc, #333); font-size: 14px; }
+  .sigs-top3-region-name { color: #555; font-size: 11px; }
+  .sigs-top3-axis { color: #888; font-style: italic; font-size: 10.5px; margin-left: auto; }
+  .sigs-top3-packs { display: flex; gap: 10px; align-items: stretch; justify-content: space-around; }
+  .sigs-top3-pack { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+  .sigs-top3-pack-name { font-size: 10.5px; font-weight: 600; color: #444; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .sigs-top3-pack-n { font-size: 9px; color: #888; margin-bottom: 4px; }
+  .sigs-top3-vbar { width: 100%; max-width: 80px; height: 130px; display: flex; flex-direction: column; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; background: #f5f5f5; }
+  .sigs-top3-vseg { flex-basis: 0; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; min-height: 0; padding: 0 2px; overflow: hidden; white-space: nowrap; }
+  .sigs-top3-vseg-missing { background: repeating-linear-gradient(45deg, #e6e6e6, #e6e6e6 4px, #cfcfcf 4px, #cfcfcf 8px); color: #555; font-style: italic; font-weight: 500; }
+  .sigs-top3-modal { font-size: 10px; color: #666; margin-top: 4px; font-weight: 500; text-align: center; }
+  .sigs-top3-empty-msg { font-size: 11px; color: #aaa; font-style: italic; padding: 16px 0; text-align: center; }
+
+  /* Region-role bars — horizontal-bar view of the role map (new) */
+  .srb-version-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 4px 0; }
+  .srb-table { display: grid; grid-template-columns: 60px 1fr 1fr 1fr; gap: 2px 12px; align-items: center; max-width: 940px; }
+  .srb-header { display: contents; }
+  .srb-header > span { font-size: 10.5px; font-weight: 700; color: #555; padding: 4px 0 6px; text-align: left; border-bottom: 1px solid #ddd; }
+  .srb-region { font-weight: 700; font-size: 12px; color: #333; border-left: 3px solid var(--gc, #888); padding: 4px 0 4px 8px; }
+  .srb-group { grid-column: 1 / -1; font-size: 11px; font-weight: 700; color: var(--gc, #555); padding: 10px 0 2px; border-bottom: 1px solid #eee; }
+  .srb-grp-letter { display: inline-block; min-width: 20px; }
+  .srb-cell { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .srb-bar { position: relative; flex: 1; height: 18px; background: #f0f0f0; border-radius: 3px; overflow: hidden; min-width: 100px; }
+  .srb-bar::before, .srb-bar::after { content: ""; position: absolute; top: 0; bottom: 0; border-left: 1px dashed rgba(0,0,0,0.32); pointer-events: none; }
+  .srb-bar::before { left: 40%; }
+  .srb-bar::after  { left: 70%; }
+  .srb-fill { position: relative; height: 100%; border-radius: 3px; }
+  .srb-label { font-size: 10.5px; color: #555; white-space: nowrap; min-width: 110px; }
+  .srb-na { font-size: 10.5px; color: #aaa; font-style: italic; padding-left: 8px; }
+  .srb-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 10.5px; color: #666; }
+  .srb-leg-item { display: flex; align-items: center; gap: 5px; }
+  .srb-leg-swatch { width: 14px; height: 12px; border-radius: 2px; display: inline-block; }
+  .srb-region-block { display: contents; }
+
+  /* Mobile layout for the Pack Signatures tab — stack role-bar axes vertically,
+     pack cards / top-3 panels become single-column. */
+  @media (max-width: 768px) {
+    .srb-table { display: block; max-width: 100%; }
+    .srb-header { display: none; }
+    .srb-region-block { display: block; padding: 6px 0 10px; }
+    .srb-group { display: block; padding: 10px 0 4px; border-bottom: 1px solid #eee; }
+    .srb-region { display: block; border-left: 3px solid var(--gc, #888); padding: 4px 0 6px 10px; font-size: 13px; }
+    .srb-cell { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 3px 0 3px 13px; align-items: center; }
+    .srb-cell::before { content: attr(data-axis); font-size: 9.5px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .srb-bar { min-width: 0; }
+    .srb-label { min-width: 0; font-size: 10px; }
+    .sigs-pack-card { font-size: 11px; padding: 10px; }
+    .sigs-matrix { font-size: 10px; }
+    .sigs-matrix th, .sigs-matrix td { padding: 3px 4px; }
+    .sigs-matrix .modal-letter { font-size: 12px; }
+    .sigs-top3-region { padding: 8px 10px; }
+    .sigs-top3-pack-name { font-size: 10px; }
+    .sigs-top3-vbar { max-width: 70px; height: 110px; }
+  }
   .ip-status-pill.status-needs_more_data { background: #ef6c00; }
 
   /* Clarification block in active card */
@@ -1595,8 +1952,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <div id="col-toggle-list"></div>
       </div>
     </div>
-    <button id="export-csv">⬇ CSV</button>
-    <button id="export-xlsx">⬇ XLSX (data only)</button>
     <button id="reset-filters">Reset filters</button>
   </div>
 </header>
@@ -1714,6 +2069,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
 </div>
 
+<div id="table-download-bar" class="table-download-bar">
+  <button id="download-xlsx-btn" type="button" title="Download the table to an Excel file — exactly the columns and rows currently shown">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Download to Excel
+  </button>
+</div>
+
 <div id="data-table"></div>
 
 <!-- ============= Anatomy reference ============= -->
@@ -1747,6 +2109,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <button class="viz-tab active" data-target="distribution-section">🎨 Region Distribution</button>
   <button class="viz-tab" data-target="idpower-section">🎯 Identification Power</button>
   <button class="viz-tab" data-target="social-section">🐺 Social Dynamics</button>
+  <button class="viz-tab" data-target="signatures-section">🐾 Pack Signatures</button>
 </div>
 
 <!-- ============= Per-region status distribution chart ============= -->
@@ -1834,6 +2197,40 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <h3>4. Overall social-dynamic mix</h3>
       <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category.</div>
       <div class="chart-host" id="social-donut-chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============= Pack Signatures ============= -->
+<div class="section viz-pane" id="signatures-section" style="display:none;">
+  <h2><span class="swatch"></span>Pack Signatures — what unites and individualises within each pack</h2>
+  <div class="section-sub">
+    Each named pack (n ≥ 2): the <em>pattern</em> axis tends to individualise members; the
+    <em>colour</em> and <em>contrast</em> axes tend to tag the pack. Each region is split by its
+    grammar — A1/A2/C6/D8 → pattern + colour; B3/B4/B5 → pattern + a/b contrast;
+    D9 → contrast level only; C7 → pattern only.
+  </div>
+
+  <div class="sigs-container">
+    <div class="sigs-block">
+      <h3>Top 3 packs per region — colour / contrast comparison</h3>
+      <div class="sub">For each region: the three packs whose colour (A1/A2/C6/D8), contrast (B3/B4/B5/D9), or pattern (C7) is most consistent within the pack. Each vertical bar shows one pack's full within-pack distribution at the region's primary axis; the diagonal-striped grey segment marks wolves without info on this axis (N/P or code missing the relevant half), so each bar represents the whole pack. Packs with fewer than 3 observed wolves on that region are excluded so small-sample 100%s don't dominate.</div>
+      <div id="sigs-top3-comparison"></div>
+    </div>
+    <div class="sigs-block">
+      <h3>Cross-pack colour signatures</h3>
+      <div class="sub">Per pack × per colour-bearing region: modal colour (large), share, and 1–2 secondary colours. Cell background uses each region's reference palette (bubble shades from the colour-code maps).</div>
+      <div id="sigs-color-matrix"></div>
+    </div>
+    <div class="sigs-block">
+      <h3>Region-role map</h3>
+      <div class="sub">Average within-pack modal % per region per axis. High → the axis consistently tags the pack; low → the axis individualises wolves.</div>
+      <div id="sigs-role-bars"></div>
+    </div>
+    <div class="sigs-block">
+      <h3>Pack profile cards — per-region breakdown</h3>
+      <div class="sub">Each card shows one pack. Bars are full within-pack distributions (sorted by frequency). Region rows tinted green = all members share an identical code.</div>
+      <div id="sigs-pack-cards" class="sigs-pack-cards"></div>
     </div>
   </div>
 </div>
@@ -2183,11 +2580,43 @@ function refreshStats() {
   $("stat-visible").textContent = table.getDataCount("active");
 }
 
+// Exports only what's on screen — visible columns + filtered rows — so the .xlsx mirrors the table 1:1.
+function exportVisibleToXlsx() {
+  if (!table) return;
+  const cols = table.getColumns().filter(c => c.isVisible() && c.getField());
+  if (cols.length === 0) { alert("No columns are visible — nothing to export."); return; }
+  const fields = cols.map(c => c.getField());
+  const titles = cols.map(c => c.getDefinition().title || c.getField());
+  const rows = table.getData("active");
+  if (rows.length === 0) { alert("No rows match the current filters — nothing to export."); return; }
+  const aoa = [titles];
+  for (const r of rows) {
+    aoa.push(fields.map(f => {
+      const v = r[f];
+      return (v === undefined || v === null) ? "" : v;
+    }));
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "wolves");
+  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbout], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "wolves_data_view.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function setMode(adminOn) {
   isAdmin = adminOn;
   $("mode-badge").textContent = adminOn ? "ADMIN" : "VIEWER";
   $("mode-badge").className = "mode-badge " + (adminOn ? "mode-admin" : "mode-viewer");
   $("admin-bar").classList.toggle("show", adminOn);
+  $("table-download-bar").classList.toggle("show", adminOn);
   $("admin-login-btn").style.display = adminOn ? "none" : "";
   if (!adminOn) toggleIssuePanel(false);
   // Rebuild table to swap editor states
@@ -2595,8 +3024,8 @@ function renderRegionDistributionChart() {
     return lum > 165 ? "#222" : "#fff";
   }
 
-  // One trace per bucket — labels appear only when segment >= 10%.
-  // Label format: "N, P%"  (wolf count, then percentage of analysed wolves).
+  // Segment text: percentage if >= 10%, plus the region's top unambiguous code(s) on the bucket they fall in. Skip < 3% (codes there remain accessible via click-to-drill-down).
+  const topByBucket = A.top_codes_by_bucket || {};
   const traces = buckets.map(b => {
     const ys = regions.map(r => totals[r] ? (100 * (dist[r][b] || 0) / totals[r]) : 0);
     const counts = regions.map(r => dist[r][b] || 0);
@@ -2606,8 +3035,12 @@ function renderRegionDistributionChart() {
       x: regions,
       y: ys,
       customdata: counts,
-      // Show "P%" inside any segment >= 10%  (with n_pool = 100, count == %)
-      text: ys.map(y => y >= 10 ? `${y.toFixed(0)}%` : ""),
+      text: ys.map((y, i) => {
+        const codes = ((topByBucket[regions[i]] || {})[b] || []).join(", ");
+        if (y >= 10) return codes ? `${y.toFixed(0)}%, ${codes}` : `${y.toFixed(0)}%`;
+        if (y >= 3)  return codes;
+        return "";
+      }),
       textposition: "inside",
       insidetextanchor: "middle",
       textfont: { color: textColorFor(colors[b]), size: 11, family: "sans-serif" },
@@ -3054,6 +3487,322 @@ function renderSocialDonut(sd) {
 
 // (chart 5b — Per-polygon % — removed at user request, redundant with chart 1)
 
+// ============================================================================
+// Pack Signatures tab — per-pack appearance breakdown across 9 regions.
+// Three sub-views: pack-profile cards, cross-pack colour matrix, role-map.
+// ============================================================================
+let signaturesRendered = false;
+
+// Per-region colour palettes — hex values approximate the bubble shades in
+// the user's reference images (NOT the wolf photo lighting). A1/A2 share
+// e..j and diverge at k onwards; C6 has its own brown/ginger scale; D8
+// uses digits 1..8. B regions (a/b) and D9 levels are NOT fur colours —
+// they encode CONTRAST relative to surroundings, so they get a cool-blue
+// palette to stay visually distinct from real-colour bars.
+const SIGS_COLOR_PALETTES = {
+  A1: {
+    e: "#2A1810", f: "#5D4F3F", g: "#807268", h: "#98A4A9",
+    i: "#B59C7E", j: "#C9B188",
+    k: "#CC823E", l: "#BC8252", m: "#D9CFC1",
+    "∅": "#bbbbbb",
+  },
+  A2: {
+    e: "#2A1810", f: "#5D4F3F", g: "#807268", h: "#98A4A9",
+    i: "#B59C7E", j: "#C9B188",
+    k: "#BD8A55", l: "#B5AFA3",
+    "∅": "#bbbbbb",
+  },
+  C6: {
+    e: "#251610", f: "#3F2918", g: "#885838", h: "#A0A4A9",
+    i: "#847362", j: "#BC7C48", k: "#C7A773", l: "#DECCAA",
+    "∅": "#bbbbbb",
+  },
+  D8: {
+    "1": "#251510", "2": "#3D2418", "3": "#6E6151", "4": "#9A7C5E",
+    "5": "#B5783D", "6": "#D2A56B", "7": "#C9BAA4", "8": "#DCC8A1",
+  },
+};
+// B-region a/b — relative contrast (a = slightly lighter than surrounds,
+// b = significantly lighter). D9 levels 1..4 — same idea (none/slight/
+// significant/graded). Cool-blue palette signals "not a fur colour".
+const SIGS_CONTRAST_PALETTE = { a: "#C4D0E2", b: "#6580AE" };
+const SIGS_D9_LEVEL_PALETTE = { "1": "#DCE0EB", "2": "#BFC9DE", "3": "#7F92BC", "4": "#9F7BB8" };
+// Categorical greys for pattern segments — 1st-most-common is darkest.
+const SIGS_PATTERN_GREYS = ["#4a4a4a","#6f6f6f","#8e8e8e","#a8a8a8","#bbbbbb","#cccccc","#d5d5d5","#dddddd"];
+
+function _sigsColorFor(letter, region) {
+  const p = SIGS_COLOR_PALETTES[region];
+  if (p && letter in p) return p[letter];
+  return "#bbbbbb";
+}
+function _sigsContrastColor(v, region) {
+  if (region === "D9") return SIGS_D9_LEVEL_PALETTE[v] || "#999999";
+  return SIGS_CONTRAST_PALETTE[v] || "#999999";
+}
+function _sigsTextOn(bg) {
+  const m = /^#?([0-9a-f]{6})/i.exec(bg);
+  if (!m) return "#fff";
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 165 ? "#222" : "#fff";
+}
+
+function renderPackSignaturesTab() {
+  if (signaturesRendered) return;
+  const sd = PAYLOAD.anatomy && PAYLOAD.anatomy.pack_signatures;
+  if (!sd) return;
+  signaturesRendered = true;
+  renderSigsTopPacksComparison(sd);
+  renderSigsColorMatrix(sd);
+  renderSigsRoleBars(sd);
+  renderSigsPackCards(sd);
+}
+
+function _sigsBar(entries, total, kind, region) {
+  let html = "";
+  for (let i = 0; i < entries.length; i++) {
+    const [v, c] = entries[i];
+    let bg;
+    if (kind === "colour") bg = _sigsColorFor(v, region);
+    else if (kind === "contrast") bg = _sigsContrastColor(v, region);
+    else bg = SIGS_PATTERN_GREYS[Math.min(i, SIGS_PATTERN_GREYS.length - 1)];
+    const fg = _sigsTextOn(bg);
+    const lbl = c > 1 ? `${escapeHtml(v)}:${c}` : escapeHtml(v);
+    html += `<div class="sigs-seg" style="flex:${c}; background:${bg}; color:${fg};" title="${escapeHtml(v)} = ${c}/${total}">${lbl}</div>`;
+  }
+  return html;
+}
+
+function renderSigsPackCards(sd) {
+  const container = document.getElementById("sigs-pack-cards");
+  if (!container) return;
+  const regions = PAYLOAD.anatomy.regions;
+  const regionGroup = PAYLOAD.anatomy.region_group;
+  const groupColors = PAYLOAD.anatomy.group_colors;
+  let html = "";
+  for (const pack of sd.packs) {
+    html += `<div class="sigs-pack-card">`;
+    html += `<h4>${escapeHtml(pack.display)}</h4>`;
+    html += `<div class="meta">n=${pack.n} · ${escapeHtml(pack.main_polygon || "—")} · members: ${pack.members.map(escapeHtml).join(", ")}</div>`;
+    html += `<div class="sigs-summary-pills">`;
+    html += `<span class="sigs-pill">${pack.summary.identical_full}/9 identical full</span>`;
+    html += `<span class="sigs-pill pat">pattern modal avg ${Math.round(100 * pack.summary.avg_pattern_modal_pct)}%</span>`;
+    html += `<span class="sigs-pill col">colour modal avg ${Math.round(100 * pack.summary.avg_color_modal_pct)}%</span>`;
+    html += `</div>`;
+    for (const region of regions) {
+      const rd = pack.regions[region];
+      if (!rd) continue;
+      const isIdentical = rd.n_obs > 0 && Object.keys(rd.codes).length === 1;
+      const grpCol = groupColors[regionGroup[region]] || "#333";
+      html += `<div class="sigs-region-row${isIdentical ? " identical" : ""}">`;
+      html += `<div class="sigs-region-name" style="color:${grpCol};">${region}</div>`;
+      html += `<div class="sigs-axes">`;
+      if (rd.n_obs === 0) {
+        html += `<div class="sigs-empty">no data (${rd.n_NP} N/P/empty)</div>`;
+      } else {
+        if (rd.patterns && Object.keys(rd.patterns).length > 0) {
+          const entries = Object.entries(rd.patterns).sort((a, b) => b[1] - a[1]);
+          const total = entries.reduce((s, e) => s + e[1], 0);
+          html += `<div class="sigs-axis-row"><div class="sigs-axis-label">pattern</div><div class="sigs-bar">${_sigsBar(entries, total, "pattern")}</div></div>`;
+        }
+        if (rd.colors && Object.keys(rd.colors).length > 0) {
+          const entries = Object.entries(rd.colors).sort((a, b) => b[1] - a[1]);
+          const total = entries.reduce((s, e) => s + e[1], 0);
+          html += `<div class="sigs-axis-row"><div class="sigs-axis-label">colour</div><div class="sigs-bar">${_sigsBar(entries, total, "colour", region)}</div></div>`;
+        }
+        if (rd.contrasts && Object.keys(rd.contrasts).length > 0) {
+          const entries = Object.entries(rd.contrasts).sort((a, b) => b[1] - a[1]);
+          const total = entries.reduce((s, e) => s + e[1], 0);
+          const lbl = (region === "D9") ? "level" : "a/b";
+          html += `<div class="sigs-axis-row"><div class="sigs-axis-label">${lbl}</div><div class="sigs-bar">${_sigsBar(entries, total, "contrast", region)}</div></div>`;
+        }
+      }
+      html += `</div></div>`;
+    }
+    html += `</div>`;
+  }
+  container.innerHTML = html;
+}
+
+function renderSigsColorMatrix(sd) {
+  const container = document.getElementById("sigs-color-matrix");
+  if (!container) return;
+  const cols = ["A1", "A2", "C6", "D8"];
+  let html = `<table class="sigs-matrix"><thead><tr><th>Pack (n)</th>`;
+  for (const c of cols) html += `<th>${c}${c === "D8" ? " colour" : ""}</th>`;
+  html += `</tr></thead><tbody>`;
+  for (const pack of sd.packs) {
+    html += `<tr><td class="pack-name">${escapeHtml(pack.display)} <span style="color:#888;">(${pack.n})</span></td>`;
+    for (const region of cols) {
+      const rd = pack.regions[region];
+      const dist = rd ? rd.colors : null;
+      if (!dist || Object.keys(dist).length === 0) {
+        html += `<td style="background:#fafafa;color:#bbb;">—</td>`;
+        continue;
+      }
+      const entries = Object.entries(dist).sort((a, b) => b[1] - a[1]);
+      const total = entries.reduce((s, e) => s + e[1], 0);
+      const [topLetter, topCount] = entries[0];
+      const topPct = Math.round(100 * topCount / total);
+      const bg = _sigsColorFor(topLetter, region);
+      const fg = _sigsTextOn(bg);
+      const secondary = entries.slice(1, 3).map(e => `${escapeHtml(e[0])}=${e[1]}`).join(", ");
+      html += `<td style="background:${bg};color:${fg};">`;
+      html += `<div class="cell-content"><span class="modal-letter">${escapeHtml(topLetter)}</span>`;
+      html += `<span class="modal-pct">${topCount}/${total} (${topPct}%)</span>`;
+      if (secondary) html += `<span class="secondary">${secondary}</span>`;
+      html += `</div></td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  container.innerHTML = html;
+}
+
+function renderSigsTopPacksComparison(sd) {
+  const container = document.getElementById("sigs-top3-comparison");
+  if (!container) return;
+  const tpr = sd.top_packs_per_region;
+  if (!tpr) return;
+  const regions = PAYLOAD.anatomy.regions;
+  const regionNames = PAYLOAD.anatomy.region_names;
+  const regionGroup = PAYLOAD.anatomy.region_group;
+  const groupColors = PAYLOAD.anatomy.group_colors;
+  const AXIS_LABEL = { colors: "colour", contrasts: "contrast", patterns: "pattern" };
+
+  let html = `<div class="sigs-top3-grid">`;
+  for (const region of regions) {
+    const d = tpr[region];
+    const gc = groupColors[regionGroup[region]] || "#888";
+    if (!d || !d.packs || d.packs.length === 0) {
+      html += `<div class="sigs-top3-region empty">`;
+      html += `<div class="sigs-top3-region-header" style="--gc:${gc};">`;
+      html += `<span class="sigs-top3-region-letter">${region}</span>`;
+      html += `<span class="sigs-top3-region-name">${escapeHtml(regionNames[region] || "")}</span>`;
+      html += `</div>`;
+      html += `<div class="sigs-top3-empty-msg">no packs qualify (need n ≥ 3 on this axis)</div>`;
+      html += `</div>`;
+      continue;
+    }
+    const axisLabel = AXIS_LABEL[d.axis] || d.axis;
+    html += `<div class="sigs-top3-region">`;
+    html += `<div class="sigs-top3-region-header" style="--gc:${gc};">`;
+    html += `<span class="sigs-top3-region-letter">${region}</span>`;
+    html += `<span class="sigs-top3-region-name">${escapeHtml(regionNames[region] || "")}</span>`;
+    html += `<span class="sigs-top3-axis">· ${axisLabel}</span>`;
+    html += `</div>`;
+    html += `<div class="sigs-top3-packs">`;
+    for (const pack of d.packs) {
+      const entries = Object.entries(pack.dist).sort((a, b) => b[1] - a[1]);
+      const total = entries.reduce((s, e) => s + e[1], 0);
+      const modalPct = Math.round(100 * pack.modal_pct);
+      const modalKey = entries[0][0];
+      html += `<div class="sigs-top3-pack">`;
+      html += `<div class="sigs-top3-pack-name" title="${escapeHtml(pack.display)}">${escapeHtml(pack.display)}</div>`;
+      html += `<div class="sigs-top3-pack-n">n=${pack.n_obs}/${pack.n_total}</div>`;
+      html += `<div class="sigs-top3-vbar">`;
+      for (let i = 0; i < entries.length; i++) {
+        const [v, c] = entries[i];
+        let bg;
+        if (d.axis === "colors") bg = _sigsColorFor(v, region);
+        else if (d.axis === "contrasts") bg = _sigsContrastColor(v, region);
+        else bg = SIGS_PATTERN_GREYS[Math.min(i, SIGS_PATTERN_GREYS.length - 1)];
+        const fg = _sigsTextOn(bg);
+        html += `<div class="sigs-top3-vseg" style="flex:${c}; background:${bg}; color:${fg};" title="${escapeHtml(v)} = ${c}/${pack.n_total}">${escapeHtml(v)}:${c}</div>`;
+      }
+      const nMissing = pack.n_total - total;
+      if (nMissing > 0) {
+        html += `<div class="sigs-top3-vseg sigs-top3-vseg-missing" style="flex:${nMissing};" title="no info on this axis (${nMissing}/${pack.n_total} wolves — N/P, no code, or code with no value on this axis)">?:${nMissing}</div>`;
+      }
+      html += `</div>`;
+      html += `<div class="sigs-top3-modal">${modalPct}% · <strong>${escapeHtml(modalKey)}</strong></div>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function renderSigsRoleBars(sd) {
+  const container = document.getElementById("sigs-role-bars");
+  if (!container) return;
+  const rm = sd.role_map;
+  const regions = PAYLOAD.anatomy.regions;
+  const groupOf = PAYLOAD.anatomy.region_group;
+  const groupColors = PAYLOAD.anatomy.group_colors;
+  const groupNames = PAYLOAD.anatomy.group_names;
+
+  function fillFor(v) {
+    if (v == null) return { bg: null, cat: "n/a" };
+    if (v >= 0.70) return { bg: "#81C784", cat: "pack-tag" };
+    if (v <  0.40) return { bg: "#90CAF9", cat: "individual" };
+    return { bg: "#FFD54F", cat: "mixed" };
+  }
+  function barCell(v) {
+    if (v == null) return `<div class="srb-na">— n/a —</div>`;
+    const pct = Math.round(100 * v);
+    const f = fillFor(v);
+    return `<div class="srb-bar"><div class="srb-fill" style="width:${pct}%; background:${f.bg};"></div></div><span class="srb-label">${pct}% · ${f.cat}</span>`;
+  }
+
+  let html = `<div class="srb-table">`;
+  html += `<div class="srb-header"><span>Region</span><span>Pattern</span><span>Colour</span><span>Contrast / Level</span></div>`;
+  let lastGroup = null;
+  for (const region of regions) {
+    const grp = groupOf[region];
+    if (grp !== lastGroup) {
+      lastGroup = grp;
+      const gc = groupColors[grp] || "#888";
+      const gn = (groupNames[grp] || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+      html += `<div class="srb-group" style="--gc:${gc};"><span class="srb-grp-letter">${grp}</span>${escapeHtml(gn)}</div>`;
+    }
+    const r = rm[region] || {};
+    const gc = groupColors[grp] || "#888";
+    html += `<div class="srb-region-block" style="--gc:${gc};">`;
+    html += `<span class="srb-region">${region}</span>`;
+    html += `<div class="srb-cell" data-axis="Pattern">${barCell(r.pattern_avg)}</div>`;
+    html += `<div class="srb-cell" data-axis="Colour">${barCell(r.color_avg)}</div>`;
+    html += `<div class="srb-cell" data-axis="Contrast / Level">${barCell(r.contrast_avg)}</div>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+  html += `<div class="srb-legend">`;
+  html += `<span class="srb-leg-item"><span class="srb-leg-swatch" style="background:#90CAF9;"></span>&lt; 40% · individualises</span>`;
+  html += `<span class="srb-leg-item"><span class="srb-leg-swatch" style="background:#FFD54F;"></span>40–70% · mixed</span>`;
+  html += `<span class="srb-leg-item"><span class="srb-leg-swatch" style="background:#81C784;"></span>≥ 70% · tags the pack</span>`;
+  html += `<span class="srb-leg-item">dashed verticals = thresholds at 40% and 70%</span>`;
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function renderSigsRoleMap(sd) {
+  const container = document.getElementById("sigs-role-map");
+  if (!container) return;
+  const rm = sd.role_map;
+  let html = `<table class="sigs-role-map"><thead><tr><th>Region</th><th>Pattern</th><th>Colour</th><th>Contrast / Level</th></tr></thead><tbody>`;
+  function tagFor(v) {
+    if (v == null) return `<span class="sigs-role-tag none">—</span>`;
+    const pct = Math.round(100 * v);
+    let cls, lbl;
+    if (v >= 0.70) { cls = "pack"; lbl = `${pct}% · pack-tag`; }
+    else if (v < 0.40) { cls = "individual"; lbl = `${pct}% · individual`; }
+    else { cls = "mixed"; lbl = `${pct}% · mixed`; }
+    return `<span class="sigs-role-tag ${cls}">${lbl}</span>`;
+  }
+  for (const region of PAYLOAD.anatomy.regions) {
+    const r = rm[region] || {};
+    html += `<tr><td class="region-cell">${region}</td>`;
+    html += `<td>${tagFor(r.pattern_avg)}</td>`;
+    html += `<td>${tagFor(r.color_avg)}</td>`;
+    html += `<td>${tagFor(r.contrast_avg)}</td>`;
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  container.innerHTML = html;
+}
+
 // Shared Plotly config: image-export only, no zoom / pan / select.
 // Adds a JPEG download button next to the default PNG camera, so users can
 // pick whichever format their report / slide deck prefers.
@@ -3112,6 +3861,8 @@ function setupVizTabs() {
         renderIdentificationPowerTab();
       } else if (targetId === "social-section") {
         renderSocialDynamicsTab();
+      } else if (targetId === "signatures-section") {
+        renderPackSignaturesTab();
       }
       // Trigger Plotly resize so charts use full container width on tab switch
       window.dispatchEvent(new Event("resize"));
@@ -4103,8 +4854,7 @@ function init() {
     PAYLOAD.columns.forEach((c, i) => { const col = table.getColumn(c); if (col && i > 0) col.hide(); });
     rebuildColMenu();
   });
-  $("export-csv").addEventListener("click", () => table.download("csv", "wolves_data.csv"));
-  $("export-xlsx").addEventListener("click", () => table.download("xlsx", "wolves_data_view.xlsx", { sheetName: "wolves" }));
+  $("download-xlsx-btn").addEventListener("click", exportVisibleToXlsx);
   $("admin-login-btn").addEventListener("click", () => {
     $("pwd-modal").classList.add("show");
     $("pwd-input").value = "";

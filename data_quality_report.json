@@ -5,7 +5,7 @@
     "n_info_categories": 4,
     "n_error_rows": 30,
     "n_warning_rows": 3,
-    "n_info_rows": 89,
+    "n_info_rows": 98,
     "source_rows": 100,
     "source_cols": 28,
     "decisions_applied": {
@@ -258,43 +258,37 @@
       "category": "'pack name' vs 'שיוך' diverge",
       "category_id": "pack_name_vs_diverge",
       "severity": "info",
-      "description": "69 row(s) differ between the two columns — for user's manual cleanup",
+      "description": "78 row(s) differ between the two columns — for user's manual cleanup",
       "rows": [
         {
-          "serial": "M3",
-          "pack name": "(blank)",
-          "שיוך": "makhfi unknown",
-          "_id": "pack_name_vs_diverge__M3__"
-        },
-        {
-          "serial": "M6H",
-          "pack name": "(blank)",
-          "שיוך": "makhfi unknown",
-          "_id": "pack_name_vs_diverge__M6H__"
-        },
-        {
-          "serial": "M10",
-          "pack name": "(blank)",
-          "שיוך": "makhfi unknown",
-          "_id": "pack_name_vs_diverge__M10__"
-        },
-        {
           "serial": "S21",
-          "pack name": "(blank)",
+          "pack name": "indeterminate",
           "שיוך": "unknown",
           "_id": "pack_name_vs_diverge__S21__"
         },
         {
           "serial": "S104",
-          "pack name": "(blank)",
+          "pack name": "indeterminate",
           "שיוך": "unknown",
           "_id": "pack_name_vs_diverge__S104__"
         },
         {
           "serial": "F22",
-          "pack name": "(blank)",
+          "pack name": "fire zone group*",
           "שיוך": "group*",
           "_id": "pack_name_vs_diverge__F22__"
+        },
+        {
+          "serial": "F23",
+          "pack name": "fire zone group",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__F23__"
+        },
+        {
+          "serial": "F24",
+          "pack name": "fire zone group",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__F24__"
         },
         {
           "serial": "F26",
@@ -442,7 +436,7 @@
         },
         {
           "serial": "Y37",
-          "pack name": "unknown",
+          "pack name": "indeterminate",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__Y37__"
         },
@@ -610,7 +604,7 @@
         },
         {
           "serial": "O77",
-          "pack name": "unknown",
+          "pack name": "indeterminate",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__O77__"
         },
@@ -669,10 +663,70 @@
           "_id": "pack_name_vs_diverge__Ma88__"
         },
         {
+          "serial": "In89",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In89__"
+        },
+        {
           "serial": "In90",
-          "pack name": "marom golan",
+          "pack name": "unknown",
           "שיוך": "(blank)",
           "_id": "pack_name_vs_diverge__In90__"
+        },
+        {
+          "serial": "In91",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In91__"
+        },
+        {
+          "serial": "In92",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In92__"
+        },
+        {
+          "serial": "In93",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In93__"
+        },
+        {
+          "serial": "In94",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In94__"
+        },
+        {
+          "serial": "In95",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In95__"
+        },
+        {
+          "serial": "In96",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In96__"
+        },
+        {
+          "serial": "In97",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In97__"
+        },
+        {
+          "serial": "In98",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In98__"
+        },
+        {
+          "serial": "In105",
+          "pack name": "unknown",
+          "שיוך": "(blank)",
+          "_id": "pack_name_vs_diverge__In105__"
         }
       ]
     },
