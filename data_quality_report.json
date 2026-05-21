@@ -5,7 +5,7 @@
     "n_info_categories": 4,
     "n_error_rows": 30,
     "n_warning_rows": 3,
-    "n_info_rows": 98,
+    "n_info_rows": 101,
     "source_rows": 100,
     "source_cols": 28,
     "decisions_applied": {
@@ -258,8 +258,26 @@
       "category": "'pack name' vs 'שיוך' diverge",
       "category_id": "pack_name_vs_diverge",
       "severity": "info",
-      "description": "78 row(s) differ between the two columns — for user's manual cleanup",
+      "description": "81 row(s) differ between the two columns — for user's manual cleanup",
       "rows": [
+        {
+          "serial": "M3",
+          "pack name": "indeterminate",
+          "שיוך": "makhfi unknown",
+          "_id": "pack_name_vs_diverge__M3__"
+        },
+        {
+          "serial": "M6H",
+          "pack name": "indeterminate",
+          "שיוך": "makhfi unknown",
+          "_id": "pack_name_vs_diverge__M6H__"
+        },
+        {
+          "serial": "M10",
+          "pack name": "indeterminate",
+          "שיוך": "makhfi unknown",
+          "_id": "pack_name_vs_diverge__M10__"
+        },
         {
           "serial": "S21",
           "pack name": "indeterminate",

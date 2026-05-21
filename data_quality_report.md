@@ -1,6 +1,6 @@
 # Data Quality Report — `wolves_data.xlsx`
 
-**Generated:** 2026-05-20 01:58  
+**Generated:** 2026-05-22 02:48  
 **Source sheet:** `נתוני זיהוי זאבים (2)` (100 rows × 28 cols)
 
 > **From `data_decisions.json`:** 11 finding(s) suppressed (status=decided_keep), 0 carry a user comment, 0 marked `fixed_in_xlsx` but still detected.
@@ -11,7 +11,7 @@
 |---|---:|---:|
 | ❌ Errors (must fix) | 2 | 30 |
 | ⚠ Warnings (likely issues) | 2 | 3 |
-| ℹ Info (FYI) | 4 | 98 |
+| ℹ Info (FYI) | 4 | 101 |
 
 
 ## ❌ Errors
@@ -80,10 +80,13 @@
 ## ℹ Info
 
 ### 'pack name' vs 'שיוך' diverge
-78 row(s) differ between the two columns — for user's manual cleanup
+81 row(s) differ between the two columns — for user's manual cleanup
 
 | serial | pack name | שיוך |
 |---|---|---|
+| M3 | indeterminate | makhfi unknown |
+| M6H | indeterminate | makhfi unknown |
+| M10 | indeterminate | makhfi unknown |
 | S21 | indeterminate | unknown |
 | S104 | indeterminate | unknown |
 | F22 | fire zone group* | group* |
@@ -111,11 +114,8 @@
 | Y44 | golden pack | (blank) |
 | Y45 | golden pack | (blank) |
 | Y46 | lone | (blank) |
-| Y47 | yehodiya trio | (blank) |
-| Y48 | yehodiya trio | (blank) |
-| Y37 | indeterminate | (blank) |
 
-*(showing first 30 of 78 rows)*
+*(showing first 30 of 81 rows)*
 
 ### missing 'main poligon' (in analysis pool)
 11 analysed wolf(ves) have empty 'main poligon'

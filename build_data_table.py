@@ -377,6 +377,7 @@ def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
     SOC_ORDER = ["pack", "group", "lone", "unknown"]
     NO_POLY = "(no polygon)"
     NO_PACK = "(no pack)"
+    MAKHFI_UNKNOWN = "Makhfi pack — unknown which"
 
     def _strip_star(v: str) -> tuple[str, bool]:
         v = (v or "").strip()
@@ -402,12 +403,14 @@ def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
             poly_display[poly_canon] = poly_raw
         pack_raw = (str(row["pack name"]) if pd.notna(row["pack name"]) else "").strip()
         pack_canon, pack_probable = _strip_star(pack_raw) if pack_raw else ("", False)
-        # "makhfi unknown" is a meta-label (Nili 2026-05-20): pack identity within
-        # Makhfi is unclear — not a real pack. Route into the "(no pack)" sentinel
-        # so it doesn't render as a labeled pack above the divider.
+        # "makhfi unknown" is a meta-label (Nili 2026-05-20): the wolf belongs to
+        # one of Makhfi's two packs but which is unknown. It gets its own labelled
+        # bar, ranked among the named packs by member count and coloured by the
+        # Makhfi polygon (Nili 2026-05-22) — kept separate from the generic
+        # blank-pack-name "(no pack)" bucket.
         if pack_canon and pack_canon.lower() == "makhfi unknown":
-            pack_canon = ""
-        if not pack_canon:
+            pack_canon = MAKHFI_UNKNOWN
+        elif not pack_canon:
             pack_canon = NO_PACK
         social_raw = (str(row["social dynamic"]) if pd.notna(row["social dynamic"]) else "").strip()
         social_canon, social_probable = _strip_star(social_raw) if social_raw else ("", False)
@@ -2106,45 +2109,58 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <!-- ============= Visualization tabs ============= -->
 <div class="viz-tabs">
-  <button class="viz-tab active" data-target="distribution-section">🎨 Region Distribution</button>
-  <button class="viz-tab" data-target="idpower-section">🎯 Identification Power</button>
+  <button class="viz-tab active" data-target="distribution-section">🎯 Identification by Region</button>
   <button class="viz-tab" data-target="social-section">🐺 Social Dynamics</button>
   <button class="viz-tab" data-target="signatures-section">🐾 Pack Signatures</button>
 </div>
 
 <!-- ============= Per-region status distribution chart ============= -->
 <div class="section viz-pane" id="distribution-section">
+  <!-- Version A (discrete-bucket chart) hidden 2026-05-22: Nili chose the
+       continuous heat-map below. Markup kept intact (just wrapped in
+       display:none) so it can be restored by removing this wrapper. -->
+  <div style="display:none;">
+    <h2><span class="swatch"></span>Per-region identification breakdown <span style="font-size:13px;font-weight:600;color:#999;">&mdash; version A &middot; discrete buckets</span></h2>
+    <div class="section-sub">
+      Each column represents one region. Each bar holds 100% of the analysed wolves
+      (n = <span id="dist-n">0</span>), partitioned into identification-power buckets:
+      <strong>Unique</strong> = wolves whose code in this region appears in no other wolf;
+      <strong>Shared 2-3 → 36+</strong> = a heat-map of how widely a code is reused
+      (lighter = uncommon, darker brown = dominates the population);
+      <strong>Asymmetric</strong> / <strong>Partial</strong> / <strong>P</strong> /
+      <strong>N</strong> = non-resolvable categories.
+      Hover any segment for exact counts. Use Plotly's camera icon to download as PNG.
+    </div>
+    <div id="region-distribution-chart"></div>
+  </div>
+
   <h2><span class="swatch"></span>Per-region identification breakdown</h2>
   <div class="section-sub">
-    Each column represents one region. Each bar holds 100% of the analysed wolves
-    (n = <span id="dist-n">0</span>), partitioned into identification-power buckets:
-    <strong>Unique</strong> = wolves whose code in this region appears in no other wolf;
-    <strong>Shared 2-3 → 36+</strong> = a heat-map of how widely a code is reused
-    (lighter = uncommon, darker brown = dominates the population);
+    Each column represents one region; each bar holds 100% of the analysed wolves
+    (n = <span id="dist-n-cont">0</span>). <strong>Unique</strong> = wolves whose
+    code in this region appears in no other wolf. The <strong>Shared</strong>
+    portion — every band above the green Unique base — is a <em>continuous</em>
+    heat-map: each band is coloured by the exact number of wolves that share that
+    code (light green = shared by few, dark brown = shared by many), and the
+    colour bar on the right maps shade to share-count.
     <strong>Asymmetric</strong> / <strong>Partial</strong> / <strong>P</strong> /
-    <strong>N</strong> = non-resolvable categories.
-    Hover any segment for exact counts. Use Plotly's camera icon to download as PNG.
+    <strong>N</strong> = non-resolvable categories. Segments ≥10% are labelled
+    with their percentage and code(s). Hover any segment for exact counts; use
+    Plotly's camera icon to download as PNG.
   </div>
-  <div id="region-distribution-chart"></div>
-</div>
+  <div id="region-distribution-chart-cont"></div>
 
-<!-- ============= Identification Power (Nili's strict fingerprint rule) ============= -->
-<div class="section viz-pane" id="idpower-section" style="display:none;">
-  <h2><span class="swatch"></span>Identification Power</h2>
+  <!-- Single-region power chart — merged into this tab 2026-05-22 (Nili): both
+       charts describe per-region identification ability, so they live together. -->
+  <h2 style="margin-top:42px;"><span class="swatch"></span>Single-region power — bars sorted by ID power</h2>
   <div class="section-sub" id="idpower-definition">
     <!-- Filled in by JS from PAYLOAD.anatomy.identification_power.definition_note -->
   </div>
-
-  <div class="idpower-grid idpower-grid-single">
-    <div class="idpower-card">
-      <h3>Single-region power — bars sorted by ID power</h3>
-      <div class="card-sub">
-        For each region alone (k=1), how many wolves get a unique fingerprint?
-        Bar colour follows the anatomical group.
-      </div>
-      <div class="chart-host" id="idpower-single-chart"></div>
-    </div>
+  <div class="section-sub">
+    For each region alone (k=1), how many wolves get a unique fingerprint?
+    Bar colour follows the anatomical group.
   </div>
+  <div id="idpower-single-chart"></div>
 </div>
 
 <!-- ============= Social Dynamics (polygon + pack + social) ============= -->
@@ -2997,6 +3013,11 @@ const DRILLDOWN_BUCKETS = new Set([
 ]);
 
 function renderRegionDistributionChart() {
+  // Version A (discrete buckets) is hidden as of 2026-05-22 — Nili chose the
+  // continuous heat-map (renderRegionDistributionChartContinuous). The function
+  // is kept intact; delete the next line and the display:none wrapper in the
+  // HTML to bring version A back.
+  return;
   if (!window.Plotly) return;
   const A = PAYLOAD.anatomy;
   const regions = A.regions;
@@ -3146,6 +3167,323 @@ function renderRegionDistributionChart() {
 }
 
 // ============================================================================
+// Continuous heat-map variant of the region-distribution chart (version B).
+//
+// Identical data to renderRegionDistributionChart(); the only difference is the
+// "Shared" portion: instead of six discrete Shared 2-3 ... 36+ buckets, every
+// shared code is coloured on a CONTINUOUS scale by the exact number of wolves
+// that share it. "Unique", "Asymmetric", "Partial", "P", "N", "Empty" unchanged.
+//
+// Data sources, both already covered by verify_chart_vs_table.py:
+//   - PAYLOAD.anatomy.codes_per_region  (Layer 3)  -> Unique + Shared split
+//   - PAYLOAD.anatomy.bucket_dist       (Layer 2)  -> the categorical bands
+// A runtime self-check rebuilds the six discrete buckets + region totals from
+// the continuous decomposition and asserts they equal bucket_dist exactly.
+// ============================================================================
+
+// Continuous Shared palette. heatRGB / heatColor interpolate a colour for a
+// share-count k across an anchor list. The anchor list is rebuilt every render
+// (see heatAnchors) so the scale spans 2 .. the real maximum share-count.
+function heatRGB(k, anchors) {
+  const A = anchors;
+  if (k <= A[0][0]) return A[0][1].slice();
+  if (k >= A[A.length - 1][0]) return A[A.length - 1][1].slice();
+  for (let i = 0; i < A.length - 1; i++) {
+    const k0 = A[i][0], k1 = A[i + 1][0];
+    if (k >= k0 && k <= k1) {
+      const c0 = A[i][1], c1 = A[i + 1][1], t = (k - k0) / (k1 - k0);
+      return [
+        Math.round(c0[0] + t * (c1[0] - c0[0])),
+        Math.round(c0[1] + t * (c1[1] - c0[1])),
+        Math.round(c0[2] + t * (c1[2] - c0[2])),
+      ];
+    }
+  }
+  return A[A.length - 1][1].slice();
+}
+function heatColor(k, anchors) {
+  const c = heatRGB(k, anchors);
+  return "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")";
+}
+
+function renderRegionDistributionChartContinuous() {
+  if (!window.Plotly) return;
+  const A = PAYLOAD.anatomy;
+  const regions = A.regions;
+  const dist = A.bucket_dist;
+  const codesPR = A.codes_per_region || {};
+  const colors = A.id_bucket_colors;
+
+  // --- Decompose codes_per_region into wolves-at-each-exact-share-count -----
+  // A code shared by k wolves represents k wolves all at share-count k, so it
+  // contributes k to wolvesAtK[k]. k===1 is exactly the "Unique" bucket.
+  const wolvesAtK = {};
+  const presentKs = new Set();
+  let maxK = 2;
+  for (const r of regions) {
+    const m = {};
+    for (const item of (codesPR[r] || [])) {
+      const k = item.count;
+      m[k] = (m[k] || 0) + k;
+      if (k >= 2) { presentKs.add(k); if (k > maxK) maxK = k; }
+    }
+    wolvesAtK[r] = m;
+  }
+  const sharedKs = Array.from(presentKs).sort((a, b) => a - b);
+
+  // --- Per-region totals (each must equal n_pool) --------------------------
+  const totals = {};
+  for (const r of regions) {
+    let t = 0;
+    for (const b of A.id_bucket_order) t += (dist[r] || {})[b] || 0;
+    totals[r] = t;
+  }
+  const nPool = totals[regions[0]] || PAYLOAD.n_pool || 0;
+  const dnEl = document.getElementById("dist-n-cont");
+  if (dnEl) dnEl.textContent = nPool;
+
+  // --- Self-check: continuous decomposition must rebuild bucket_dist -------
+  const CHECK = [
+    ["Unique (1)", 1, 1], ["Shared 2-3", 2, 3], ["Shared 4-6", 4, 6],
+    ["Shared 7-10", 7, 10], ["Shared 11-20", 11, 20],
+    ["Shared 21-35", 21, 35], ["Shared 36+", 36, Infinity],
+  ];
+  const fails = [];
+  for (const r of regions) {
+    for (const c of CHECK) {
+      let s = 0;
+      for (const kStr in wolvesAtK[r]) {
+        const k = +kStr;
+        if (k >= c[1] && k <= c[2]) s += wolvesAtK[r][kStr];
+      }
+      const exp = (dist[r] || {})[c[0]] || 0;
+      if (s !== exp) fails.push(r + "/" + c[0] + ": heat=" + s + " dist=" + exp);
+    }
+    let tot = 0;
+    for (const kStr in wolvesAtK[r]) tot += wolvesAtK[r][kStr];
+    for (const b of ["Asymmetric", "Partial-ambiguous", "P", "N", "Empty"]) {
+      tot += (dist[r] || {})[b] || 0;
+    }
+    if (tot !== totals[r]) fails.push(r + "/TOTAL: " + tot + " != " + totals[r]);
+  }
+  const host = document.getElementById("region-distribution-chart-cont");
+  const prevWarn = document.getElementById("cont-chart-selfcheck-warn");
+  if (prevWarn) prevWarn.remove();
+  if (fails.length) {
+    console.error("[continuous chart] SELF-CHECK FAILED:", fails);
+    if (host) host.insertAdjacentHTML("beforebegin",
+      '<div id="cont-chart-selfcheck-warn" style="background:#FDECEA;' +
+      'border:1px solid #E53935;color:#B71C1C;padding:8px 12px;' +
+      'border-radius:6px;font-size:12px;margin:8px 0;">&#9888; Continuous-chart ' +
+      'self-check failed (' + fails.length + ' mismatch(es)) &mdash; see console. ' +
+      'Version A above remains the trusted reference.</div>');
+  } else {
+    console.log("[continuous chart] self-check OK: heat-map rebuilds all " +
+      (regions.length * 7) + " Unique/Shared buckets and " + regions.length +
+      " region totals exactly from codes_per_region.");
+  }
+
+  // --- text-colour helper (black/white by background luminance) ------------
+  function hexText(hex) {
+    const m = /^#([0-9a-f]{6})/i.exec(hex || "");
+    if (!m) return "#000";
+    const n = parseInt(m[1], 16);
+    const lum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+    return lum > 165 ? "#222" : "#fff";
+  }
+
+  const isMobile = (typeof window.matchMedia === "function")
+                    && window.matchMedia("(max-width: 768px)").matches;
+  const pct = (r, n) => totals[r] ? 100 * n / totals[r] : 0;
+  const traces = [];
+
+  // (1) Unique band — discrete dark green, unchanged from version A.
+  {
+    const counts = regions.map(r => wolvesAtK[r][1] || 0);
+    const ys = regions.map((r, i) => pct(r, counts[i]));
+    traces.push({
+      name: "Unique (1)", type: "bar", x: regions, y: ys, customdata: counts,
+      text: ys.map(y => y >= 10 ? y.toFixed(0) + "%" : ""),
+      textposition: "inside", insidetextanchor: "middle",
+      textfont: { color: hexText(colors["Unique (1)"]), size: 11, family: "sans-serif" },
+      cliponaxis: false,
+      marker: { color: colors["Unique (1)"], line: { width: 0.5, color: "rgba(0,0,0,0.18)" } },
+      hovertemplate: "<b>%{x}</b><br>Unique — code found in no other wolf<br>" +
+        "%{customdata} wolves (%{y:.1f}%)<extra></extra>",
+    });
+  }
+
+  // Per region: distinct codes grouped by their share-count, plus the largest
+  // share-count. Used for the in-bar labels.
+  const codesByCount = {};   // region -> { share-count k -> [codes] }
+  const maxCountOf = {};     // region -> largest share-count in that region
+  for (const r of regions) {
+    const byCount = {};
+    let mx = 0;
+    for (const c of (codesPR[r] || [])) {
+      (byCount[c.count] = byCount[c.count] || []).push(c.code);
+      if (c.count > mx) mx = c.count;
+    }
+    codesByCount[r] = byCount;
+    maxCountOf[r] = mx;
+  }
+  // Label for a list of codes: the code(s) when there are 1-2, otherwise just
+  // the count ("N codes") — keeps crowded low-share bands legible (Nili 2026-05-22).
+  const codeLabel = C => (!C || !C.length) ? ""
+    : (C.length <= 2 ? C.join(", ") : (C.length + " codes"));
+  const rgbText = rgb => (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]) > 165 ? "#222" : "#fff";
+
+  // Continuous heat scale: 2 .. the real maximum share-count (maxK).
+  // The five fixed low-end anchors stay dense (most codes have low share
+  // counts, so they need the colour range); the final brown anchor is pinned
+  // to maxK, so the gradient — and the colour bar — end exactly at the largest
+  // number of wolves any single code is shared by.
+  const heatAnchors = [
+    [2,  [0x66, 0xBB, 0x6A]],
+    [4,  [0xC5, 0xE1, 0xA5]],
+    [7,  [0xFF, 0xF1, 0x76]],
+    [11, [0xFF, 0xB7, 0x4D]],
+    [21, [0xF5, 0x7C, 0x00]],
+  ].filter(a => a[0] < maxK);
+  heatAnchors.push([maxK, [0x6D, 0x4C, 0x41]]);
+
+  // (2) Shared bands — one trace per exact share-count k, continuous colour,
+  // no border (so the stack reads as a smooth gradient), no legend entry.
+  for (const k of sharedKs) {
+    const counts = regions.map(r => wolvesAtK[r][k] || 0);
+    const ys = regions.map((r, i) => pct(r, counts[i]));
+    traces.push({
+      name: "shared x" + k, type: "bar", x: regions,
+      y: ys, customdata: counts,
+      showlegend: false,
+      // In-bar label. A segment >= 10% of the bar shows its percentage plus the
+      // code(s) at that share-count — listed when 1-2, summarised as "N codes"
+      // when 3+. Sub-10% segments stay blank except the region's most-common-
+      // code band, which keeps its code label.
+      text: regions.map((r, i) => {
+        const here = (codesByCount[r] || {})[k] || [];
+        if (ys[i] >= 10) {
+          return here.length ? (ys[i].toFixed(0) + "%, " + codeLabel(here))
+                              : (ys[i].toFixed(0) + "%");
+        }
+        return (k === maxCountOf[r]) ? codeLabel(here) : "";
+      }),
+      textposition: "inside", insidetextanchor: "middle", cliponaxis: false,
+      textfont: { color: rgbText(heatRGB(k, heatAnchors)), size: 10, family: "sans-serif" },
+      marker: { color: heatColor(k, heatAnchors), line: { width: 0 } },
+      hovertemplate: "<b>%{x}</b><br>code shared by " + k + " wolves<br>" +
+        "%{customdata} wolves (%{y:.1f}%)<extra></extra>",
+    });
+  }
+
+  // (3) Non-resolvable categories — discrete, unchanged from version A.
+  for (const b of ["Asymmetric", "Partial-ambiguous", "P", "N", "Empty"]) {
+    const counts = regions.map(r => (dist[r] || {})[b] || 0);
+    if (counts.every(c => c === 0)) continue;
+    const ys = regions.map((r, i) => pct(r, counts[i]));
+    traces.push({
+      name: b, type: "bar", x: regions, y: ys, customdata: counts,
+      text: ys.map(y => y >= 10 ? y.toFixed(0) + "%" : ""),
+      textposition: "inside", insidetextanchor: "middle",
+      textfont: { color: hexText(colors[b]), size: 11, family: "sans-serif" },
+      cliponaxis: false,
+      marker: { color: colors[b], line: { width: 0.5, color: "rgba(0,0,0,0.18)" } },
+      hovertemplate: "<b>%{x}</b><br>" + b +
+        "<br>%{customdata} wolves (%{y:.1f}%)<extra></extra>",
+    });
+  }
+
+  // (4) Colour-bar carrier — invisible scatter trace that renders the
+  // continuous legend for the Shared scale. cmin/cmax = 2 .. maxK so the bar
+  // spans exactly the real range of how often a code is shared.
+  const denom = maxK > 2 ? maxK - 2 : 1;
+  const colorscale = heatAnchors.map(a =>
+    [(a[0] - 2) / denom, "rgb(" + a[1][0] + "," + a[1][1] + "," + a[1][2] + ")"]);
+  // Ticks: the min (2), the max (real largest share-count) and round numbers
+  // in between, dropping any that would crowd the max tick.
+  const cbarTicks = [2];
+  for (const v of [10, 20, 30, 40, 50, 60]) {
+    if (v < maxK - 3) cbarTicks.push(v);
+  }
+  cbarTicks.push(maxK);
+  const cbarText = cbarTicks.map(v => "" + v);
+  const colorbar = isMobile
+    ? { orientation: "h", x: 0.5, xanchor: "center", y: -0.46, yanchor: "top",
+        len: 0.92, thickness: 11, outlinewidth: 0, tickmode: "array",
+        tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
+        title: { text: "wolves sharing the code  (2 – " + maxK + ")", side: "top", font: { size: 9.5 } } }
+    : { x: 1.015, xanchor: "left", y: 0.5, yanchor: "middle",
+        len: 0.74, thickness: 14, outlinewidth: 0, tickmode: "array",
+        tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
+        title: { text: "wolves sharing the code<br>(2 – " + maxK + ")", side: "right", font: { size: 10 } } };
+  traces.push({
+    type: "scatter", mode: "markers", x: [regions[0]], y: [0],
+    showlegend: false, hoverinfo: "skip",
+    marker: {
+      size: 0.1, opacity: 0, color: [2], colorscale: colorscale,
+      cmin: 2, cmax: maxK, showscale: true, colorbar: colorbar,
+    },
+  });
+
+  // --- region icons / colour stripe above each bar (same as version A) -----
+  const icons = A.region_icons || {};
+  const images = [], shapes = [];
+  regions.forEach((r, i) => {
+    if (icons[r]) {
+      images.push({
+        source: icons[r], xref: "x", yref: "paper",
+        x: i, y: isMobile ? 1.14 : 1.20,
+        sizex: 0.90, sizey: isMobile ? 0.11 : 0.18,
+        xanchor: "center", yanchor: "top", sizing: "contain", layer: "above",
+      });
+    } else {
+      shapes.push({
+        type: "rect", xref: "x", yref: "paper",
+        x0: i - 0.4, x1: i + 0.4, y0: 1.005, y1: 1.028,
+        line: { width: 0 }, fillcolor: A.group_colors[A.region_group[r]],
+      });
+    }
+  });
+  const ticktext = regions.map(r => {
+    const c = A.group_colors[A.region_group[r]];
+    return '<span style="color:' + c + '; font-weight:700; font-size:' +
+      (isMobile ? "12" : "13") + 'px;">' + r + '</span>';
+  });
+
+  Plotly.newPlot("region-distribution-chart-cont", traces, {
+    barmode: "stack", bargap: 0.18,
+    height: isMobile ? 560 : undefined,
+    margin: {
+      l: isMobile ? 40 : 56,
+      r: isMobile ? 8 : 92,
+      t: isMobile ? 56 : 88,
+      b: isMobile ? 178 : 56,
+    },
+    yaxis: {
+      title: { text: "% of analysed wolves", font: { size: isMobile ? 10 : 12 } },
+      range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
+      fixedrange: true, tickfont: { size: isMobile ? 9 : 11 },
+    },
+    xaxis: {
+      title: isMobile ? "" : {
+        text: "Region (icon above each bar shows the anatomical area)",
+        font: { size: 11, color: "#666" },
+      },
+      tickmode: "array", tickvals: regions, ticktext: ticktext,
+      tickfont: { size: isMobile ? 11 : 13 }, fixedrange: true,
+    },
+    legend: {
+      orientation: "h", x: 0.5, xanchor: "center",
+      y: isMobile ? -0.18 : -0.22,
+      font: { size: isMobile ? 9 : 11 },
+      traceorder: "normal", itemwidth: isMobile ? 30 : undefined,
+    },
+    shapes: shapes, images: images,
+    plot_bgcolor: "#fff", paper_bgcolor: "#fff",
+  }, plotlyConfig("wolf_region_distribution_continuous"));
+}
+
+// ============================================================================
 // Identification Power tab — single-region bar chart (Nili's strict fingerprint
 // rule). Other graphs were considered earlier and removed at user request; the
 // underlying data (greedy / envelope / pairs) is still computed in Python and
@@ -3187,6 +3525,7 @@ function renderSingleRegionBar(ip) {
     hovertemplate: "<b>%{y} alone</b><br>%{x}/" + N + " wolves identifiable<extra></extra>",
   };
   Plotly.newPlot("idpower-single-chart", [trace], {
+    height: 420,
     margin: { l: 36, r: 38, t: 18, b: 40 },
     yaxis: {
       autorange: "reversed", tickfont: { size: 12, family: "sans-serif" },
@@ -3196,7 +3535,7 @@ function renderSingleRegionBar(ip) {
       title: { text: "Wolves identifiable (k=1)", font: { size: 11 } },
       range: [0, N + 6], gridcolor: "#eee", fixedrange: true,
     },
-    plot_bgcolor: "#fff", paper_bgcolor: "#fafbfc",
+    plot_bgcolor: "#fff", paper_bgcolor: "#fff",
     showlegend: false,
   }, plotlyConfig("wolf_identification_power"));
 }
@@ -3857,9 +4196,7 @@ function setupVizTabs() {
         p.style.display = (p.id === targetId) ? "" : "none";
       });
       // Lazy-init tabs on first open (Plotly charts are expensive to build)
-      if (targetId === "idpower-section") {
-        renderIdentificationPowerTab();
-      } else if (targetId === "social-section") {
+      if (targetId === "social-section") {
         renderSocialDynamicsTab();
       } else if (targetId === "signatures-section") {
         renderPackSignaturesTab();
@@ -4952,11 +5289,15 @@ function init() {
   // Render chart (Plotly is async-loaded via CDN; check)
   if (window.Plotly) {
     renderRegionDistributionChart();
+    renderRegionDistributionChartContinuous();
+    renderIdentificationPowerTab();
   } else {
     const wait = setInterval(() => {
       if (window.Plotly) {
         clearInterval(wait);
         renderRegionDistributionChart();
+        renderRegionDistributionChartContinuous();
+        renderIdentificationPowerTab();
       }
     }, 80);
   }
@@ -4974,9 +5315,16 @@ function init() {
         if (document.getElementById("region-distribution-chart")) {
           renderRegionDistributionChart();
         }
-        // The other tabs are lazy-rendered; reset their flags so the next
-        // tab activation rebuilds them with the new breakpoint values.
-        idpowerRendered = false;
+        if (document.getElementById("region-distribution-chart-cont")) {
+          renderRegionDistributionChartContinuous();
+        }
+        // The single-region power chart shares this tab — re-render it too.
+        if (document.getElementById("idpower-single-chart")) {
+          idpowerRendered = false;
+          renderIdentificationPowerTab();
+        }
+        // Social / Pack-Signatures are lazy-rendered; reset so the next tab
+        // activation rebuilds them with the new breakpoint values.
         socialRendered = false;
       }
     };
