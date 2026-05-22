@@ -1,8 +1,8 @@
 # Data-integrity Report — `data_table.html` chart vs. table
 
-**Generated:** 2026-05-22 03:35  
+**Generated:** 2026-05-22 04:26  
 **Source:** `wolves_data.xlsx`, sheet `נתוני זיהוי זאבים (2)`  
-**HTML:** `data_table.html` (build_iso: `2026-05-22 03:35`)
+**HTML:** `data_table.html` (build_iso: `2026-05-22 04:26`)
 
 ## 1. Headline
 

@@ -2211,7 +2211,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
     <div class="social-card">
       <h3>4. Overall social-dynamic mix</h3>
-      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. The hatched part of a slice = probable (*) wolves — category assignment not certain.</div>
+      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. The bubble at each hatched wedge gives that category's probable (*) count.</div>
       <div class="chart-host" id="social-donut-chart"></div>
     </div>
   </div>
@@ -3795,46 +3795,67 @@ function renderSocialPackChart(sd) {
 
 // 3a. Social donut (overall)
 function renderSocialDonut(sd) {
-  // Each social category splits into two adjacent wedges, counted SEPARATELY:
-  // a solid wedge for the confirmed wolves and a hatched wedge for the probable
-  // (*) ones. Each wedge shows its own wolf count — the probable wolves are NOT
-  // folded into the category total.
+  // Donut: each social category = a solid wedge (confirmed wolves) + a hatched
+  // wedge (probable *). A category-coloured bubble sits just inside the hole
+  // edge at each hatched wedge with its probable count; the legend explains
+  // that hatched = probable.
   const N = sd.n_pool;
   const pctOf = n => N ? (100 * n / N) : 0;
-  const labels = [], values = [], colors = [], patterns = [],
-        text = [], textPos = [], hover = [];
+  const labels = [], values = [], colors = [], patterns = [], text = [], hover = [];
+  const bubbleColor = [], bubbleText = [], hatchMid = [];
+  let cum = 0;
   for (const s of sd.soc_order) {
     const tot = sd.social_totals[s].total;
     if (!tot) continue;
     const prob = sd.social_totals[s].probable;
     const certain = tot - prob;
     const name = SOCIAL_LABELS[s];
-    // hatched wedge — probable (*) wolves — pushed first so it lands on the
-    // clockwise side; counted on its own, label = the probable count.
+    // hatched wedge — probable (*) wolves — clockwise side
     if (prob > 0) {
       labels.push(name + " *");
       values.push(prob);
       colors.push(SOCIAL_COLORS[s]);
       patterns.push("/");
-      text.push(prob + "*");
-      textPos.push("outside");
+      text.push("");
       hover.push("<b>" + name + " &mdash; probable (*)</b><br>" + prob +
         " wolves (" + pctOf(prob).toFixed(1) + "%) &mdash; assignment not certain");
+      hatchMid.push((cum + prob / 2) / N);   // fraction at the wedge's middle
+      bubbleColor.push(SOCIAL_COLORS[s]);
+      bubbleText.push(String(prob));
     }
+    cum += prob;
     // solid wedge — confirmed wolves only
     labels.push(name);
     values.push(certain);
     colors.push(SOCIAL_COLORS[s]);
     patterns.push("");
     text.push(name + "<br>" + certain + " (" + pctOf(certain).toFixed(0) + "%)");
-    textPos.push("inside");
     hover.push("<b>" + name + "</b><br>" + certain +
       " confirmed wolves (" + pctOf(certain).toFixed(1) + "%)");
+    cum += certain;
   }
-  const trace = {
-    type: "pie", hole: 0.55,
+  // Place each probable-count bubble just inside the hole edge, at its hatched
+  // wedge's angle — fully visible (the hole is transparent, so a scatter shows
+  // there even though it renders below the pie) yet hugging the wedge. The
+  // container is measured so this holds at any size; the pie renders
+  // counter-clockwise from 12 o'clock.
+  const HOLE = 0.55;
+  const el = document.getElementById("social-donut-chart");
+  const W = (el && el.clientWidth) || 600;
+  const H = (el && el.clientHeight) || 420;
+  const plotW = Math.max(1, W - 20), plotH = Math.max(1, H - 20);
+  const bubR = HOLE * 0.5 * Math.min(plotW, plotH) - 14;  // bubble-centre radius, px
+  const bubbleX = [], bubbleY = [];
+  for (const f of hatchMid) {
+    const phi = f * 2 * Math.PI;
+    bubbleX.push(0.5 - (bubR / plotW) * Math.sin(phi));
+    bubbleY.push(0.5 + (bubR / plotH) * Math.cos(phi));
+  }
+  const donut = {
+    type: "pie", hole: HOLE,
     labels: labels, values: values,
-    sort: false, automargin: true,
+    sort: false, showlegend: false,
+    domain: { x: [0, 1], y: [0, 1] },
     marker: {
       colors: colors,
       line: { color: "#fff", width: 2 },
@@ -3842,18 +3863,40 @@ function renderSocialDonut(sd) {
     },
     text: text,
     textinfo: "text",
-    textposition: textPos,
+    textposition: "inside",
     insidetextfont: { size: 12, color: "#fff", family: "sans-serif" },
-    outsidetextfont: { size: 11, color: "#444", family: "sans-serif" },
     hovertext: hover,
     hoverinfo: "text",
   };
-  Plotly.newPlot("social-donut-chart", [trace], {
-    margin: { l: 24, r: 24, t: 18, b: 18 },
-    showlegend: false,
+  const bubbles = {
+    type: "scatter", mode: "markers+text",
+    x: bubbleX, y: bubbleY,
+    marker: { size: 24, color: bubbleColor, line: { color: "#fff", width: 2 } },
+    text: bubbleText,
+    textposition: "middle center",
+    textfont: { size: 12, color: "#fff", family: "sans-serif" },
+    hoverinfo: "skip", showlegend: false,
+  };
+  // invisible carrier trace — supplies the single "probable" legend entry
+  const legendKey = {
+    type: "bar", x: [0.5], y: [-5], name: "probable",
+    marker: { color: "#9E9E9E",
+              pattern: { shape: "/", fillmode: "overlay", fgcolor: "#ffffff", size: 7, solidity: 0.3 } },
+    hoverinfo: "skip", showlegend: true,
+  };
+  Plotly.newPlot("social-donut-chart", [donut, bubbles, legendKey], {
+    margin: { l: 10, r: 10, t: 10, b: 10 },
+    showlegend: true,
+    legend: {
+      x: 0.99, xanchor: "right", y: 0.99, yanchor: "top",
+      font: { size: 11 }, bgcolor: "rgba(255,255,255,0.7)",
+    },
+    barmode: "overlay",
+    xaxis: { visible: false, range: [0, 1], fixedrange: true, zeroline: false },
+    yaxis: { visible: false, range: [0, 1], fixedrange: true, zeroline: false },
     annotations: [{
       text: `<b>${sd.n_pool}</b><br><span style="font-size:11px;color:#888;">wolves</span>`,
-      x: 0.5, y: 0.5, showarrow: false,
+      xref: "x", yref: "y", x: 0.5, y: 0.5, showarrow: false,
       font: { size: 22, color: "#333", family: "sans-serif" },
     }],
     paper_bgcolor: "#fafbfc", plot_bgcolor: "#fff",
