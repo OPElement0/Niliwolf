@@ -2211,7 +2211,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
     <div class="social-card">
       <h3>4. Overall social-dynamic mix</h3>
-      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category.</div>
+      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. The hatched part of a slice = probable (*) wolves — category assignment not certain.</div>
       <div class="chart-host" id="social-donut-chart"></div>
     </div>
   </div>
@@ -3795,25 +3795,61 @@ function renderSocialPackChart(sd) {
 
 // 3a. Social donut (overall)
 function renderSocialDonut(sd) {
-  const labels = sd.soc_order.map(s => SOCIAL_LABELS[s]);
-  const values = sd.soc_order.map(s => sd.social_totals[s].total);
-  const probables = sd.soc_order.map(s => sd.social_totals[s].probable);
-  const colors = sd.soc_order.map(s => SOCIAL_COLORS[s]);
+  // Each social category splits into two adjacent wedges, counted SEPARATELY:
+  // a solid wedge for the confirmed wolves and a hatched wedge for the probable
+  // (*) ones. Each wedge shows its own wolf count — the probable wolves are NOT
+  // folded into the category total.
+  const N = sd.n_pool;
+  const pctOf = n => N ? (100 * n / N) : 0;
+  const labels = [], values = [], colors = [], patterns = [],
+        text = [], textPos = [], hover = [];
+  for (const s of sd.soc_order) {
+    const tot = sd.social_totals[s].total;
+    if (!tot) continue;
+    const prob = sd.social_totals[s].probable;
+    const certain = tot - prob;
+    const name = SOCIAL_LABELS[s];
+    // hatched wedge — probable (*) wolves — pushed first so it lands on the
+    // clockwise side; counted on its own, label = the probable count.
+    if (prob > 0) {
+      labels.push(name + " *");
+      values.push(prob);
+      colors.push(SOCIAL_COLORS[s]);
+      patterns.push("/");
+      text.push(prob + "*");
+      textPos.push("outside");
+      hover.push("<b>" + name + " &mdash; probable (*)</b><br>" + prob +
+        " wolves (" + pctOf(prob).toFixed(1) + "%) &mdash; assignment not certain");
+    }
+    // solid wedge — confirmed wolves only
+    labels.push(name);
+    values.push(certain);
+    colors.push(SOCIAL_COLORS[s]);
+    patterns.push("");
+    text.push(name + "<br>" + certain + " (" + pctOf(certain).toFixed(0) + "%)");
+    textPos.push("inside");
+    hover.push("<b>" + name + "</b><br>" + certain +
+      " confirmed wolves (" + pctOf(certain).toFixed(1) + "%)");
+  }
   const trace = {
     type: "pie", hole: 0.55,
     labels: labels, values: values,
-    customdata: probables,
-    marker: { colors: colors, line: { color: "#fff", width: 2 } },
-    textinfo: "label+percent+value",
-    texttemplate: "%{label}<br>%{value} (%{percent})",
-    textfont: { size: 12, color: "#fff", family: "sans-serif" },
-    hovertemplate:
-      "<b>%{label}</b><br>%{value} wolves (%{percent})<br>" +
-      "<i>(%{customdata} probable)</i><extra></extra>",
-    sort: false,
+    sort: false, automargin: true,
+    marker: {
+      colors: colors,
+      line: { color: "#fff", width: 2 },
+      pattern: { shape: patterns, fillmode: "overlay", fgcolor: "#ffffff", size: 8, solidity: 0.3 },
+    },
+    text: text,
+    textinfo: "text",
+    textposition: textPos,
+    insidetextfont: { size: 12, color: "#fff", family: "sans-serif" },
+    outsidetextfont: { size: 11, color: "#444", family: "sans-serif" },
+    hovertext: hover,
+    hoverinfo: "text",
   };
   Plotly.newPlot("social-donut-chart", [trace], {
-    margin: { l: 8, r: 8, t: 10, b: 10 },
+    margin: { l: 24, r: 24, t: 18, b: 18 },
     showlegend: false,
     annotations: [{
       text: `<b>${sd.n_pool}</b><br><span style="font-size:11px;color:#888;">wolves</span>`,
