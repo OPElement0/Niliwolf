@@ -9,7 +9,7 @@
     "source_rows": 100,
     "source_cols": 28,
     "decisions_applied": {
-      "suppressed_decided_keep": 11,
+      "suppressed_decided_keep": 10,
       "suppressed_fixed_in_xlsx": 0,
       "annotated_with_comment": 0,
       "fixed_but_still_detected": 0
@@ -218,7 +218,7 @@
       "category": "cams_spotted: non-numeric token",
       "category_id": "cams_spotted_non_numeric_token",
       "severity": "warnings",
-      "description": "12 entry(ies) contain a token that is not a camera ID",
+      "description": "11 entry(ies) contain a token that is not a camera ID",
       "rows": [
         {
           "serial": "In90",

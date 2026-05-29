@@ -6,7 +6,169 @@
 
 ---
 
-## Last session — 2026-05-13 (most recent)
+## Last session — 2026-05-30 (most recent — chart polish for paper / mentor share)
+
+### What landed in this session
+
+Entirely chart-presentation work on `data_table.html`. No data changes — pool
+stays at 89 wolves, all CSVs / xlsx untouched. `verify_chart_vs_table.py`
+remains at 0 mismatches across all 4 layers.
+
+**Per-region identification heat-map (Identification by Region tab):**
+1. Recoloured the continuous Shared scale to an **all-green ramp** (darkest
+   `#2E7D32` at k=2, palest `#E8F5E9` at k=maxK) replacing the green→yellow→
+   orange→brown ramp. Distinguishable from the discrete Unique `#1B5E20` dark
+   green.
+2. Bar segment labels now show **percent only** (e.g. `22%`), no more
+   `22%, a4b5` style code lists.
+3. Updated the description text + the **N and P legend labels**:
+   - `P — marking present, code unclear` (legend short form)
+   - `N — not codable` (legend short form)
+   - Full nuance in the section sub-text — P is informative presence,
+     N is no usable observation. Saved as memory
+     `feedback_p_vs_n_semantics.md`.
+
+**Social donut (Social Dynamics tab, card #4):**
+1. Replaced the in-wedge probable-count badges with **leader-line callouts**
+   pointing from inside each hatched (probable) wedge to a label outside the
+   donut showing `<b>N</b> probable (X%)`. L-shape, category-coloured line,
+   labels close to the donut.
+2. Fixed a Plotly pie-direction bug that put callouts in the wrong place for
+   wedges other than the first. The reverse-engineered rule lives as
+   `wedgeMidPhi(i)` in `renderSocialDonut` with a verification comment.
+   Confirmed correct against the rendered SVG paths for Pack/Group/Lone
+   hatched wedges.
+3. Donut shrunk slightly via `domain.y = [0.04, 0.96]` so callouts have room.
+4. Caption now says "Leader-line callouts point from each hatched wedge to
+   its probable (*) count and its share of the pool."
+
+**Header banner:**
+- Replaced `total rows: 100` with `wolves in pool: 89` (populated from
+  `PAYLOAD.n_pool`). The hover tooltip explains the canonical-pool rule.
+
+**Cross-pack colour signature matrix (Pack Signatures tab — major overhaul):**
+1. **Moved to be the FIRST block in the tab** (was second after Top-3 packs).
+2. **Colour NAMES instead of letter codes** — sourced from Nili's fur-region
+   key image (`Downloads/עותק של מיפוי אזורי פרווה לתרגום.png`,
+   2026-05-30). The mapping is saved permanently as memory file
+   `reference_colour_names.md` and mirrored as `COLOR_NAMES` JS constant
+   in `build_data_table.py`. Keep both in sync if the palette ever extends.
+3. **New columns** between Pack-name and the region cells: **Land use**
+   (tinted with `LAND_USE_COLORS`) and **Type** (`pack` if n≥5, `group` if
+   2–4 — per `feedback_pack_inference_criteria.md`).
+4. **Polygon column dropped** to free space — polygon name still shown as
+   tooltip on the pack-name cell.
+5. **Tie handling**: when 2+ colours share the most-common count in a pack,
+   the cell splits into one vertical strip per tied colour (each with its
+   own name + `N/total`). Less-common colours intentionally hidden.
+6. **Auto font-shrink** for crowded tied cells. CSS hooks: `data-n="<count>"`
+   on `.sigs-tie-strips`; an extra `.long-name` class on names with 3+ tokens
+   (split on space + hyphen). Effective sizes:
+
+   | # tied | Short name (≤2 tokens) | Long name (3+ tokens) |
+   |---|---|---|
+   | 1 | 11.5 px | 11.5 px |
+   | 2 | 10.5 px | 10.5 px |
+   | 3 | 9.5 px  | 8.5 px |
+   | 4-6 | 8.5 px | 7.5 px |
+7. **Uniform row height** (`tbody td { height: 56px; }`) so short rows like
+   `yehodiya trio` match taller tied-cell rows.
+8. Long names wrap at hyphens/spaces (`overflow-wrap: anywhere`); tooltip
+   on every coloured cell carries the full name as safety.
+
+**Memory files added this session:**
+- `feedback_p_vs_n_semantics.md` — P = informative presence, N = no usable
+  observation. Not symmetric.
+- `reference_colour_names.md` — full A1/A2/C6/D8 letter→name table from
+  Nili's image, plus a how-to-apply note.
+
+### Share link for the mentor
+
+The repo IS the public GitHub Pages site:
+
+  **`https://opelement0.github.io/Niliwolf/`**
+
+Pushing `data_table.html` to `origin/main` updates the live site. The
+mentor needs only that URL. Tooltips work on hover; admin features stay
+hidden without the admin password.
+
+### Next session — likely starting points
+
+- Open Claude questions still awaiting user input (no change since
+  2026-05-29): ≈22 per-wolf pack-candidate / cohort items, plus the
+  long-standing methodology questions Nili owns.
+- Possible next visual polish areas if the mentor flags them:
+  - Mobile layout for the colour-signature matrix (currently desktop-tuned).
+  - A "show region colour-key swatch" legend if the colour names alone
+    aren't self-explanatory in the matrix.
+- O80's `#pictures=0` typo is still pending Nili's xlsx fix; Sh109's empty
+  D9 also still pending.
+
+---
+
+## Earlier session — 2026-05-29
+
+### What landed in this session
+
+**Mentor decision: photographer-source wolves are out of the paper.**
+
+1. **New canonical pool: 89 wolves** (was 100). The 11 wolves observed only
+   by external photographers — `In89, In90, In91, In92, In93, In94, In95,
+   In96, In97, In98, In105` — are excluded from the analysis pool. The
+   five photographers in the data: `ariel shamir`, `omer weiner`,
+   `elimelech`, `moshe_neeman`, `nevo_`.
+2. **O66 kept** — it has both `31` (research camera) and `omer weiner` in
+   `cams_spotted`. The photographer name was stripped from the Excel;
+   `cams_spotted` is now `"31"` only. Backup preserved as
+   `wolves_data.OLD.before_photographer_filter.xlsx`.
+3. **`wolf_lib.cams_source(...)`** — new classifier. Returns
+   `"research"` (≥1 numeric token 1–60), `"photographer"` (no numeric
+   tokens), or `"empty"`. Used by `load_data` and the data table.
+4. **`load_data(include_photographer_only=False)`** — new keyword. Default
+   `False` excludes photographer-only rows from the canonical pool. Pass
+   `True` for admin tooling that needs the full 100-row view.
+5. **`build_data_table.py`**: photographer rows are still embedded in the
+   HTML (so admins can audit / export them), but:
+   - viewer mode hides them entirely;
+   - admin mode also hides them by default — a new toggle, **"show
+     photographer-source wolves"** (admin controls bar), reveals them;
+   - when revealed, they get a pale-orange tint
+     (`.row-photographer-source`);
+   - admin export and master xlsx save include them when the toggle is on.
+6. **Stale `only_with_pictures=True` fixed** in `step3_build_app.py` and
+   `step3_panelA_rankfreq.py`. Both now use the canonical pool.
+7. **`verify_chart_vs_table.py`** updated to apply the same photographer
+   filter, so the integrity check passes against the new pool.
+8. **All outputs rebuilt** — every CSV, the audit, the data-QC report,
+   `wolf_dashboard.html`, `data_table.html`, and the verifier all agree
+   on `n_total = 89`.
+
+### Headline numbers (new — 89-pool)
+
+| Region | n_unambiguous | n_unique | H (bits) | Top code (count) | %usable |
+|---|---|---|---|---|---|
+| A1 | 83 | 66 | 5.887 | b1i (5) | 98.88 |
+| A2 | 77 | 38 | 4.929 | a1i, N (7) | 92.13 |
+| B3 | 28 | 9 | 2.734 | N (24) | 68.54 |
+| B4 | 51 | 12 | 3.175 | N (17) | 70.79 |
+| B5 | 49 | 12 | 2.864 | N (22) | 70.79 |
+| C6 | 81 | 38 | 4.840 | c1g (8) | 94.38 |
+| C7 | 73 | 7 | 2.376 | c (26) | 82.02 |
+| D8 | 54 | 18 | 3.334 | a4b5 (20) | 94.38 |
+| D9 | 75 | 4 | 1.678 | a2 (39) | 84.27 |
+
+### Caveats
+
+- `update.bat` still does NOT rebuild `wolf_dashboard.html` automatically
+  (only data_table). If the user needs the analysis dashboard refreshed,
+  run `step3_build_app.py` manually. Pre-existing gap, not a regression.
+- The 12 per-wolf pack-candidate questions from the 2026-05-13 session
+  that referenced `In92`, `In93` etc. now point at excluded wolves; if
+  Nili revisits those questions, they should be closed (not actionable).
+
+---
+
+## Earlier session — 2026-05-13
 
 ### What landed in this session
 

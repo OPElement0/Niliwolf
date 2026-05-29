@@ -1,8 +1,8 @@
 # Data-integrity Report — `data_table.html` chart vs. table
 
-**Generated:** 2026-05-22 04:26  
+**Generated:** 2026-05-30 02:11  
 **Source:** `wolves_data.xlsx`, sheet `נתוני זיהוי זאבים (2)`  
-**HTML:** `data_table.html` (build_iso: `2026-05-22 04:26`)
+**HTML:** `data_table.html` (build_iso: `2026-05-30 02:11`)
 
 ## 1. Headline
 
@@ -13,11 +13,11 @@
 | item | value |
 |---|---|
 | rows in sheet (2) | 100 |
-| rows with non-empty `code` (analysis pool used by chart + statuses) | 100 |
-| rows with `code` AND `#pictures > 0` (load_data pool) | 100 |
+| rows with non-empty `code` (analysis pool used by chart + statuses) | 89 |
+| rows with `code` AND `#pictures > 0` (load_data pool) | 89 |
 | region cells in table (rows × 9 regions) | 900 |
 | HTML reports `n_total_rows` | 100 |
-| HTML reports `n_pool` | 100 |
+| HTML reports `n_pool` | 89 |
 
 ## 3. Layer 1 — per-cell status (table colour bars)
 
@@ -37,21 +37,21 @@ Reference (chart values, all confirmed correct):
 
 | region | Unique (1) | Shared 2-3 | Shared 4-6 | Shared 7-10 | Shared 11-20 | Shared 21-35 | Shared 36+ | Asymmetric | Partial-ambiguous | P | N | Empty |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| A1 | 54 | 28 | 9 | 0 | 0 | 0 | 0 | 2 | 6 | 0 | 1 | 0 |
-| A2 | 17 | 30 | 29 | 7 | 0 | 0 | 0 | 3 | 7 | 0 | 7 | 0 |
-| B3 | 2 | 8 | 4 | 8 | 11 | 0 | 0 | 1 | 33 | 4 | 29 | 0 |
-| B4 | 2 | 3 | 10 | 33 | 11 | 0 | 0 | 3 | 9 | 9 | 20 | 0 |
-| B5 | 3 | 3 | 13 | 8 | 30 | 0 | 0 | 3 | 11 | 4 | 25 | 0 |
-| C6 | 26 | 19 | 27 | 17 | 0 | 0 | 0 | 0 | 6 | 1 | 4 | 0 |
-| C7 | 1 | 3 | 6 | 10 | 31 | 29 | 0 | 0 | 1 | 5 | 14 | 0 |
-| D8 | 9 | 12 | 14 | 0 | 20 | 0 | 0 | 0 | 36 | 2 | 7 | 0 |
-| D9 | 0 | 0 | 6 | 0 | 12 | 21 | 41 | 0 | 0 | 2 | 18 | 0 |
+| A1 | 51 | 23 | 9 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 1 | 0 |
+| A2 | 16 | 30 | 24 | 7 | 0 | 0 | 0 | 3 | 2 | 0 | 7 | 0 |
+| B3 | 2 | 7 | 9 | 10 | 0 | 0 | 0 | 1 | 32 | 4 | 24 | 0 |
+| B4 | 1 | 2 | 20 | 17 | 11 | 0 | 0 | 3 | 9 | 9 | 17 | 0 |
+| B5 | 2 | 5 | 13 | 0 | 29 | 0 | 0 | 3 | 11 | 4 | 22 | 0 |
+| C6 | 23 | 23 | 19 | 15 | 0 | 0 | 0 | 0 | 4 | 1 | 4 | 0 |
+| C7 | 1 | 3 | 6 | 8 | 28 | 26 | 0 | 0 | 1 | 3 | 13 | 0 |
+| D8 | 9 | 11 | 14 | 0 | 20 | 0 | 0 | 0 | 30 | 2 | 3 | 0 |
+| D9 | 0 | 0 | 6 | 10 | 20 | 0 | 39 | 0 | 0 | 2 | 12 | 0 |
 
 ## 5. Layer 3 — codes_per_region (the drill-down modal source)
 
 Each region's `(code, count)` list in the HTML, compared to value-counts of the unambiguous wolves' cleaned codes.
 
-✅ **All 205 distinct codes (across 9 regions) match expected counts.**
+✅ **All 192 distinct codes (across 9 regions) match expected counts.**
 
 
 ## 6. Layer 4 — cross-check: table cell statuses vs. chart bucket sums
@@ -65,15 +65,15 @@ Reference (per region, status counts, all confirmed):
 
 | region | Full (unambig.) | Asym. | Partial | P | N | Empty | total |
 |---|---|---|---|---|---|---|---|
-| A1 | 91 | 2 | 6 | 0 | 1 | 0 | 100 |
-| A2 | 83 | 3 | 7 | 0 | 7 | 0 | 100 |
-| B3 | 33 | 1 | 33 | 4 | 29 | 0 | 100 |
-| B4 | 59 | 3 | 9 | 9 | 20 | 0 | 100 |
-| B5 | 57 | 3 | 11 | 4 | 25 | 0 | 100 |
-| C6 | 89 | 0 | 6 | 1 | 4 | 0 | 100 |
-| C7 | 80 | 0 | 1 | 5 | 14 | 0 | 100 |
-| D8 | 55 | 0 | 36 | 2 | 7 | 0 | 100 |
-| D9 | 80 | 0 | 0 | 2 | 18 | 0 | 100 |
+| A1 | 83 | 2 | 3 | 0 | 1 | 0 | 89 |
+| A2 | 77 | 3 | 2 | 0 | 7 | 0 | 89 |
+| B3 | 28 | 1 | 32 | 4 | 24 | 0 | 89 |
+| B4 | 51 | 3 | 9 | 9 | 17 | 0 | 89 |
+| B5 | 49 | 3 | 11 | 4 | 22 | 0 | 89 |
+| C6 | 80 | 0 | 4 | 1 | 4 | 0 | 89 |
+| C7 | 72 | 0 | 1 | 3 | 13 | 0 | 89 |
+| D8 | 54 | 0 | 30 | 2 | 3 | 0 | 89 |
+| D9 | 75 | 0 | 0 | 2 | 12 | 0 | 89 |
 
 ## 7. Asymmetric wolves (sanity listing)
 

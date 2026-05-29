@@ -159,7 +159,7 @@ def main() -> None:
     apply_publication_style()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    df = load_data(only_with_pictures=True)
+    df = load_data()  # canonical: every wolf with code, from research cameras
     proc = process_all_regions(df)
     summary = region_summary(proc)
 

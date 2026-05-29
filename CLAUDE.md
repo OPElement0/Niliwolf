@@ -4,6 +4,34 @@
 
 ---
 
+## ✅ PHOTOGRAPHER-SOURCE WOLVES EXCLUDED (2026-05-29)
+
+Mentor decision (Nili reported 2026-05-29): wolves observed **only by external
+photographers** — i.e. `cams_spotted` contains no numeric camera token from
+the 1-60 research grid — are **out of the paper's analysis pool**.
+
+- **Canonical analysis pool is now 89 wolves** (was 100).
+- 11 photographer-only wolves excluded:
+  `In89, In90, In91, In92, In93, In94, In95, In96, In97, In98, In105`.
+  Photographers: `ariel shamir`, `omer weiner`, `elimelech`, `moshe_neeman`, `nevo_`.
+- **O66 was kept** — it had `cams_spotted = "31, omer weiner"`. The research
+  camera observation (camera 31) makes it valid. The photographer name was
+  stripped from the Excel; the cell is now `"31"`.
+- Backup of the pre-edit file: `wolves_data.OLD.before_photographer_filter.xlsx`.
+
+**Implementation:**
+- `wolf_lib.cams_source(cell)` classifies a `cams_spotted` value as
+  `"research"` / `"photographer"` / `"empty"`.
+- `wolf_lib.load_data(include_photographer_only=False)` — default excludes
+  photographer-only wolves from the pool. Set `True` for admin tooling.
+- `build_data_table.py` embeds photographer rows in the HTML (admins can
+  audit / export them) but hides them by default. Admin-only toggle
+  **"show photographer-source wolves"** reveals them with a pale-orange tint.
+- `step3_build_app.py`, `step3_panelA_rankfreq.py`, `verify_chart_vs_table.py`
+  all use the canonical 89-wolf pool.
+
+---
+
 ## ✅ NEW TABLE INTEGRATED (2026-05-02)
 
 The new, larger Excel file `Golan Hights wolves data.xlsx` has been integrated.
@@ -11,8 +39,11 @@ Status as of this session:
 
 - Source file moved into the project: `wolves_data.xlsx` (78.9 KB).
 - Backup of the previous file: `wolves_data.OLD.xlsx`.
-- Canonical analysis pool: **100 wolves** (every row with `code != null`).
-  Sheet (2) has 104 rows × 28 cols; 4 rows have empty `code` and are dropped.
+- Canonical analysis pool: **89 wolves** (every row with `code != null` AND
+  observed on the research camera grid). *(Originally documented as 100
+  here; reduced 2026-05-29 when photographer-only wolves were excluded —
+  see top of this file.)* Sheet (2) has 104 rows × 28 cols; 4 rows have
+  empty `code` and are dropped; an additional 11 rows are photographer-only.
   *(Previously listed as 99 with `#pictures > 0` — that filter was rescinded
   on 2026-05-11 per user statement: "any wolf with a code is an identified
   wolf; the picture count is informational only".)*
@@ -109,7 +140,7 @@ If any of those are true → **stop and discuss** before running `update.bat`.
 
 ## 1. Project Goal
 
-Analyse pelt pattern codes from **98 wolves** across **9 anatomical regions** to:
+Analyse pelt pattern codes from **89 wolves** across **9 anatomical regions** to:
 1. **Prove the methodology** — show that wolves can be identified individually from pelt patterns.
 2. **Describe the population** — characterize what was found in the Golan wolf population.
 
@@ -123,10 +154,12 @@ Final deliverable for the paper is **Figure 1**, an interactive HTML dashboard d
 |------|-------|
 | **Excel file** | `C:\Users\nilim\Desktop\wolf paper\wolves_data.xlsx` (in the project, not Downloads) |
 | **Sheet name** | `נתוני זיהוי זאבים (2)` (Hebrew — Wolf Identification Data) |
-| **Total rows in sheet** | 104 |
-| **Wolves analysed (canonical pool)** | **100** — filtered by `code != null` only |
-| **Excluded** | 4 rows with empty `code` (`M11H`, `F25`, `Y38`, trailing blank) |
-| **`#pictures` filter — NOT applied** | The picture count is informational only; data-entry errors in `#pictures` (e.g. `O80` currently has `#pictures=0` as a typo the user will fix) do NOT exclude a wolf from analysis. **Any wolf with a non-empty `code` IS an identified wolf.** |
+| **Total rows in sheet** | 100 (4 empty-code rows were removed 2026-05-12) |
+| **Wolves analysed (canonical pool)** | **89** — `code != null` AND `cams_spotted` has ≥1 numeric token (research camera 1-60) |
+| **Excluded — empty code** | 0 (the 4 empty rows were physically removed from the sheet on 2026-05-12: `M11H`, `F25`, `Y38`, trailing blank) |
+| **Excluded — photographer-only** | 11 — `In89, In90, In91, In92, In93, In94, In95, In96, In97, In98, In105`. Their `cams_spotted` contains only photographer names (`ariel shamir`, `omer weiner`, `elimelech`, `moshe_neeman`, `nevo_`). |
+| **O66 special case** | Kept in pool. Originally `cams_spotted = "31, omer weiner"`; the photographer name was stripped 2026-05-29 — cell is now `"31"`. |
+| **`#pictures` filter — NOT applied** | The picture count is informational only; data-entry errors in `#pictures` (e.g. `O80` currently has `#pictures=0` as a typo the user will fix) do NOT exclude a wolf from analysis. **Any wolf with a non-empty `code` AND a research camera number IS an identified wolf.** |
 | **Collection window** | 3 months |
 | **Same wolf rule** | One row per wolf regardless of how many times photographed |
 | **Other sheets** | `נתוני זיהוי זאבים` (106×21, no code/pictures — NOT used) and `גרפים` (11 rows, auxiliary) |
@@ -413,23 +446,25 @@ Implemented in `wolf_lib.identification_buckets(processed, region)` and `all_ide
 ## 9. Findings Summary (for reference)
 
 ### Per-region diversity & visibility (region_summary.csv)
-| Region | n_total | n_unambiguous | n_unique | H (bits) | Gini-Simpson | top_codes (count) | %usable |
-|--------|---------|---------------|----------|----------|--------------|-------------------|---------|
-| **A1** | 98 | 89 | **71** | **5.998** | 0.982 | b1i (5) | 99.0 |
-| A2 | 98 | 81 | 40 | 5.020 | 0.963 | a1i, a4f (6) | 92.9 |
-| B3 | 98 | 33 | 10 | 2.799 | 0.815 | b (18) | 66.3 |
-| B4 | 98 | 57 | 13 | 3.262 | 0.879 | b2b (11) | 70.4 |
-| B5 | 98 | 55 | 12 | 2.936 | 0.828 | a1b (18) | 70.4 |
-| **C6** | 98 | 88 | 41 | 4.886 | 0.954 | c1f, c1g (9) | 94.9 |
-| C7 | 98 | 78 | 7 | 2.370 | 0.773 | c (28) | 80.6 |
-| D8 | 98 | 54 | 18 | 3.344 | 0.829 | a4b5 (20) | 91.8 |
-| **D9** | 98 | 78 | **4** | **1.682** | 0.639 | a2 (40) | 79.6 |
+*(89-wolf canonical pool, 2026-05-29)*
 
-### Headline insights
-- **A1 is the strongest single-region identifier**: 55 of 98 wolves had a UNIQUE code (singleton).
-- **C6 is the second strongest**: 26 unique singletons, 41 distinct codes overall.
-- **D9 is essentially uninformative**: 0 singletons, only 4 distinct codes (a2 dominates with 40 wolves).
-- **B3 has the worst visibility**: 33 wolves marked N or P (66% usable).
+| Region | n_total | n_unambiguous | n_unique | H (bits) | top_codes (count) | %usable |
+|--------|---------|---------------|----------|----------|-------------------|---------|
+| **A1** | 89 | 83 | **66** | **5.887** | b1i (5) | 98.88 |
+| A2 | 89 | 77 | 38 | 4.929 | a1i, N (7) | 92.13 |
+| B3 | 89 | 28 | 9 | 2.734 | N (24) | 68.54 |
+| B4 | 89 | 51 | 12 | 3.175 | N (17) | 70.79 |
+| B5 | 89 | 49 | 12 | 2.864 | N (22) | 70.79 |
+| **C6** | 89 | 81 | 38 | 4.840 | c1g (8) | 94.38 |
+| C7 | 89 | 73 | 7 | 2.376 | c (26) | 82.02 |
+| D8 | 89 | 54 | 18 | 3.334 | a4b5 (20) | 94.38 |
+| **D9** | 89 | 75 | **4** | **1.678** | a2 (39) | 84.27 |
+
+### Headline insights *(refresh against `region_summary.csv` after any data change)*
+- **A1 is the strongest single-region identifier**: highest H and most distinct codes.
+- **C6 is the second strongest**: high H, many distinct codes.
+- **D9 is essentially uninformative**: only 4 distinct codes (a2 dominates).
+- **B3 has the worst visibility**: ~31% of wolves marked N or P.
 
 ### Asymmetric wolves (13 total across 5 regions)
 - A1: 2 (`Ra3vzfLb1f`, `Ra4vxiLa4txi`)
@@ -490,8 +525,10 @@ The user also wanted the heatmap (Graph 4) as supplementary — NOT YET BUILT.
 ```python
 from wolf_lib import load_data, process_all_regions, region_summary
 
-df = load_data(only_with_pictures=True)   # 98 wolves
-proc = process_all_regions(df)             # adds {region}_status, _cleaned, _right, _left, _color, _pattern
+df = load_data()                            # 89 wolves (canonical, research-cam only)
+# For admin / audit tooling that needs the full 100-row view:
+# df_full = load_data(include_photographer_only=True)
+proc = process_all_regions(df)              # adds {region}_status, _cleaned, _right, _left, _color, _pattern
 summary = region_summary(proc)
 ```
 

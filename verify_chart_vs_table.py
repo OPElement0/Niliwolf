@@ -455,12 +455,18 @@ def main() -> None:
     df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME)
     df.columns = [str(c).strip() for c in df.columns]
     n_total_rows = len(df)
-    n_pool = int(df["code"].notna().sum()) if "code" in df.columns else 0
+    # Tag every row with its cams_spotted source so we can mirror the
+    # canonical pool used by build_data_table (research-camera wolves only).
+    from wolf_lib import cams_source
+    df["_cams_source"] = df["cams_spotted"].apply(cams_source) if "cams_spotted" in df.columns else "empty"
+    n_pool = int((df["code"].notna() & (df["_cams_source"] != "photographer")).sum()) if "code" in df.columns else 0
     n_active = int((df["code"].notna() &
+                    (df["_cams_source"] != "photographer") &
                     (pd.to_numeric(df["#pictures"], errors="coerce").fillna(0) > 0)).sum())
 
     print("Processing through wolf_lib...")
-    df_pool = df[df["code"].notna()].copy()
+    # Canonical pool excludes (a) rows without a code AND (b) photographer-only rows.
+    df_pool = df[df["code"].notna() & (df["_cams_source"] != "photographer")].copy()
     processed = process_all_regions(df_pool)
 
     print("Extracting PAYLOAD from data_table.html...")

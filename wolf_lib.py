@@ -232,14 +232,60 @@ def split_color_pattern(code: str, region: str) -> tuple[str, str] | None:
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_data(path: Path = INPUT_FILE, only_with_pictures: bool = False) -> pd.DataFrame:
-    """Return the analysis pool: every wolf with a non-empty `code`.
+# Token splitter for cams_spotted: split on commas (and optional spaces).
+_CAMS_TOKEN_RE = re.compile(r"[,;]+")
+
+
+def cams_source(cams_spotted) -> str:
+    """Classify a `cams_spotted` cell by data source.
+
+    Returns one of:
+        'research'         — at least one token is a numeric camera ID (1–60).
+                              (Mixed cells like "31, omer weiner" also count as
+                              research — the research camera observation makes
+                              the wolf valid; the photographer entry is
+                              supplemental.)
+        'photographer'     — all tokens are non-numeric (photographer names
+                              or external reporter IDs). These wolves were
+                              NOT observed on the research camera grid.
+        'empty'            — cell is NaN or blank.
+    """
+    if cams_spotted is None:
+        return "empty"
+    if isinstance(cams_spotted, float) and np.isnan(cams_spotted):
+        return "empty"
+    s = str(cams_spotted).strip()
+    if s == "" or s.lower() == "nan":
+        return "empty"
+    tokens = [t.strip() for t in _CAMS_TOKEN_RE.split(s) if t.strip()]
+    if not tokens:
+        return "empty"
+    has_numeric = any(re.fullmatch(r"\d+", t) for t in tokens)
+    return "research" if has_numeric else "photographer"
+
+
+def load_data(
+    path: Path = INPUT_FILE,
+    only_with_pictures: bool = False,
+    include_photographer_only: bool = False,
+) -> pd.DataFrame:
+    """Return the analysis pool.
 
     Canonical rule (user-stated 2026-05-11): **any wolf that has a `code` value
-    is an identified wolf and is part of the analysis pool**, regardless of
-    `#pictures`. The picture count is informational only; data-entry errors
-    in `#pictures` (e.g. O80 currently has #pictures=0 as a typo to fix) MUST
-    NOT exclude a wolf from analysis.
+    is an identified wolf**, regardless of `#pictures`. The picture count is
+    informational only; data-entry errors in `#pictures` (e.g. O80 currently
+    has #pictures=0 as a typo) MUST NOT exclude a wolf from analysis.
+
+    Additional canonical rule (user-stated 2026-05-29, mentor decision):
+    **wolves observed only by external photographers (cams_spotted contains
+    NO numeric camera token) are EXCLUDED from the paper's analysis pool**.
+    They remain in the Excel file and are accessible via
+    `include_photographer_only=True` for admin/export purposes, but the
+    canonical analysis pool is research-camera wolves only.
+
+    The pool also adds a derived `cams_source` column with values
+    {"research", "photographer", "empty"} so downstream tools (data_table,
+    QC, etc.) can distinguish row provenance.
 
     `only_with_pictures=True` is preserved as an *optional* extra filter for
     studies that need photographed-only wolves, but it is NO LONGER the
@@ -250,6 +296,14 @@ def load_data(path: Path = INPUT_FILE, only_with_pictures: bool = False) -> pd.D
     # Canonical filter: keep every wolf with a non-empty `code`.
     if "code" in df.columns:
         df = df[df["code"].notna()].copy()
+    # Tag every row with its data source (research / photographer / empty).
+    if "cams_spotted" in df.columns:
+        df["cams_source"] = df["cams_spotted"].apply(cams_source)
+    else:
+        df["cams_source"] = "empty"
+    # Canonical analysis pool: exclude photographer-only wolves.
+    if not include_photographer_only:
+        df = df[df["cams_source"] != "photographer"].copy()
     if only_with_pictures:
         pics = pd.to_numeric(df["#pictures"], errors="coerce").fillna(0)
         df = df[pics > 0].copy()

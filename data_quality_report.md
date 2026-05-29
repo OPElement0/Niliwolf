@@ -1,9 +1,9 @@
 # Data Quality Report — `wolves_data.xlsx`
 
-**Generated:** 2026-05-22 02:48  
+**Generated:** 2026-05-29 21:29  
 **Source sheet:** `נתוני זיהוי זאבים (2)` (100 rows × 28 cols)
 
-> **From `data_decisions.json`:** 11 finding(s) suppressed (status=decided_keep), 0 carry a user comment, 0 marked `fixed_in_xlsx` but still detected.
+> **From `data_decisions.json`:** 10 finding(s) suppressed (status=decided_keep), 0 carry a user comment, 0 marked `fixed_in_xlsx` but still detected.
 
 ## Summary
 
@@ -62,7 +62,7 @@
 ## ⚠ Warnings
 
 ### cams_spotted: non-numeric token
-12 entry(ies) contain a token that is not a camera ID
+11 entry(ies) contain a token that is not a camera ID
 
 | serial | value | non_numeric_token |
 |---|---|---|

@@ -154,7 +154,10 @@ ID_BUCKET_COLORS = {
 # ---------------------------------------------------------------------------
 
 def build_data():
-    df = load_data(only_with_pictures=True)
+    # Canonical pool: every wolf with a code AND from the research camera
+    # grid (photographer-only wolves excluded). #pictures is informational
+    # only — a typo there must not silently drop a wolf.
+    df = load_data()
     proc = process_all_regions(df)
     summary = region_summary(proc)
 

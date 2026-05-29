@@ -32,6 +32,7 @@ from wolf_lib import (
     identification_buckets,
     ID_BUCKET_ORDER,
     split_color_pattern,
+    cams_source,
 )
 from step1d_dataqc import run_checks
 
@@ -362,6 +363,36 @@ LAND_USE_COLORS: dict[str, str] = {
 }
 
 
+# Per-pack interpretation overrides decided by Nili. These are *display rules*
+# layered on top of the raw `pack name` column in the Excel — see
+# SESSION_HANDOFF / CLAUDE.md for the rationale.
+#
+# Keys are canonical pack names (lowercase, trailing `*` stripped).
+#  - `expert_only=True` → the pack is known from local-expert reports, NOT
+#     from the research camera survey. Rendered in the sentinel/unknown
+#     section of the inventory table (and chart) rather than the real-packs
+#     section, so paper readers don't conflate it with camera-derived packs.
+#  - `unrecognized=N` → N additional wolves were observed alongside the
+#     identified pack members but were not photographed clearly enough to be
+#     individually ID'd. They count toward the pack's social-dynamic
+#     classification (pack/group/lone threshold) but are listed separately
+#     from the identified members.
+PACK_SPECIAL_RULES: dict[str, dict] = {
+    # M2k's pack assignment (`makhfi new`) is based on expert reporting only,
+    # not the camera survey. Per Nili (2026-05-29) fold M2k into the
+    # `indeterminate` sentinel bucket rather than show makhfi new as a row
+    # of its own.
+    "makhfi new": {
+        "reassign_to": "indeterminate",
+        "note": "M2k reassigned to indeterminate — makhfi new is expert-reported only, not in camera survey",
+    },
+    "snir": {
+        "unrecognized": 1,
+        "note": "1 additional wolf spotted but not photographed clearly enough to identify",
+    },
+}
+
+
 def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
     """Pre-compute per-polygon and per-pack breakdowns for the Social Dynamics tab.
 
@@ -412,6 +443,13 @@ def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
             pack_canon = MAKHFI_UNKNOWN
         elif not pack_canon:
             pack_canon = NO_PACK
+        # Apply per-pack reassignment rules (PACK_SPECIAL_RULES). E.g. M2k's
+        # `pack name = "makhfi new"` is rewritten to "indeterminate" so M2k
+        # is folded into that sentinel bucket and makhfi new doesn't appear
+        # as its own pack row.
+        rule = PACK_SPECIAL_RULES.get(pack_canon.lower(), {})
+        if rule.get("reassign_to"):
+            pack_canon = rule["reassign_to"]
         social_raw = (str(row["social dynamic"]) if pd.notna(row["social dynamic"]) else "").strip()
         social_canon, social_probable = _strip_star(social_raw) if social_raw else ("", False)
         if not social_canon:
@@ -479,12 +517,22 @@ def _build_social_dynamics(df_pool: pd.DataFrame) -> dict:
         del b["polygons"]
         b["members"].sort()
         b["probable_members"].sort()
+        # Apply per-pack overrides that act on the (already-built) pack
+        # bucket — currently just the `unrecognized` companion count.
+        # The `reassign_to` rule was already applied per-wolf during the
+        # records loop, so reassigned pack names never reach this point.
+        rule = PACK_SPECIAL_RULES.get(pc.lower(), {})
+        b["unrecognized"] = int(rule.get("unrecognized", 0))
+        b["special_note"] = str(rule.get("note", "")) if rule.get("unrecognized") else ""
+        # Effective count for pack/group/lone classification — unrecognized
+        # companions count, even though they aren't individually listed.
+        b["effective_total"] = b["total"] + b["unrecognized"]
 
-    # Ordering: real packs (not 'lone' / 'unknown' / NO_PACK), then sentinels
+    # Ordering: real packs (not 'lone' / 'unknown' / NO_PACK), then sentinels.
     sentinels = {"lone", "unknown", "indeterminate", NO_PACK}
     real_packs = sorted(
         [b for pc, b in pack_inventory.items() if pc not in sentinels],
-        key=lambda x: (-x["total"], x["name"]),
+        key=lambda x: (-x["effective_total"], x["name"]),
     )
     sentinel_packs = sorted(
         [b for pc, b in pack_inventory.items() if pc in sentinels],
@@ -687,11 +735,21 @@ def _build_pack_signatures(df_pool: pd.DataFrame, processed: pd.DataFrame) -> di
             if col_dist:
                 col_homog_pcts.append(max(col_dist.values()) / sum(col_dist.values()))
 
+        # Derived for the cross-pack colour-signature matrix:
+        # - land_use: from the main polygon via LAND_USE_BY_POLYGON
+        # - group_type: per pack_inference_criteria — n >= 5 is "pack",
+        #   2-4 is "group" (rows with n < 2 are filtered out above)
+        main_poly_canon = (main_poly or "").lower()
+        land_use = LAND_USE_BY_POLYGON.get(main_poly_canon, "Unclassified")
+        group_type = "pack" if n >= 5 else "group"
+
         packs_out.append({
             "canon": pc,
             "display": display_names[pc],
             "n": n,
             "main_polygon": main_poly,
+            "land_use": land_use,
+            "group_type": group_type,
             "members": members,
             "regions": regions_data,
             "summary": {
@@ -767,6 +825,7 @@ def _build_pack_signatures(df_pool: pd.DataFrame, processed: pd.DataFrame) -> di
         "role_map": role_map,
         "top_packs_per_region": top_packs_per_region,
         "n_packs": len(packs_out),
+        "landuse_colors": LAND_USE_COLORS,
     }
 
 
@@ -818,8 +877,10 @@ def _build_identification_power(processed: pd.DataFrame) -> dict:
         return sum(1 for s in sigs if len(s) > 0 and counts[s] == 1)
 
     # ---- Single-region (k=1) ----
+    # Natural anatomical order (A1, A2, B3, …, D9) — per user request 2026-05-29.
+    # The chart used to sort by descending count, but A→D order is more readable
+    # and lets the per-bar region icons line up with the table conventions.
     single = [{"region": r, "identifiable": n_identifiable([r])} for r in regions]
-    single.sort(key=lambda x: -x["identifiable"])
 
     # ---- Greedy ladder ----
     remaining = set(regions)
@@ -1082,8 +1143,19 @@ def main() -> None:
     df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME)
     df.columns = [str(c).strip() for c in df.columns]
 
+    # Tag every row with its cams_spotted provenance so the front-end can
+    # decide what the viewer / admin sees. Values: "research" (≥1 numeric
+    # camera token), "photographer" (only photographer names — excluded from
+    # the canonical paper pool per the 2026-05-29 mentor decision), "empty".
+    if "cams_spotted" in df.columns:
+        df["_cams_source"] = df["cams_spotted"].apply(cams_source)
+    else:
+        df["_cams_source"] = "empty"
+
     # ----- Compute per-region status using wolf_lib (only on the analysis pool) -----
-    df_pool = df[df["code"].notna()].copy()
+    # Canonical pool excludes (a) rows without a code AND (b) photographer-only
+    # rows (cams_spotted has no numeric camera token).
+    df_pool = df[df["code"].notna() & (df["_cams_source"] != "photographer")].copy()
     processed = process_all_regions(df_pool)
     # Map: original sheet row index -> {region: status_string}
     status_by_row: dict[int, dict[str, str]] = {}
@@ -1150,6 +1222,8 @@ def main() -> None:
     for idx, row in df.iterrows():
         record = {"_row_index": int(idx)}
         for col, val in row.items():
+            if col == "_cams_source":
+                continue  # carried separately on `_source`, not as a column
             if pd.isna(val):
                 record[col] = ""
             elif isinstance(val, (int, float)):
@@ -1161,10 +1235,21 @@ def main() -> None:
                 record[col] = str(val)
         # Attach per-region status so the JS can highlight cells & filter rows.
         record["_status"] = status_by_row.get(int(idx), {r: "empty" for r in REGIONS})
+        # Tag row provenance so the front-end can hide photographer-only
+        # wolves in viewer mode (admin can opt-in to view/export them).
+        record["_source"] = str(row.get("_cams_source", "empty"))
         rows.append(record)
 
-    columns = list(df.columns)
-    n_visible = int(df["code"].notna().sum()) if "code" in df.columns else len(df)
+    # Drop the internal _cams_source from the exported column list — it's
+    # carried separately on each row (see record["_source"] below) and
+    # shouldn't appear as a user-visible column in the table.
+    columns = [c for c in df.columns if c != "_cams_source"]
+    # n_visible matches what the viewer sees by default: rows with a code
+    # AND from the research camera grid (photographer-only wolves hidden).
+    if "code" in df.columns:
+        n_visible = int((df["code"].notna() & (df["_cams_source"] != "photographer")).sum())
+    else:
+        n_visible = len(df)
 
     pwd_hash = hashlib.sha256(PASSWORD.encode("utf-8")).hexdigest()
     xlsx_b64 = base64.b64encode(INPUT_FILE.read_bytes()).decode("ascii")
@@ -1344,6 +1429,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   .tabulator { font-size: 12.5px; }
   .tabulator-row.row-empty-code { background: #fffde7 !important; }
+  /* Photographer-source wolves: not part of the canonical paper pool.
+     Hidden from viewers, shown to admins tinted in pale orange. */
+  .tabulator-row.row-photographer-source { background: #ffe0b2 !important; }
 
   /* Status filter chips */
   .status-filter-bar {
@@ -1524,6 +1612,95 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
   .social-card .chart-host.tall { height: 540px; min-height: 420px; }
   .social-card .chart-host.short { height: 320px; min-height: 240px; }
+
+  /* Pack inventory tables (3 alternative layouts) */
+  .pack-tables-tabs {
+    display: flex; gap: 6px; margin: 8px 0 12px;
+    flex-wrap: wrap;
+  }
+  .pack-tables-tab {
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+    background: #fff; border: 1px solid #ddd; border-radius: 6px;
+    color: #555; font-weight: 500; user-select: none;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .pack-tables-tab:hover { background: #f0f0f0; }
+  .pack-tables-tab.active {
+    background: #1565C0; border-color: #1565C0; color: #fff;
+  }
+  .pack-table-panel { display: none; }
+  .pack-table-panel.active { display: block; }
+  .pack-table-wrap {
+    overflow-x: auto; max-width: 100%;
+    border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  table.pack-table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+    background: #fff; color: #333;
+  }
+  table.pack-table th {
+    background: #f5f6f8; padding: 8px 10px; text-align: left;
+    font-weight: 600; font-size: 11.5px; color: #555;
+    border-bottom: 1.5px solid #ddd; white-space: nowrap;
+    position: sticky; top: 0;
+  }
+  table.pack-table th.sortable { cursor: pointer; user-select: none; }
+  table.pack-table th.sortable:hover { background: #ebedf0; }
+  table.pack-table th.num, table.pack-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.pack-table td {
+    padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top;
+  }
+  table.pack-table tr:hover td { background: #f9fafb; }
+  table.pack-table tr.sentinel td { background: #fafafa; color: #777; font-style: italic; }
+  table.pack-table tr.sentinel:hover td { background: #f3f3f3; }
+  table.pack-table tr.divider td {
+    background: transparent; border-bottom: 2px dashed #ccc;
+    padding: 4px 10px; color: #999; font-size: 11px; font-style: italic;
+  }
+  /* Land-use color chip used in detailed table */
+  .lu-chip {
+    display: inline-block; width: 11px; height: 11px; border-radius: 3px;
+    margin-right: 6px; vertical-align: -1px;
+  }
+  .lu-name { font-size: 12px; color: #444; }
+  /* Member list inside a cell — wrap nicely, comma-separated */
+  .pack-members {
+    font-size: 11.5px; color: #555; line-height: 1.5;
+    word-break: break-word;
+  }
+  .pack-members .star { color: #777; font-weight: 600; }
+  /* Grouped table (Variant B) */
+  table.pack-table tr.group-header td {
+    background: linear-gradient(to right, var(--lu-color, #888) 0%, var(--lu-color, #888) 4px, #f5f6f8 4px);
+    font-weight: 700; color: #222; padding: 10px 10px 8px;
+    border-top: 1px solid #ddd; border-bottom: 1.5px solid #ddd;
+    font-size: 12.5px; letter-spacing: 0.02em;
+  }
+  table.pack-table tr.subtotal td {
+    background: #f5f6f8; font-weight: 600; color: #444;
+    border-top: 1px solid #ddd; font-size: 12px;
+  }
+  /* Compact table (Variant C) tweaks */
+  table.pack-table.compact { font-size: 11.5px; }
+  table.pack-table.compact td, table.pack-table.compact th { padding: 6px 8px; }
+  table.pack-table.compact .pack-members { font-size: 11px; }
+  /* Pack-type chip (pack / group / lone) — muted so it doesn't compete with
+     the land-use chip. Each type gets a faint tinted background + matching
+     text colour. Sized small so it reads as metadata, not as a value. */
+  .type-chip {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+    margin-left: 6px; vertical-align: 1px;
+    border: 1px solid transparent;
+  }
+  .type-chip.t-pack  { background: #e3f0e6; color: #2e7d32; border-color: #cfe3d4; }
+  .type-chip.t-group { background: #fcecd9; color: #b85a00; border-color: #f3dab8; }
+  .type-chip.t-lone  { background: #ececec; color: #666;    border-color: #dcdcdc; }
+  /* Threshold footnote below each table */
+  .pack-threshold-note {
+    margin-top: 6px; font-size: 10.5px; color: #888; font-style: italic;
+    padding: 0 2px;
+  }
   .social-grid-2col {
     display: grid; gap: 18px; grid-template-columns: 1fr;
   }
@@ -1752,8 +1929,48 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .sigs-matrix .pack-name { text-align: left; font-weight: 700; background: #fafafa; }
   .sigs-matrix .cell-content { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.1; }
   .sigs-matrix .modal-letter { font-weight: 700; font-size: 14px; }
+  /* Allow colour names to wrap at hyphens / spaces so "gold-honey-ginger"
+     and similar long names stay fully visible inside their cell. */
+  .sigs-matrix .modal-name {
+    font-weight: 700; font-size: 11.5px; line-height: 1.18;
+    text-align: center; padding: 0 2px;
+    white-space: normal; word-break: normal; overflow-wrap: anywhere;
+    hyphens: manual;
+  }
   .sigs-matrix .modal-pct { font-size: 9.5px; opacity: 0.9; }
-  .sigs-matrix .secondary { font-size: 9px; opacity: 0.85; }
+  .sigs-matrix td.sigs-meta { font-size: 11px; font-weight: 500; padding: 5px 6px; }
+  /* Give the four colour columns more room so the names fit on 1-2 lines. */
+  .sigs-matrix th.sigs-col-color, .sigs-matrix td.sigs-col-color { min-width: 110px; }
+  /* Uniform row height — without this, rows whose cells are all single-modal
+     (e.g. yehodiya trio) render shorter than rows containing tie cells. */
+  .sigs-matrix tbody td { height: 56px; }
+  /* Tie cell: strips must fill the td edge-to-edge, even when the row is
+     taller than the strips' natural height (no white gaps above/below). */
+  .sigs-matrix td.sigs-tie { padding: 0; position: relative; min-height: 44px; }
+  .sigs-matrix .sigs-tie-strips { position: absolute; inset: 0; display: flex; width: 100%; height: 100%; }
+  .sigs-matrix .sigs-tie-strip { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; padding: 4px 3px; gap: 1px; }
+  .sigs-matrix .sigs-tie-strip .modal-name { font-size: 10.5px; }
+  .sigs-matrix .sigs-tie-strip .modal-pct { font-size: 9.5px; opacity: 0.9; }
+  /* 3+ tied colours = narrow strips. Shrink the name and count so they stay
+     readable instead of being clipped or wrapping awkwardly. */
+  .sigs-matrix .sigs-tie-strips[data-n="3"] .sigs-tie-strip .modal-name { font-size: 9.5px; line-height: 1.12; }
+  .sigs-matrix .sigs-tie-strips[data-n="3"] .sigs-tie-strip .modal-pct { font-size: 8.5px; }
+  .sigs-matrix .sigs-tie-strips[data-n="3"] .sigs-tie-strip { padding: 3px 2px; }
+  .sigs-matrix .sigs-tie-strips[data-n="4"] .sigs-tie-strip .modal-name,
+  .sigs-matrix .sigs-tie-strips[data-n="5"] .sigs-tie-strip .modal-name,
+  .sigs-matrix .sigs-tie-strips[data-n="6"] .sigs-tie-strip .modal-name { font-size: 8.5px; line-height: 1.1; }
+  .sigs-matrix .sigs-tie-strips[data-n="4"] .sigs-tie-strip .modal-pct,
+  .sigs-matrix .sigs-tie-strips[data-n="5"] .sigs-tie-strip .modal-pct,
+  .sigs-matrix .sigs-tie-strips[data-n="6"] .sigs-tie-strip .modal-pct { font-size: 8px; }
+  .sigs-matrix .sigs-tie-strips[data-n="4"] .sigs-tie-strip,
+  .sigs-matrix .sigs-tie-strips[data-n="5"] .sigs-tie-strip,
+  .sigs-matrix .sigs-tie-strips[data-n="6"] .sigs-tie-strip { padding: 2px 1px; }
+  /* Long names (3+ tokens, e.g. "very dark brown") inside 3+ tie cells get an
+     extra shrink so they fit on 2 lines max in the narrow strip. */
+  .sigs-matrix .sigs-tie-strips[data-n="3"] .sigs-tie-strip .modal-name.long-name { font-size: 8.5px; line-height: 1.05; }
+  .sigs-matrix .sigs-tie-strips[data-n="4"] .sigs-tie-strip .modal-name.long-name,
+  .sigs-matrix .sigs-tie-strips[data-n="5"] .sigs-tie-strip .modal-name.long-name,
+  .sigs-matrix .sigs-tie-strips[data-n="6"] .sigs-tie-strip .modal-name.long-name { font-size: 7.5px; line-height: 1.05; }
   .sigs-role-map { width: 100%; max-width: 620px; border-collapse: collapse; font-size: 11.5px; }
   .sigs-role-map th, .sigs-role-map td { border: 1px solid #e5e5e5; padding: 6px 10px; text-align: center; }
   .sigs-role-map th { background: #f7f7f7; font-size: 10.5px; font-weight: 700; }
@@ -1920,7 +2137,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div>
       <h1>Wolves Data — Interactive Table <span id="mode-badge" class="mode-badge mode-viewer">VIEWER</span></h1>
       <div class="stats">
-        <div class="stat">total rows: <strong id="stat-total">0</strong></div>
+        <div class="stat" title="Canonical analysis pool: every wolf with a code AND ≥1 numeric camera token (research grid). Photographer-only wolves are excluded per the 2026-05-29 mentor decision.">wolves in pool: <strong id="stat-pool">0</strong></div>
         <div class="stat">visible: <strong id="stat-visible">0</strong></div>
         <div class="stat">last refresh: <strong id="stat-build">—</strong></div>
       </div>
@@ -1942,6 +2159,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div class="controls">
     <input type="text" id="search-input" placeholder="Search across all columns…" />
     <label><input type="checkbox" id="show-empty-code" /> show wolves with no code</label>
+    <label id="show-photographer-wrap" style="display:none;" title="Wolves observed only by external photographers — excluded from the paper pool. Admin-only.">
+      <input type="checkbox" id="show-photographer" /> show photographer-source wolves
+    </label>
     <label><input type="checkbox" id="show-status-bars" checked /> region status badges</label>
     <div id="col-toggle-wrap" style="position:relative; display:inline-block;">
       <button id="col-toggle-btn" type="button">Columns ▼</button>
@@ -2139,13 +2359,19 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     Each column represents one region; each bar holds 100% of the analysed wolves
     (n = <span id="dist-n-cont">0</span>). <strong>Unique</strong> = wolves whose
     code in this region appears in no other wolf. The <strong>Shared</strong>
-    portion — every band above the green Unique base — is a <em>continuous</em>
-    heat-map: each band is coloured by the exact number of wolves that share that
-    code (light green = shared by few, dark brown = shared by many), and the
-    colour bar on the right maps shade to share-count.
-    <strong>Asymmetric</strong> / <strong>Partial</strong> / <strong>P</strong> /
-    <strong>N</strong> = non-resolvable categories. Segments ≥10% are labelled
-    with their percentage and code(s). Hover any segment for exact counts; use
+    portion — every band above the dark-green Unique base — is a
+    <em>continuous</em> heat-map: each band is coloured by the exact number of
+    wolves that share that code (<strong>darkest green</strong> = shared by few,
+    <strong>palest green</strong> = shared by many), and the colour bar on the
+    right maps shade to share-count.
+    <strong>Asymmetric</strong> = wolf carries a different code on its right vs.
+    left side; <strong>Partial</strong> = code is a substring of another code or
+    has a missing character; <strong>P</strong> = a fur marking is visible but
+    too indistinct to assign a code (the presence itself is informative — we
+    know <em>something</em> is there); <strong>N</strong> = no codable view —
+    either the region was never captured in any photo, or it was captured but
+    too poorly (angle, lighting, blur) to read anything from. Segments ≥10% are
+    labelled with their percentage; hover any segment for exact counts. Use
     Plotly's camera icon to download as PNG.
   </div>
   <div id="region-distribution-chart-cont"></div>
@@ -2188,13 +2414,31 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="social-card">
       <h3>2. Pack inventory — sizes and home polygons</h3>
       <div class="card-sub">
-        Each row is one identified pack. Solid bar = certain members,
-        lighter hatched extension = probable members (asterisk).
-        Bar colour = <strong>land-use class</strong> of the pack's home polygon
-        (blue=Nature Reserve, orange=Minefield, pink=High Culling, green=Low Culling).
-        Lone / no-pack wolves shown below the divider in neutral grey.
+        Each row is one identified pack. <strong>Land-use chip</strong> shows the
+        class of the pack's home polygon (blue=Nature Reserve, orange=Minefield,
+        pink=High Culling, green=Low Culling). Sentinels (lone / no-pack /
+        indeterminate) sit below the divider in muted grey.
       </div>
-      <div class="chart-host tall" id="social-pack-chart"></div>
+      <div class="pack-tables-tabs" role="tablist" aria-label="Pack inventory table variants">
+        <div class="pack-tables-tab active" data-pack-variant="A" role="tab" tabindex="0">A · Sortable detailed</div>
+        <div class="pack-tables-tab" data-pack-variant="C" role="tab" tabindex="0">C · Compact (publication)</div>
+      </div>
+      <div class="pack-table-panel active" data-pack-panel="A">
+        <div class="pack-table-wrap"><table class="pack-table" id="pack-table-A"></table></div>
+        <div class="pack-threshold-note">
+          Threshold (Nili field rule): <strong>pack</strong> = 5+ wolves &nbsp;·&nbsp;
+          <strong>group</strong> = 2–4 &nbsp;·&nbsp; <strong>lone</strong> = 1 &nbsp;·&nbsp;
+          counts include probable* members.
+        </div>
+      </div>
+      <div class="pack-table-panel" data-pack-panel="C">
+        <div class="pack-table-wrap"><table class="pack-table compact" id="pack-table-C"></table></div>
+        <div class="pack-threshold-note">
+          Threshold (Nili field rule): <strong>pack</strong> = 5+ wolves &nbsp;·&nbsp;
+          <strong>group</strong> = 2–4 &nbsp;·&nbsp; <strong>lone</strong> = 1 &nbsp;·&nbsp;
+          counts include probable* members.
+        </div>
+      </div>
     </div>
 
     <div class="social-card">
@@ -2211,7 +2455,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
     <div class="social-card">
       <h3>4. Overall social-dynamic mix</h3>
-      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. The bubble at each hatched wedge gives that category's probable (*) count.</div>
+      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. Leader-line callouts point from each hatched wedge to its probable (*) count and its share of the pool.</div>
       <div class="chart-host" id="social-donut-chart"></div>
     </div>
   </div>
@@ -2229,14 +2473,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <div class="sigs-container">
     <div class="sigs-block">
+      <h3>Cross-pack colour signatures</h3>
+      <div class="sub">Per pack × per colour-bearing region: the most-common colour in that pack (large), its share, and 1–2 secondary colours. When multiple colours tie for the top count, the cell is split into one strip per tied colour. Cell background uses each region's reference palette (bubble shades from the colour-code maps).</div>
+      <div id="sigs-color-matrix"></div>
+    </div>
+    <div class="sigs-block">
       <h3>Top 3 packs per region — colour / contrast comparison</h3>
       <div class="sub">For each region: the three packs whose colour (A1/A2/C6/D8), contrast (B3/B4/B5/D9), or pattern (C7) is most consistent within the pack. Each vertical bar shows one pack's full within-pack distribution at the region's primary axis; the diagonal-striped grey segment marks wolves without info on this axis (N/P or code missing the relevant half), so each bar represents the whole pack. Packs with fewer than 3 observed wolves on that region are excluded so small-sample 100%s don't dominate.</div>
       <div id="sigs-top3-comparison"></div>
-    </div>
-    <div class="sigs-block">
-      <h3>Cross-pack colour signatures</h3>
-      <div class="sub">Per pack × per colour-bearing region: modal colour (large), share, and 1–2 secondary colours. Cell background uses each region's reference palette (bubble shades from the colour-code maps).</div>
-      <div id="sigs-color-matrix"></div>
     </div>
     <div class="sigs-block">
       <h3>Region-role map</h3>
@@ -2539,6 +2783,8 @@ function rowFormatter(row) {
   const data = row.getData();
   if (!data["code"] || data["code"] === "") row.getElement().classList.add("row-empty-code");
   else row.getElement().classList.remove("row-empty-code");
+  if (data["_source"] === "photographer") row.getElement().classList.add("row-photographer-source");
+  else row.getElement().classList.remove("row-photographer-source");
 }
 
 // Smart filter state. Each set holds the *canonical* values currently selected
@@ -2559,6 +2805,10 @@ function _canonStarStripped(v) {
 function applyFilters() {
   if (!table) return;
   const showEmpty = isAdmin || $("show-empty-code").checked;
+  // Photographer-source rows are excluded from the canonical paper pool.
+  // Viewers never see them; admins can opt in via the "show photographer-source
+  // wolves" checkbox (default off — even admins see the paper pool by default).
+  const showPhotographer = isAdmin && $("show-photographer") && $("show-photographer").checked;
   const q = ($("search-input").value || "").trim().toLowerCase();
   const activeStatuses = window._activeStatuses || new Set();
   const sf = window._smartFilters;
@@ -2567,6 +2817,7 @@ function applyFilters() {
       const code = row["code"];
       if (code === undefined || code === null || code === "") return false;
     }
+    if (!showPhotographer && row["_source"] === "photographer") return false;
     // Smart filters (AND between dimensions, OR within each dimension)
     if (sf.polygon.size > 0 && !sf.polygon.has(_canonPolygon(row["main poligon"]))) return false;
     if (sf.pack.size    > 0 && !sf.pack.has(_canonStarStripped(row["pack name"])))   return false;
@@ -2634,7 +2885,14 @@ function setMode(adminOn) {
   $("admin-bar").classList.toggle("show", adminOn);
   $("table-download-bar").classList.toggle("show", adminOn);
   $("admin-login-btn").style.display = adminOn ? "none" : "";
-  if (!adminOn) toggleIssuePanel(false);
+  // The "show photographer-source wolves" toggle is admin-only.
+  if ($("show-photographer-wrap")) {
+    $("show-photographer-wrap").style.display = adminOn ? "" : "none";
+  }
+  if (!adminOn) {
+    if ($("show-photographer")) $("show-photographer").checked = false;
+    toggleIssuePanel(false);
+  }
   // Rebuild table to swap editor states
   rebuildTable();
 }
@@ -3313,39 +3571,23 @@ function renderRegionDistributionChartContinuous() {
     });
   }
 
-  // Per region: distinct codes grouped by their share-count, plus the largest
-  // share-count. Used for the in-bar labels.
-  const codesByCount = {};   // region -> { share-count k -> [codes] }
-  const maxCountOf = {};     // region -> largest share-count in that region
-  for (const r of regions) {
-    const byCount = {};
-    let mx = 0;
-    for (const c of (codesPR[r] || [])) {
-      (byCount[c.count] = byCount[c.count] || []).push(c.code);
-      if (c.count > mx) mx = c.count;
-    }
-    codesByCount[r] = byCount;
-    maxCountOf[r] = mx;
-  }
-  // Label for a list of codes: the code(s) when there are 1-2, otherwise just
-  // the count ("N codes") — keeps crowded low-share bands legible (Nili 2026-05-22).
-  const codeLabel = C => (!C || !C.length) ? ""
-    : (C.length <= 2 ? C.join(", ") : (C.length + " codes"));
   const rgbText = rgb => (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]) > 165 ? "#222" : "#fff";
 
-  // Continuous heat scale: 2 .. the real maximum share-count (maxK).
-  // The five fixed low-end anchors stay dense (most codes have low share
-  // counts, so they need the colour range); the final brown anchor is pinned
-  // to maxK, so the gradient — and the colour bar — end exactly at the largest
-  // number of wolves any single code is shared by.
+  // Continuous heat scale: 2 .. the real maximum share-count (maxK), green-only
+  // ramp. Darkest green = most unique end (k=2); palest green = most common
+  // (k=maxK). Stays a shade lighter than the discrete Unique (1) #1B5E20 so
+  // the two greens read as related but distinct. The five fixed low-end
+  // anchors stay dense (most codes have low share counts); the final pale
+  // anchor is pinned to maxK so gradient and colour bar end exactly at the
+  // largest number of wolves any single code is shared by.
   const heatAnchors = [
-    [2,  [0x66, 0xBB, 0x6A]],
-    [4,  [0xC5, 0xE1, 0xA5]],
-    [7,  [0xFF, 0xF1, 0x76]],
-    [11, [0xFF, 0xB7, 0x4D]],
-    [21, [0xF5, 0x7C, 0x00]],
+    [2,  [0x2E, 0x7D, 0x32]],
+    [4,  [0x43, 0xA0, 0x47]],
+    [7,  [0x66, 0xBB, 0x6A]],
+    [11, [0xA5, 0xD6, 0xA7]],
+    [21, [0xC8, 0xE6, 0xC9]],
   ].filter(a => a[0] < maxK);
-  heatAnchors.push([maxK, [0x6D, 0x4C, 0x41]]);
+  heatAnchors.push([maxK, [0xE8, 0xF5, 0xE9]]);
 
   // (2) Shared bands — one trace per exact share-count k, continuous colour,
   // no border (so the stack reads as a smooth gradient), no legend entry.
@@ -3356,18 +3598,9 @@ function renderRegionDistributionChartContinuous() {
       name: "shared x" + k, type: "bar", x: regions,
       y: ys, customdata: counts,
       showlegend: false,
-      // In-bar label. A segment >= 10% of the bar shows its percentage plus the
-      // code(s) at that share-count — listed when 1-2, summarised as "N codes"
-      // when 3+. Sub-10% segments stay blank except the region's most-common-
-      // code band, which keeps its code label.
-      text: regions.map((r, i) => {
-        const here = (codesByCount[r] || {})[k] || [];
-        if (ys[i] >= 10) {
-          return here.length ? (ys[i].toFixed(0) + "%, " + codeLabel(here))
-                              : (ys[i].toFixed(0) + "%");
-        }
-        return (k === maxCountOf[r]) ? codeLabel(here) : "";
-      }),
+      // In-bar label. Percentage only when the segment is >= 10% of the bar;
+      // code names are no longer shown (Nili 2026-05-29).
+      text: ys.map(y => y >= 10 ? y.toFixed(0) + "%" : ""),
       textposition: "inside", insidetextanchor: "middle", cliponaxis: false,
       textfont: { color: rgbText(heatRGB(k, heatAnchors)), size: 10, family: "sans-serif" },
       marker: { color: heatColor(k, heatAnchors), line: { width: 0 } },
@@ -3377,12 +3610,18 @@ function renderRegionDistributionChartContinuous() {
   }
 
   // (3) Non-resolvable categories — discrete, unchanged from version A.
+  // Legend label expands P and N inline so the legend itself explains them;
+  // the bucket key b stays short for colour / dist / hover lookups.
+  const bucketLegendLabel = {
+    "P": "P — marking present, code unclear",
+    "N": "N — not codable",
+  };
   for (const b of ["Asymmetric", "Partial-ambiguous", "P", "N", "Empty"]) {
     const counts = regions.map(r => (dist[r] || {})[b] || 0);
     if (counts.every(c => c === 0)) continue;
     const ys = regions.map((r, i) => pct(r, counts[i]));
     traces.push({
-      name: b, type: "bar", x: regions, y: ys, customdata: counts,
+      name: bucketLegendLabel[b] || b, type: "bar", x: regions, y: ys, customdata: counts,
       text: ys.map(y => y >= 10 ? y.toFixed(0) + "%" : ""),
       textposition: "inside", insidetextanchor: "middle",
       textfont: { color: hexText(colors[b]), size: 11, family: "sans-serif" },
@@ -3508,14 +3747,20 @@ function renderIdentificationPowerTab() {
 
 function renderSingleRegionBar(ip) {
   const N = ip.n_pool;
-  const data = ip.single.slice();  // already sorted desc by Python
+  const A = PAYLOAD.anatomy;
+  // Natural A1, A2, B3, …, D9 order (Python now serves this order; no sort).
+  const data = ip.single.slice();
   const regions = data.map(d => d.region);
   const counts = data.map(d => d.identifiable);
-  const colors = regions.map(r => {
-    const grp = PAYLOAD.anatomy.region_group[r];
-    return PAYLOAD.anatomy.group_colors[grp];
-  });
+  const colors = regions.map(r => A.group_colors[A.region_group[r]]);
   const labels = counts.map(c => c > 0 ? `${c}` : "");
+  // Y-axis tick labels: the region code (A1, A2, …) coloured by anatomical
+  // group. The descriptive name is intentionally omitted per Nili's request
+  // (2026-05-29) — the mini icon already conveys the anatomical area.
+  const ticktext = regions.map(r => {
+    const c = A.group_colors[A.region_group[r]];
+    return `<span style="color:${c}; font-weight:700;">${r}</span>`;
+  });
   const trace = {
     y: regions, x: counts,
     type: "bar", orientation: "h",
@@ -3524,19 +3769,40 @@ function renderSingleRegionBar(ip) {
     textfont: { size: 11, color: "#222" },
     hovertemplate: "<b>%{y} alone</b><br>%{x}/" + N + " wolves identifiable<extra></extra>",
   };
+  // Region icons placed at the far left, before the region-code labels.
+  const icons = A.region_icons || {};
+  const images = [];
+  regions.forEach(r => {
+    if (icons[r]) {
+      images.push({
+        source: icons[r],
+        xref: "paper", yref: "y",
+        x: -0.16, y: r,
+        sizex: 0.10, sizey: 0.85,
+        xanchor: "left", yanchor: "middle",
+        sizing: "contain",
+        layer: "above",
+      });
+    }
+  });
   Plotly.newPlot("idpower-single-chart", [trace], {
     height: 420,
-    margin: { l: 36, r: 38, t: 18, b: 40 },
+    margin: { l: 130, r: 38, t: 18, b: 40 },
     yaxis: {
-      autorange: "reversed", tickfont: { size: 12, family: "sans-serif" },
+      autorange: "reversed",
+      tickmode: "array",
+      tickvals: regions,
+      ticktext: ticktext,
+      tickfont: { size: 12, family: "sans-serif" },
       fixedrange: true,
     },
     xaxis: {
       title: { text: "Wolves identifiable (k=1)", font: { size: 11 } },
-      range: [0, N + 6], gridcolor: "#eee", fixedrange: true,
+      range: [0, 60], gridcolor: "#eee", fixedrange: true,
     },
     plot_bgcolor: "#fff", paper_bgcolor: "#fff",
     showlegend: false,
+    images: images,
   }, plotlyConfig("wolf_identification_power"));
 }
 
@@ -3606,7 +3872,8 @@ function renderSocialDynamicsTab() {
       ` &nbsp;·&nbsp; ${sd.n_excluded_no_polygon} wolves excluded (photographer-sourced, no known location)`;
   }
   renderSocialPolygonChart(sd);
-  renderSocialPackChart(sd);
+  // renderSocialPackChart(sd);  // chart replaced by the pack-inventory tables (2026-05-29)
+  renderPackInventoryTables(sd);
   renderLandUseChart(sd);
   renderSocialDonut(sd);
 }
@@ -3793,25 +4060,305 @@ function renderSocialPackChart(sd) {
   }, plotlyConfig("wolf_pack_inventory"));
 }
 
+// ----- 2b. Pack inventory as a table (three layout variants) ---------------
+// Helpers shared by all three table variants.
+function _packLanduseFor(p, sd) {
+  const lu = (sd.polygon_to_landuse || {})[p.primary_polygon] || "Unclassified";
+  return { lu, color: (sd.landuse_colors || {})[lu] || "#888" };
+}
+// Effective count for pack/group/lone classification — includes unrecognized
+// companions tracked via PACK_SPECIAL_RULES.
+function _effectiveTotal(p) {
+  return (p.effective_total != null) ? p.effective_total : (p.total || 0);
+}
+// Classify a row by effective total per Nili's field rule.
+//   5+ → pack · 2–4 → group · 1 → lone.
+// Sentinel meta-rows (lone bucket, indeterminate, no-pack) get no badge —
+// the row label already states what they are.
+function _packTypeBadge(p, klass) {
+  if (klass === "sentinel") return `<span style="color:#bbb;">—</span>`;
+  const n = _effectiveTotal(p);
+  if (n >= 5)  return `<span class="type-chip t-pack">pack</span>`;
+  if (n >= 2)  return `<span class="type-chip t-group">group</span>`;
+  if (n === 1) return `<span class="type-chip t-lone">lone</span>`;
+  return "";
+}
+// Render the pack name (plain — no inline note needed anymore).
+function _packNameHtml(p) {
+  return `<strong>${escapeHtml(p.name)}</strong>`;
+}
+function _packMembersHtml(p) {
+  // List certain members first (alphabetical), then probable ones marked with *.
+  // If PACK_SPECIAL_RULES added unrecognized companions, append them with a
+  // distinct styling so they don't look like missing serials.
+  const certain = (p.members || []).filter(m => !(p.probable_members || []).includes(m));
+  const probable = (p.probable_members || []).slice();
+  const unr = p.unrecognized || 0;
+  const parts = [];
+  if (certain.length) parts.push(certain.map(escapeHtml).join(", "));
+  if (probable.length) {
+    const stars = probable.map(m => `<span class="star">${escapeHtml(m)}*</span>`).join(", ");
+    parts.push(stars);
+  }
+  if (unr > 0) {
+    const label = unr === 1 ? "1 unrecognized" : `${unr} unrecognized`;
+    parts.push(`<span style="color:#a06000; font-style:italic;">+ ${label}</span>`);
+  }
+  return parts.join(", ");
+}
+function _packPolygonsHtml(p) {
+  // Show the primary polygon; if the pack spans multiple, list them with counts.
+  const breakdown = p.polygon_breakdown || {};
+  const polys = Object.keys(breakdown);
+  if (polys.length <= 1) return escapeHtml(p.primary_polygon || "");
+  // primary first, then others ordered by count desc
+  const others = polys.filter(x => x !== p.primary_polygon)
+    .sort((a, b) => (breakdown[b] || 0) - (breakdown[a] || 0));
+  const all = [p.primary_polygon, ...others];
+  return all.map(pp => {
+    const n = breakdown[pp] || 0;
+    return `${escapeHtml(pp)}<span style="color:#999;"> (${n})</span>`;
+  }).join("<br>");
+}
+
+// Variant A — Sortable detailed table.
+function renderPackTableA(sd) {
+  const root = $("pack-table-A");
+  if (!root) return;
+  const reals = (sd.real_packs || []).slice();
+  const sentinels = (sd.sentinel_packs || []).slice();
+
+  // Header
+  const thead = `<thead><tr>
+    <th class="sortable" data-sort="name">Pack</th>
+    <th class="sortable" data-sort="type">Type</th>
+    <th class="sortable" data-sort="lu">Land-use</th>
+    <th class="sortable" data-sort="polygon">Home polygon</th>
+    <th class="num sortable" data-sort="certain">Certain</th>
+    <th class="num sortable" data-sort="probable">Probable*</th>
+    <th class="num sortable" data-sort="total">Total</th>
+    <th>Members</th>
+  </tr></thead>`;
+
+  function rowHtml(p, klass) {
+    const { lu, color } = _packLanduseFor(p, sd);
+    const isSentinel = klass === "sentinel";
+    const eff = _effectiveTotal(p);
+    // For sort, give sentinels a type-rank low so they always sit at bottom.
+    const typeRank = isSentinel ? -1
+                  : eff >= 5 ? 3 : eff >= 2 ? 2 : eff === 1 ? 1 : 0;
+    return `<tr class="${klass || ""}" data-name="${escapeHtml(p.name)}"
+       data-type="${typeRank}"
+       data-lu="${escapeHtml(lu)}" data-polygon="${escapeHtml(p.primary_polygon || "")}"
+       data-certain="${p.certain}" data-probable="${p.probable}" data-total="${eff}">
+      <td>${_packNameHtml(p)}</td>
+      <td>${_packTypeBadge(p, klass)}</td>
+      <td>${isSentinel
+        ? `<span class="lu-name">—</span>`
+        : `<span class="lu-chip" style="background:${color};"></span><span class="lu-name">${escapeHtml(lu)}</span>`}</td>
+      <td>${isSentinel ? "<span style='color:#999;'>—</span>" : _packPolygonsHtml(p)}</td>
+      <td class="num">${p.certain || 0}</td>
+      <td class="num">${p.probable ? `<span class="star">${p.probable}*</span>` : ""}</td>
+      <td class="num"><strong>${eff}</strong></td>
+      <td class="pack-members">${_packMembersHtml(p)}</td>
+    </tr>`;
+  }
+  const realRows = reals.map(p => rowHtml(p, "real")).join("");
+  const divider = sentinels.length
+    ? `<tr class="divider"><td colspan="8">— sentinels (unsorted) —</td></tr>`
+    : "";
+  const sentRows = sentinels.map(p => rowHtml(p, "sentinel")).join("");
+  root.innerHTML = thead + `<tbody>${realRows}${divider}${sentRows}</tbody>`;
+
+  // Sortable headers — only the "real" pack rows get sorted; sentinels stay below.
+  const tbody = root.querySelector("tbody");
+  let sortKey = null, sortDir = 1;
+  root.querySelectorAll("th.sortable").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort");
+      if (sortKey === key) sortDir = -sortDir;
+      else { sortKey = key; sortDir = (key === "name" || key === "lu" || key === "polygon") ? 1 : -1; }
+      const realRowsArr = Array.from(tbody.querySelectorAll("tr.real"));
+      realRowsArr.sort((a, b) => {
+        const av = a.getAttribute(`data-${key}`) || "";
+        const bv = b.getAttribute(`data-${key}`) || "";
+        const numericKeys = ["certain", "probable", "total"];
+        const cmp = numericKeys.includes(key)
+          ? (parseFloat(av) - parseFloat(bv))
+          : av.localeCompare(bv);
+        return cmp * sortDir;
+      });
+      // Re-attach in sorted order, keeping divider + sentinels at the end.
+      const otherRows = Array.from(tbody.children).filter(r => !r.classList.contains("real"));
+      tbody.innerHTML = "";
+      realRowsArr.forEach(r => tbody.appendChild(r));
+      otherRows.forEach(r => tbody.appendChild(r));
+    });
+  });
+}
+
+// Variant B — Grouped by land-use with subtotals.
+function renderPackTableB(sd) {
+  const root = $("pack-table-B");
+  if (!root) return;
+  const reals = (sd.real_packs || []).slice();
+  const sentinels = (sd.sentinel_packs || []).slice();
+
+  // Group real packs by land-use, keeping the LAND_USE_ORDER from the payload
+  // (the original chart cycles Nature Reserve → Minefield → High Culling → Low Culling).
+  const luOrder = ["Nature Reserve", "Minefield", "High Culling", "Low Culling", "Unclassified"];
+  const groups = {};
+  reals.forEach(p => {
+    const { lu } = _packLanduseFor(p, sd);
+    (groups[lu] = groups[lu] || []).push(p);
+  });
+  // Sort each group's packs by total descending.
+  Object.values(groups).forEach(arr => arr.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)));
+
+  const thead = `<thead><tr>
+    <th>Pack</th>
+    <th>Type</th>
+    <th>Home polygon</th>
+    <th class="num">Certain</th>
+    <th class="num">Probable*</th>
+    <th class="num">Total</th>
+    <th>Members</th>
+  </tr></thead>`;
+
+  function packRowHtml(p) {
+    const eff = _effectiveTotal(p);
+    return `<tr>
+      <td>${_packNameHtml(p)}</td>
+      <td>${_packTypeBadge(p)}</td>
+      <td>${_packPolygonsHtml(p)}</td>
+      <td class="num">${p.certain || 0}</td>
+      <td class="num">${p.probable ? `<span class="star">${p.probable}*</span>` : ""}</td>
+      <td class="num"><strong>${eff}</strong></td>
+      <td class="pack-members">${_packMembersHtml(p)}</td>
+    </tr>`;
+  }
+  function subtotalHtml(groupPacks) {
+    const nPacks = groupPacks.length;
+    const cTot = groupPacks.reduce((s, p) => s + (p.certain || 0), 0);
+    const pTot = groupPacks.reduce((s, p) => s + (p.probable || 0), 0);
+    const tTot = groupPacks.reduce((s, p) => s + _effectiveTotal(p), 0);
+    return `<tr class="subtotal">
+      <td colspan="3">Subtotal · ${nPacks} pack${nPacks === 1 ? "" : "s"}</td>
+      <td class="num">${cTot}</td>
+      <td class="num">${pTot ? `<span class="star">${pTot}*</span>` : ""}</td>
+      <td class="num"><strong>${tTot}</strong></td>
+      <td></td>
+    </tr>`;
+  }
+  let bodyHtml = "";
+  luOrder.forEach(lu => {
+    const arr = groups[lu];
+    if (!arr || !arr.length) return;
+    const color = (sd.landuse_colors || {})[lu] || "#888";
+    bodyHtml += `<tr class="group-header" style="--lu-color:${color};"><td colspan="7">
+      <span class="lu-chip" style="background:${color};"></span>${escapeHtml(lu)}
+    </td></tr>`;
+    bodyHtml += arr.map(packRowHtml).join("");
+    bodyHtml += subtotalHtml(arr);
+  });
+  if (sentinels.length) {
+    bodyHtml += `<tr class="divider"><td colspan="7">— sentinels (lone / no-pack / indeterminate / expert-only) —</td></tr>`;
+    bodyHtml += sentinels.map(p => `<tr class="sentinel">
+      <td>${_packNameHtml(p)}</td>
+      <td>${_packTypeBadge(p, "sentinel")}</td>
+      <td>${p.expert_only ? _packPolygonsHtml(p) : "<span style='color:#999;'>—</span>"}</td>
+      <td class="num">${p.certain || 0}</td>
+      <td class="num">${p.probable ? `<span class="star">${p.probable}*</span>` : ""}</td>
+      <td class="num"><strong>${_effectiveTotal(p)}</strong></td>
+      <td class="pack-members">${_packMembersHtml(p)}</td>
+    </tr>`).join("");
+  }
+  root.innerHTML = thead + `<tbody>${bodyHtml}</tbody>`;
+}
+
+// Variant C — Compact publication-style table.
+function renderPackTableC(sd) {
+  const root = $("pack-table-C");
+  if (!root) return;
+  const reals = (sd.real_packs || []).slice();
+  const sentinels = (sd.sentinel_packs || []).slice();
+
+  const thead = `<thead><tr>
+    <th>Pack</th>
+    <th>Type</th>
+    <th class="num">n</th>
+    <th>Land-use</th>
+    <th>Polygon</th>
+    <th>Members</th>
+  </tr></thead>`;
+  function rowHtml(p, klass) {
+    const isSentinel = klass === "sentinel";
+    const { lu, color } = _packLanduseFor(p, sd);
+    const unr = p.unrecognized || 0;
+    // n display: "9", "6 + 1*", or "1 + 1 unrecognised" — include unrecognised
+    // companions so the column matches the badge classification.
+    const parts = [String(p.certain || 0)];
+    if (p.probable)     parts.push(`${p.probable}*`);
+    if (unr)            parts.push(`${unr} unrec.`);
+    const nLabel = parts.join(" + ");
+    const eff = _effectiveTotal(p);
+    return `<tr class="${klass || ""}">
+      <td>${_packNameHtml(p)}</td>
+      <td>${_packTypeBadge(p, klass)}</td>
+      <td class="num">${nLabel} <span style="color:#999;">(${eff})</span></td>
+      <td>${isSentinel
+        ? `<span class="lu-name">—</span>`
+        : `<span class="lu-chip" style="background:${color};"></span><span class="lu-name">${escapeHtml(lu)}</span>`}</td>
+      <td>${isSentinel ? "<span style='color:#999;'>—</span>" : escapeHtml(p.primary_polygon || "")}</td>
+      <td class="pack-members">${_packMembersHtml(p)}</td>
+    </tr>`;
+  }
+  const realRows = reals.map(p => rowHtml(p)).join("");
+  const divider = sentinels.length
+    ? `<tr class="divider"><td colspan="6">— sentinels —</td></tr>`
+    : "";
+  const sentRows = sentinels.map(p => rowHtml(p, "sentinel")).join("");
+  root.innerHTML = thead + `<tbody>${realRows}${divider}${sentRows}</tbody>`;
+}
+
+function renderPackInventoryTables(sd) {
+  renderPackTableA(sd);
+  renderPackTableC(sd);
+  // Tab switcher wiring (idempotent on re-render).
+  document.querySelectorAll(".pack-tables-tab").forEach(tab => {
+    if (tab.dataset.wired === "1") return;
+    tab.dataset.wired = "1";
+    tab.addEventListener("click", () => {
+      const variant = tab.getAttribute("data-pack-variant");
+      document.querySelectorAll(".pack-tables-tab").forEach(t =>
+        t.classList.toggle("active", t === tab));
+      document.querySelectorAll(".pack-table-panel").forEach(panel =>
+        panel.classList.toggle("active", panel.getAttribute("data-pack-panel") === variant));
+    });
+  });
+}
+
 // 3a. Social donut (overall)
 function renderSocialDonut(sd) {
   // Donut: each social category = a solid wedge (confirmed wolves) + a hatched
-  // wedge (probable *). A category-coloured bubble sits just inside the hole
-  // edge at each hatched wedge with its probable count; the legend explains
-  // that hatched = probable.
+  // wedge (probable *). Each hatched wedge has a leader-line callout pointing
+  // outward to a label on the chart side that shows the probable count and its
+  // share of the pool. The legend explains the two wedge styles (solid =
+  // confirmed, hatched = probable).
   const N = sd.n_pool;
   const pctOf = n => N ? (100 * n / N) : 0;
   const labels = [], values = [], colors = [], patterns = [], text = [], hover = [];
-  const bubbleColor = [], bubbleText = [], hatchMid = [];
-  let cum = 0;
+  // hatchInfo[k] = { valuesIdx, color, count } for the k-th hatched wedge
+  const hatchInfo = [];
   for (const s of sd.soc_order) {
     const tot = sd.social_totals[s].total;
     if (!tot) continue;
     const prob = sd.social_totals[s].probable;
     const certain = tot - prob;
     const name = SOCIAL_LABELS[s];
-    // hatched wedge — probable (*) wolves — clockwise side
+    // hatched wedge — probable (*) wolves
     if (prob > 0) {
+      hatchInfo.push({ valuesIdx: values.length, color: SOCIAL_COLORS[s], count: prob });
       labels.push(name + " *");
       values.push(prob);
       colors.push(SOCIAL_COLORS[s]);
@@ -3819,11 +4366,7 @@ function renderSocialDonut(sd) {
       text.push("");
       hover.push("<b>" + name + " &mdash; probable (*)</b><br>" + prob +
         " wolves (" + pctOf(prob).toFixed(1) + "%) &mdash; assignment not certain");
-      hatchMid.push((cum + prob / 2) / N);   // fraction at the wedge's middle
-      bubbleColor.push(SOCIAL_COLORS[s]);
-      bubbleText.push(String(prob));
     }
-    cum += prob;
     // solid wedge — confirmed wolves only
     labels.push(name);
     values.push(certain);
@@ -3832,30 +4375,101 @@ function renderSocialDonut(sd) {
     text.push(name + "<br>" + certain + " (" + pctOf(certain).toFixed(0) + "%)");
     hover.push("<b>" + name + "</b><br>" + certain +
       " confirmed wolves (" + pctOf(certain).toFixed(1) + "%)");
-    cum += certain;
   }
-  // Place each probable-count bubble just inside the hole edge, at its hatched
-  // wedge's angle — fully visible (the hole is transparent, so a scatter shows
-  // there even though it renders below the pie) yet hugging the wedge. The
-  // container is measured so this holds at any size; the pie renders
-  // counter-clockwise from 12 o'clock.
+
+  // -- Predict the real mid-angle of each rendered wedge -------------------
+  // Plotly 2.27 default pie (direction="counterclockwise", rotation=0,
+  // sort=false): empirically, values[0] fills CW from 12 by its own width,
+  // and values[1..N-1] fill CCW from 12 in code order with their CCW edges
+  // anchored at 12. So in CW-from-12 phi (0 at top, increasing CW):
+  //   wedge 0:  phi = (v[0]/2) / N * 2pi
+  //   wedge i:  phi = 2pi - (sum(v[1..i-1]) + v[i]/2) / N * 2pi
+  // Verified against the rendered SVG paths of pack/group/lone hatched wedges
+  // (2026-05-30); each predicted phi matches the SVG to within 0.01 deg.
+  const sumAll = values.reduce((a, b) => a + b, 0) || 1;
+  function wedgeMidPhi(i) {
+    if (i === 0) return Math.PI * values[0] / sumAll;
+    let cum1 = 0;
+    for (let k = 1; k < i; k++) cum1 += values[k];
+    return 2 * Math.PI - 2 * Math.PI * (cum1 + values[i] / 2) / sumAll;
+  }
+  // Build a compact leader-line callout for every hatched wedge. The line
+  // STARTS inside the hatched (probable) area — at the wedge's mid-ring point
+  // — runs radially out a short distance past the outer edge, bends, then runs
+  // a short horizontal leg to its label.
+  //
+  // The legs are drawn as ANNOTATION arrows (arrowhead=0), NOT as line shapes,
+  // because Plotly renders pie traces above the shape layer even when
+  // layer:"above" is set, hiding the in-wedge portion. Annotations live in
+  // infolayer (topmost), so the leg always shows on top of the wedge fill.
+  //
+  // Angle convention: phi grows CW from 12 (phi=0 = top, phi=pi/2 = 3 o'clock).
+  // SVG offset (with +y down) = (ringR*sin(phi), -ringR*cos(phi)); converted to
+  // paper coords (y up), the offsets are (+ringR*sin, +ringR*cos).
   const HOLE = 0.55;
+  const DX = 1.0, DY = 0.92;                              // pie domain widths
+  const ELBOW_OUT_PX = 8;                                 // radial leg past outer edge
+  const HORIZ_LEG_PX = 28;                                // length of horizontal leg
+  const LABEL_GAP_PX = 4;                                 // gap between line end and text
   const el = document.getElementById("social-donut-chart");
   const W = (el && el.clientWidth) || 600;
   const H = (el && el.clientHeight) || 420;
   const plotW = Math.max(1, W - 20), plotH = Math.max(1, H - 20);
-  const bubR = HOLE * 0.5 * Math.min(plotW, plotH) - 14;  // bubble-centre radius, px
-  const bubbleX = [], bubbleY = [];
-  for (const f of hatchMid) {
-    const phi = f * 2 * Math.PI;
-    bubbleX.push(0.5 - (bubR / plotW) * Math.sin(phi));
-    bubbleY.push(0.5 + (bubR / plotH) * Math.cos(phi));
+  // Pie outer radius in pixels — matches Plotly's pie-fit math (smaller of the
+  // two domain box dimensions, halved). Mid-ring radius = halfway between
+  // the hole and the outer edge: that's the visual center of the wedge.
+  const outerR = 0.5 * Math.min(DX * plotW, DY * plotH);
+  const ringMidR = outerR * (HOLE + 1) / 2;
+  const px2x = px => 0.5 + px / plotW;                    // paper x from px-offset-from-center
+  const py2y = py => 0.5 + py / plotH;                    // paper y from px-offset-from-center
+  const calloutAnn = [];
+  for (const h of hatchInfo) {
+    const phi = wedgeMidPhi(h.valuesIdx);
+    const sn = Math.sin(phi), cs = Math.cos(phi);
+    // start point — middle of the hatched wedge (sin>0 = right half)
+    const startXp = +ringMidR * sn, startYp = ringMidR * cs;
+    // elbow — just past the outer edge on the same radial line
+    const elbXp = +(outerR + ELBOW_OUT_PX) * sn, elbYp = (outerR + ELBOW_OUT_PX) * cs;
+    // short horizontal leg toward the nearer chart side
+    const onRight = sn >= 0;                              // ties (top/bottom) go right
+    const labelXp = elbXp + (onRight ? HORIZ_LEG_PX : -HORIZ_LEG_PX);
+    const prob = h.count;
+    const pct = N ? Math.round(100 * prob / N) : 0;
+    // (1) radial leg — wedge midpoint → elbow (arrow with no head)
+    calloutAnn.push({
+      xref: "paper", yref: "paper", axref: "paper", ayref: "paper",
+      ax: px2x(startXp), ay: py2y(startYp),
+      x:  px2x(elbXp),   y:  py2y(elbYp),
+      text: "", showarrow: true, arrowhead: 0,
+      arrowwidth: 2, arrowcolor: h.color,
+      standoff: 0, startstandoff: 0,
+    });
+    // (2) horizontal leg — elbow → label start
+    calloutAnn.push({
+      xref: "paper", yref: "paper", axref: "paper", ayref: "paper",
+      ax: px2x(elbXp),   ay: py2y(elbYp),
+      x:  px2x(labelXp), y:  py2y(elbYp),
+      text: "", showarrow: true, arrowhead: 0,
+      arrowwidth: 2, arrowcolor: h.color,
+      standoff: 0, startstandoff: 0,
+    });
+    // (3) label text — sits just past the line end, anchored on the side
+    calloutAnn.push({
+      xref: "paper", yref: "paper",
+      x: px2x(labelXp + (onRight ? LABEL_GAP_PX : -LABEL_GAP_PX)),
+      y: py2y(elbYp),
+      xanchor: onRight ? "left" : "right",
+      yanchor: "middle",
+      text: "<b>" + prob + "</b> probable (" + pct + "%)",
+      showarrow: false,
+      font: { size: 12, color: "#222", family: "sans-serif" },
+    });
   }
   const donut = {
     type: "pie", hole: HOLE,
     labels: labels, values: values,
     sort: false, showlegend: false,
-    domain: { x: [0, 1], y: [0, 1] },
+    domain: { x: [(1 - DX) / 2, (1 + DX) / 2], y: [(1 - DY) / 2, (1 + DY) / 2] },
     marker: {
       colors: colors,
       line: { color: "#fff", width: 2 },
@@ -3868,23 +4482,19 @@ function renderSocialDonut(sd) {
     hovertext: hover,
     hoverinfo: "text",
   };
-  const bubbles = {
-    type: "scatter", mode: "markers+text",
-    x: bubbleX, y: bubbleY,
-    marker: { size: 24, color: bubbleColor, line: { color: "#fff", width: 2 } },
-    text: bubbleText,
-    textposition: "middle center",
-    textfont: { size: 12, color: "#fff", family: "sans-serif" },
-    hoverinfo: "skip", showlegend: false,
-  };
-  // invisible carrier trace — supplies the single "probable" legend entry
-  const legendKey = {
-    type: "bar", x: [0.5], y: [-5], name: "probable",
-    marker: { color: "#9E9E9E",
-              pattern: { shape: "/", fillmode: "overlay", fgcolor: "#ffffff", size: 7, solidity: 0.3 } },
+  // Two off-screen carrier bars — supply a legend key for the wedge styles.
+  const legendSolid = {
+    type: "bar", x: [0.5], y: [-5], name: "confirmed",
+    marker: { color: "#9E9E9E", line: { color: "#fff", width: 1 } },
     hoverinfo: "skip", showlegend: true,
   };
-  Plotly.newPlot("social-donut-chart", [donut, bubbles, legendKey], {
+  const legendHatch = {
+    type: "bar", x: [0.5], y: [-5], name: "probable",
+    marker: { color: "#9E9E9E", line: { color: "#fff", width: 1 },
+              pattern: { shape: "/", fillmode: "overlay", fgcolor: "#ffffff", size: 8, solidity: 0.35 } },
+    hoverinfo: "skip", showlegend: true,
+  };
+  Plotly.newPlot("social-donut-chart", [donut, legendSolid, legendHatch], {
     margin: { l: 10, r: 10, t: 10, b: 10 },
     showlegend: true,
     legend: {
@@ -3896,9 +4506,9 @@ function renderSocialDonut(sd) {
     yaxis: { visible: false, range: [0, 1], fixedrange: true, zeroline: false },
     annotations: [{
       text: `<b>${sd.n_pool}</b><br><span style="font-size:11px;color:#888;">wolves</span>`,
-      xref: "x", yref: "y", x: 0.5, y: 0.5, showarrow: false,
+      xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false,
       font: { size: 22, color: "#333", family: "sans-serif" },
-    }],
+    }].concat(calloutAnn),
     paper_bgcolor: "#fafbfc", plot_bgcolor: "#fff",
   }, plotlyConfig("wolf_social_donut"));
 }
@@ -3952,6 +4562,29 @@ function _sigsColorFor(letter, region) {
   const p = SIGS_COLOR_PALETTES[region];
   if (p && letter in p) return p[letter];
   return "#bbbbbb";
+}
+
+// Human-readable colour name per region + letter (Nili's fur-region key
+// image, 2026-05-30). Mirrors the table in
+// memory/reference_colour_names.md; keep the two in sync if the scale
+// is ever extended.
+const COLOR_NAMES = {
+  A1: { e: "very dark brown", f: "dark brown-gray", g: "dark gray", h: "gray",
+        i: "light gray-brown", j: "light gray-gold", k: "bright ginger",
+        l: "gold-honey-ginger", m: "white" },
+  A2: { e: "very dark brown", f: "dark brown-gray", g: "dark gray", h: "gray",
+        i: "light gray-brown", j: "light gray-gold", k: "honey-ginger",
+        l: "light gray" },
+  C6: { e: "very dark brown", f: "dark brown", g: "bright brown", h: "bright gray",
+        i: "gray-brown", j: "ginger", k: "sand", l: "beige" },
+  D8: { "1": "very dark brown", "2": "dark brown", "3": "grayish brown",
+        "4": "light honey-brown", "5": "honey-ginger", "6": "light gold",
+        "7": "light gray-cream", "8": "beige" },
+};
+function _sigsColorName(letter, region) {
+  const m = COLOR_NAMES[region];
+  if (m && letter in m) return m[letter];
+  return letter;   // fall back to raw letter for unknowns
 }
 function _sigsContrastColor(v, region) {
   if (region === "D9") return SIGS_D9_LEVEL_PALETTE[v] || "#999999";
@@ -4046,30 +4679,78 @@ function renderSigsColorMatrix(sd) {
   const container = document.getElementById("sigs-color-matrix");
   if (!container) return;
   const cols = ["A1", "A2", "C6", "D8"];
-  let html = `<table class="sigs-matrix"><thead><tr><th>Pack (n)</th>`;
-  for (const c of cols) html += `<th>${c}${c === "D8" ? " colour" : ""}</th>`;
+  const luColors = sd.landuse_colors || {};
+  let html = `<table class="sigs-matrix"><thead><tr>`;
+  html += `<th>Pack (n)</th>`;
+  html += `<th>Land use</th><th>Type</th>`;
+  for (const c of cols) html += `<th class="sigs-col-color">${c}${c === "D8" ? " colour" : ""}</th>`;
   html += `</tr></thead><tbody>`;
   for (const pack of sd.packs) {
-    html += `<tr><td class="pack-name">${escapeHtml(pack.display)} <span style="color:#888;">(${pack.n})</span></td>`;
+    // Polygon name shown as a tooltip on the pack-name cell — dropped as its own
+    // column 2026-05-30 to free space for the colour cells.
+    const polyTip = pack.main_polygon ? `polygon: ${pack.main_polygon}` : "";
+    html += `<tr><td class="pack-name" title="${escapeHtml(polyTip)}">${escapeHtml(pack.display)} <span style="color:#888;">(${pack.n})</span></td>`;
+    // Land use + Type
+    const lu = pack.land_use || "Unclassified";
+    const luBg = luColors[lu] || "#888";
+    const luFg = _sigsTextOn(luBg);
+    html += `<td class="sigs-meta sigs-landuse" style="background:${luBg};color:${luFg};">${escapeHtml(lu)}</td>`;
+    const gt = pack.group_type || "";
+    // pack = bold, group = medium — leave colours subtle so the region cells stay the visual focus
+    const gtBg = (gt === "pack") ? "#37474F" : (gt === "group") ? "#90A4AE" : "#ECEFF1";
+    const gtFg = _sigsTextOn(gtBg);
+    html += `<td class="sigs-meta sigs-group-type" style="background:${gtBg};color:${gtFg};font-weight:600;">${escapeHtml(gt)}</td>`;
     for (const region of cols) {
       const rd = pack.regions[region];
       const dist = rd ? rd.colors : null;
       if (!dist || Object.keys(dist).length === 0) {
-        html += `<td style="background:#fafafa;color:#bbb;">—</td>`;
+        html += `<td class="sigs-col-color sigs-empty" style="background:#fafafa;color:#bbb;">—</td>`;
         continue;
       }
       const entries = Object.entries(dist).sort((a, b) => b[1] - a[1]);
       const total = entries.reduce((s, e) => s + e[1], 0);
-      const [topLetter, topCount] = entries[0];
-      const topPct = Math.round(100 * topCount / total);
-      const bg = _sigsColorFor(topLetter, region);
-      const fg = _sigsTextOn(bg);
-      const secondary = entries.slice(1, 3).map(e => `${escapeHtml(e[0])}=${e[1]}`).join(", ");
-      html += `<td style="background:${bg};color:${fg};">`;
-      html += `<div class="cell-content"><span class="modal-letter">${escapeHtml(topLetter)}</span>`;
-      html += `<span class="modal-pct">${topCount}/${total} (${topPct}%)</span>`;
-      if (secondary) html += `<span class="secondary">${secondary}</span>`;
-      html += `</div></td>`;
+      const topCount = entries[0][1];
+      // Tie detection: every entry with count == topCount is a "modal" entry.
+      // Less-common colours are intentionally hidden (Nili 2026-05-30 — only
+      // the modal colour(s) should appear in this matrix).
+      const ties = entries.filter(e => e[1] === topCount);
+      const tieCount = ties.length;
+      const sumTies = topCount * tieCount;          // == topCount * # of tied colours
+      const topPct = Math.round(100 * sumTies / total);
+      if (tieCount === 1) {
+        const [letter] = ties[0];
+        const bg = _sigsColorFor(letter, region);
+        const fg = _sigsTextOn(bg);
+        const name = _sigsColorName(letter, region);
+        html += `<td class="sigs-col-color" title="${escapeHtml(name)}" style="background:${bg};color:${fg};">`;
+        html += `<div class="cell-content">`;
+        html += `<span class="modal-name">${escapeHtml(name)}</span>`;
+        html += `<span class="modal-pct">${topCount}/${total} (${topPct}%)</span>`;
+        html += `</div></td>`;
+      } else {
+        // Tie — split the cell into one vertical strip per tied colour. Each
+        // strip shows its colour NAME and the wolf count. No white footer.
+        // data-n drives the font-size scale in CSS so 3+ tied colours stay
+        // readable when the strips get narrow. For 3+ tied colours, names
+        // with 3+ tokens (space- or hyphen-separated, e.g. "very dark brown",
+        // "gold-honey-ginger") get the .long-name class so CSS shrinks them
+        // another notch to fit on 2 lines max.
+        html += `<td class="sigs-col-color sigs-tie">`;
+        html += `<div class="sigs-tie-strips" data-n="${tieCount}">`;
+        for (const [letter] of ties) {
+          const bg = _sigsColorFor(letter, region);
+          const fg = _sigsTextOn(bg);
+          const name = _sigsColorName(letter, region);
+          const tokens = name.split(/[\s\-]+/).filter(Boolean).length;
+          const longCls = (tieCount >= 3 && tokens >= 3) ? " long-name" : "";
+          html += `<div class="sigs-tie-strip" title="${escapeHtml(name)}" style="background:${bg};color:${fg};">`;
+          html += `<span class="modal-name${longCls}">${escapeHtml(name)}</span>`;
+          html += `<span class="modal-pct">${topCount}/${total}</span>`;
+          html += `</div>`;
+        }
+        html += `</div>`;
+        html += `</td>`;
+      }
     }
     html += `</tr>`;
   }
@@ -5152,7 +5833,7 @@ function toggleIssuePanel(show) {
 }
 
 function init() {
-  $("stat-total").textContent = PAYLOAD.n_total_rows;
+  $("stat-pool").textContent = PAYLOAD.n_pool;
   $("stat-build").textContent = PAYLOAD.build_iso;
 
   baselineRows = JSON.parse(JSON.stringify(PAYLOAD.rows));
@@ -5216,9 +5897,11 @@ function init() {
 
   $("search-input").addEventListener("input", applyFilters);
   $("show-empty-code").addEventListener("change", applyFilters);
+  if ($("show-photographer")) $("show-photographer").addEventListener("change", applyFilters);
   $("reset-filters").addEventListener("click", () => {
     $("search-input").value = "";
     $("show-empty-code").checked = false;
+    if ($("show-photographer")) $("show-photographer").checked = false;
     table.clearHeaderFilter();
     clearSmartFilters();   // also clears polygon / pack / social and re-applies
   });
