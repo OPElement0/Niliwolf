@@ -92,6 +92,9 @@ REGION_VARIATION = {
 }
 
 # Identification-bucket palette (mirror of step3_build_app.py)
+# P is intentionally a lighter shade of N — both encode "no usable code",
+# but P carries presence information while N does not. Same hue family =
+# visual cue that they're related categories.
 ID_BUCKET_COLORS = {
     "Unique (1)":         "#1B5E20",
     "Shared 2-3":         "#66BB6A",
@@ -102,7 +105,7 @@ ID_BUCKET_COLORS = {
     "Shared 36+":         "#6D4C41",
     "Asymmetric":         "#1E88E5",
     "Partial-ambiguous":  "#9E9E9E",
-    "P":                  "#FB8C00",
+    "P":                  "#EF9A9A",
     "N":                  "#E53935",
     "Empty":              "#000000",
 }
@@ -112,7 +115,7 @@ STATUS_COLORS = {
     "unambiguous":        "#43A047",
     "asymmetric":         "#1E88E5",
     "partial_ambiguous":  "#9E9E9E",
-    "P":                  "#FB8C00",
+    "P":                  "#EF9A9A",
     "N":                  "#E53935",
     "empty":              "#757575",
     "unknown":            "#9C27B0",
@@ -1524,7 +1527,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .tabulator .tabulator-cell.status-unambiguous::before { background: #43A047; }
   .tabulator .tabulator-cell.status-asymmetric::before { background: #1E88E5; }
   .tabulator .tabulator-cell.status-partial_ambiguous::before { background: #9E9E9E; }
-  .tabulator .tabulator-cell.status-P::before { background: #FB8C00; }
+  .tabulator .tabulator-cell.status-P::before { background: #EF9A9A; }
   .tabulator .tabulator-cell.status-N::before { background: #E53935; }
   .tabulator .tabulator-cell.status-empty::before { background: #BDBDBD; }
   .tabulator .tabulator-cell.region-cell { padding-left: 10px !important; }
@@ -2214,7 +2217,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <span class="status-chip" data-status="unambiguous"   style="--c:#43A047;"><span class="dot" style="background:#43A047;"></span>Full <span class="count" id="cnt-unambiguous">0</span></span>
   <span class="status-chip" data-status="asymmetric"    style="--c:#1E88E5;"><span class="dot" style="background:#1E88E5;"></span>Asymmetric <span class="count" id="cnt-asymmetric">0</span></span>
   <span class="status-chip" data-status="partial_ambiguous" style="--c:#9E9E9E;"><span class="dot" style="background:#9E9E9E;"></span>Partial <span class="count" id="cnt-partial_ambiguous">0</span></span>
-  <span class="status-chip" data-status="P"             style="--c:#FB8C00;"><span class="dot" style="background:#FB8C00;"></span>P (unclear) <span class="count" id="cnt-P">0</span></span>
+  <span class="status-chip" data-status="P"             style="--c:#EF9A9A;"><span class="dot" style="background:#EF9A9A;"></span>P (unclear) <span class="count" id="cnt-P">0</span></span>
   <span class="status-chip" data-status="N"             style="--c:#E53935;"><span class="dot" style="background:#E53935;"></span>N (not visible) <span class="count" id="cnt-N">0</span></span>
   <span style="flex:1;"></span>
   <button id="status-clear" style="padding:4px 10px; font-size:11.5px;">Clear status filter</button>
@@ -2303,7 +2306,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <!-- ============= Anatomy reference ============= -->
 <div class="section" id="anatomy-section">
-  <h2><span class="swatch"></span>Anatomy reference</h2>
+  <h2><span class="swatch"></span>Anatomy Reference</h2>
   <div class="section-sub">
     Each wolf's pelt is encoded across 9 regions, grouped into 4 anatomical zones.
     Codes within a region capture the morphological variation noted in the rightmost column.
@@ -2340,7 +2343,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
        continuous heat-map below. Markup kept intact (just wrapped in
        display:none) so it can be restored by removing this wrapper. -->
   <div style="display:none;">
-    <h2><span class="swatch"></span>Per-region identification breakdown <span style="font-size:13px;font-weight:600;color:#999;">&mdash; version A &middot; discrete buckets</span></h2>
+    <h2><span class="swatch"></span>Per-Region Identification Breakdown <span style="font-size:13px;font-weight:600;color:#999;">&mdash; Version A &middot; Discrete Buckets</span></h2>
     <div class="section-sub">
       Each column represents one region. Each bar holds 100% of the analysed wolves
       (n = <span id="dist-n">0</span>), partitioned into identification-power buckets:
@@ -2354,7 +2357,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div id="region-distribution-chart"></div>
   </div>
 
-  <h2><span class="swatch"></span>Per-region identification breakdown</h2>
+  <h2><span class="swatch"></span>Per-Region Identification Breakdown</h2>
   <div class="section-sub">
     Each column represents one region; each bar holds 100% of the analysed wolves
     (n = <span id="dist-n-cont">0</span>). <strong>Unique</strong> = wolves whose
@@ -2378,7 +2381,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <!-- Single-region power chart — merged into this tab 2026-05-22 (Nili): both
        charts describe per-region identification ability, so they live together. -->
-  <h2 style="margin-top:42px;"><span class="swatch"></span>Single-region power — bars sorted by ID power</h2>
+  <h2 style="margin-top:42px;"><span class="swatch"></span>Single-Region Power — Bars Sorted By ID Power</h2>
   <div class="section-sub" id="idpower-definition">
     <!-- Filled in by JS from PAYLOAD.anatomy.identification_power.definition_note -->
   </div>
@@ -2391,7 +2394,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <!-- ============= Social Dynamics (polygon + pack + social) ============= -->
 <div class="section viz-pane" id="social-section" style="display:none;">
-  <h2><span class="swatch"></span>Social Dynamics — where the wolves live and how they group</h2>
+  <h2><span class="swatch"></span>Social Dynamics — Where The Wolves Live And How They Group</h2>
   <div class="section-sub">
     <strong>Camera-survey pool only</strong> &nbsp;·&nbsp;
     <span id="social-pool-n">?</span> wolves analysed
@@ -2402,17 +2405,33 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
 
   <div class="social-grid">
-    <div class="social-card">
-      <h3>1. Per-polygon stacked by social dynamic</h3>
-      <div class="card-sub">
-        Each polygon's bar shows how its wolves split among pack / group / lone /
-        unknown. Polygon name colour = land-use class. Hover for breakdown.
-      </div>
-      <div class="chart-host tall" id="social-polygon-chart"></div>
+    <!-- Old "probables separated" donut hidden 2026-06-02 (kept in code for easy revival). -->
+    <div class="social-card" style="display:none;">
+      <h3>1. Overall Social-Dynamic Mix &mdash; Probables Separated</h3>
+      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. Leader-line callouts point from each hatched wedge to its probable (*) count and its share of the pool.</div>
+      <div class="chart-host" id="social-donut-chart"></div>
     </div>
 
     <div class="social-card">
-      <h3>2. Pack inventory — sizes and home polygons</h3>
+      <h3>1. Overall Social-Dynamic Mix</h3>
+      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. Each probable (*) wolf is folded into the social category it is assigned to (pack / group / lone); the wedge label notes how many of its wolves are probable, and the hover tooltip gives the full confirmed / probable breakdown.</div>
+      <div class="chart-host" id="social-donut-merged-chart"></div>
+    </div>
+
+    <div class="social-card">
+      <h3>2. Land-Use Class — Wolves Per Category, Stacked By Social</h3>
+      <div class="card-sub">
+        Polygons grouped by land-use class (per the paper's key).
+        <strong>Nature Reserve</strong> = Yehodiya + Odem (most protected).
+        <strong>Minefield</strong> = Makhfi + Saki + Hazeka (no humans).
+        <strong>High Culling</strong> = Shaal + Snir + Keshet-Yonatan.
+        <strong>Low Culling</strong> = Slopes + Firing-Zone + Masade.
+      </div>
+      <div class="chart-host" id="social-landuse-chart"></div>
+    </div>
+
+    <div class="social-card">
+      <h3>3. Pack Inventory — Sizes And Home Polygons</h3>
       <div class="card-sub">
         Each row is one identified pack. <strong>Land-use chip</strong> shows the
         class of the pack's home polygon (blue=Nature Reserve, orange=Minefield,
@@ -2442,28 +2461,19 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
 
     <div class="social-card">
-      <h3>3. Land-use class — wolves per category, stacked by social</h3>
+      <h3>4. Per-Polygon Stacked By Social Dynamic</h3>
       <div class="card-sub">
-        Polygons grouped by land-use class (per the paper's key).
-        <strong>Nature Reserve</strong> = Yehodiya + Odem (most protected).
-        <strong>Minefield</strong> = Makhfi + Saki + Hazeka (no humans).
-        <strong>High Culling</strong> = Shaal + Snir + Keshet-Yonatan.
-        <strong>Low Culling</strong> = Slopes + Firing-Zone + Masade.
+        Each polygon's bar shows how its wolves split among pack / group / lone /
+        unknown. Polygon name colour = land-use class. Hover for breakdown.
       </div>
-      <div class="chart-host" id="social-landuse-chart"></div>
-    </div>
-
-    <div class="social-card">
-      <h3>4. Overall social-dynamic mix</h3>
-      <div class="card-sub">All analysed (camera-survey) wolves, by canonical social category. Leader-line callouts point from each hatched wedge to its probable (*) count and its share of the pool.</div>
-      <div class="chart-host" id="social-donut-chart"></div>
+      <div class="chart-host tall" id="social-polygon-chart"></div>
     </div>
   </div>
 </div>
 
 <!-- ============= Pack Signatures ============= -->
 <div class="section viz-pane" id="signatures-section" style="display:none;">
-  <h2><span class="swatch"></span>Pack Signatures — what unites and individualises within each pack</h2>
+  <h2><span class="swatch"></span>Pack Signatures — What Unites And Individualises Within Each Pack</h2>
   <div class="section-sub">
     Each named pack (n ≥ 2): the <em>pattern</em> axis tends to individualise members; the
     <em>colour</em> and <em>contrast</em> axes tend to tag the pack. Each region is split by its
@@ -2473,22 +2483,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <div class="sigs-container">
     <div class="sigs-block">
-      <h3>Cross-pack colour signatures</h3>
+      <h3>Cross-Pack Colour Signatures</h3>
       <div class="sub">Per pack × per colour-bearing region: the most-common colour in that pack (large), its share, and 1–2 secondary colours. When multiple colours tie for the top count, the cell is split into one strip per tied colour. Cell background uses each region's reference palette (bubble shades from the colour-code maps).</div>
       <div id="sigs-color-matrix"></div>
     </div>
     <div class="sigs-block">
-      <h3>Top 3 packs per region — colour / contrast comparison</h3>
+      <h3>Top 3 Packs Per Region — Colour / Contrast Comparison</h3>
       <div class="sub">For each region: the three packs whose colour (A1/A2/C6/D8), contrast (B3/B4/B5/D9), or pattern (C7) is most consistent within the pack. Each vertical bar shows one pack's full within-pack distribution at the region's primary axis; the diagonal-striped grey segment marks wolves without info on this axis (N/P or code missing the relevant half), so each bar represents the whole pack. Packs with fewer than 3 observed wolves on that region are excluded so small-sample 100%s don't dominate.</div>
       <div id="sigs-top3-comparison"></div>
     </div>
-    <div class="sigs-block">
-      <h3>Region-role map</h3>
+    <div class="sigs-block" style="display:none;">
+      <h3>Region-Role Map</h3>
       <div class="sub">Average within-pack modal % per region per axis. High → the axis consistently tags the pack; low → the axis individualises wolves.</div>
       <div id="sigs-role-bars"></div>
     </div>
     <div class="sigs-block">
-      <h3>Pack profile cards — per-region breakdown</h3>
+      <h3>Pack Profile Cards — Per-Region Breakdown</h3>
       <div class="sub">Each card shows one pack. Bars are full within-pack distributions (sorted by frequency). Region rows tinted green = all members share an identical code.</div>
       <div id="sigs-pack-cards" class="sigs-pack-cards"></div>
     </div>
@@ -3384,14 +3394,14 @@ function renderRegionDistributionChart() {
       b: isMobile ? 110 : 56,   // bigger bottom on mobile so the legend can wrap
     },
     yaxis: {
-      title: { text: "% of analysed wolves", font: { size: isMobile ? 10 : 12 } },
+      title: { text: "% Of Analysed Wolves", font: { size: isMobile ? 10 : 12 } },
       range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
       fixedrange: true,
       tickfont: { size: isMobile ? 9 : 11 },
     },
     xaxis: {
       title: isMobile ? "" : {
-        text: "Region (icon above each bar shows the anatomical area)",
+        text: "Region (Icon Above Each Bar Shows The Anatomical Area)",
         font: { size: 11, color: "#666" },
       },
       tickmode: "array",
@@ -3613,8 +3623,9 @@ function renderRegionDistributionChartContinuous() {
   // Legend label expands P and N inline so the legend itself explains them;
   // the bucket key b stays short for colour / dist / hover lookups.
   const bucketLegendLabel = {
-    "P": "P — marking present, code unclear",
-    "N": "N — not codable",
+    "P": "P — Marking Present, Code Unclear",
+    "N": "N — Not Codable",
+    "Partial-ambiguous": "Partial-Ambiguous",
   };
   for (const b of ["Asymmetric", "Partial-ambiguous", "P", "N", "Empty"]) {
     const counts = regions.map(r => (dist[r] || {})[b] || 0);
@@ -3650,11 +3661,11 @@ function renderRegionDistributionChartContinuous() {
     ? { orientation: "h", x: 0.5, xanchor: "center", y: -0.46, yanchor: "top",
         len: 0.92, thickness: 11, outlinewidth: 0, tickmode: "array",
         tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
-        title: { text: "wolves sharing the code  (2 – " + maxK + ")", side: "top", font: { size: 9.5 } } }
+        title: { text: "Wolves Sharing The Code  (2 – " + maxK + ")", side: "top", font: { size: 9.5 } } }
     : { x: 1.015, xanchor: "left", y: 0.5, yanchor: "middle",
         len: 0.74, thickness: 14, outlinewidth: 0, tickmode: "array",
         tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
-        title: { text: "wolves sharing the code<br>(2 – " + maxK + ")", side: "right", font: { size: 10 } } };
+        title: { text: "Wolves Sharing The Code<br>(2 – " + maxK + ")", side: "right", font: { size: 10 } } };
   traces.push({
     type: "scatter", mode: "markers", x: [regions[0]], y: [0],
     showlegend: false, hoverinfo: "skip",
@@ -3699,13 +3710,13 @@ function renderRegionDistributionChartContinuous() {
       b: isMobile ? 178 : 56,
     },
     yaxis: {
-      title: { text: "% of analysed wolves", font: { size: isMobile ? 10 : 12 } },
+      title: { text: "% Of Analysed Wolves", font: { size: isMobile ? 10 : 12 } },
       range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
       fixedrange: true, tickfont: { size: isMobile ? 9 : 11 },
     },
     xaxis: {
       title: isMobile ? "" : {
-        text: "Region (icon above each bar shows the anatomical area)",
+        text: "Region (Icon Above Each Bar Shows The Anatomical Area)",
         font: { size: 11, color: "#666" },
       },
       tickmode: "array", tickvals: regions, ticktext: ticktext,
@@ -3797,7 +3808,7 @@ function renderSingleRegionBar(ip) {
       fixedrange: true,
     },
     xaxis: {
-      title: { text: "Wolves identifiable (k=1)", font: { size: 11 } },
+      title: { text: "Wolves Identifiable (k=1)", font: { size: 11 } },
       range: [0, 60], gridcolor: "#eee", fixedrange: true,
     },
     plot_bgcolor: "#fff", paper_bgcolor: "#fff",
@@ -3875,7 +3886,8 @@ function renderSocialDynamicsTab() {
   // renderSocialPackChart(sd);  // chart replaced by the pack-inventory tables (2026-05-29)
   renderPackInventoryTables(sd);
   renderLandUseChart(sd);
-  renderSocialDonut(sd);
+  // renderSocialDonut(sd);  // hidden 2026-06-02 — replaced by merged-probables donut below
+  renderSocialDonutMerged(sd);
 }
 
 // Helper: colour-code each polygon name by its land-use class (HTML inside Plotly ticks).
@@ -4022,7 +4034,7 @@ function renderSocialPackChart(sd) {
   const colorsLight = items.map(p => landuseFor(p) + "60");  // ~38% alpha
 
   const certainTrace = {
-    name: "certain", type: "bar", orientation: "h", y: ys, x: certain,
+    name: "Certain", type: "bar", orientation: "h", y: ys, x: certain,
     customdata: items.map(p => [p.total, p.certain, p.probable, p.primary_polygon]),
     text: certain.map(v => v ? String(v) : ""),
     textposition: "inside", insidetextanchor: "middle",
@@ -4034,7 +4046,7 @@ function renderSocialPackChart(sd) {
       "Polygon: %{customdata[3]}<extra></extra>",
   };
   const probableTrace = {
-    name: "probable*", type: "bar", orientation: "h", y: ys, x: probable,
+    name: "Probable*", type: "bar", orientation: "h", y: ys, x: probable,
     text: probable.map(v => v ? `${v}*` : ""),
     textposition: "inside", insidetextanchor: "middle",
     textfont: { color: "#fff", size: 11 },
@@ -4051,7 +4063,7 @@ function renderSocialPackChart(sd) {
     barmode: "stack",
     margin: { l: 130, r: 32, t: 10, b: 44 },
     xaxis: {
-      title: { text: "Wolves in pack (solid = certain, hatched = probable*)", font: { size: 11 } },
+      title: { text: "Wolves In Pack (Solid = Certain, Hatched = Probable*)", font: { size: 11 } },
       gridcolor: "#eee", fixedrange: true,
     },
     yaxis: { fixedrange: true, tickfont: { size: 11 }, automargin: true },
@@ -4484,12 +4496,12 @@ function renderSocialDonut(sd) {
   };
   // Two off-screen carrier bars — supply a legend key for the wedge styles.
   const legendSolid = {
-    type: "bar", x: [0.5], y: [-5], name: "confirmed",
+    type: "bar", x: [0.5], y: [-5], name: "Confirmed",
     marker: { color: "#9E9E9E", line: { color: "#fff", width: 1 } },
     hoverinfo: "skip", showlegend: true,
   };
   const legendHatch = {
-    type: "bar", x: [0.5], y: [-5], name: "probable",
+    type: "bar", x: [0.5], y: [-5], name: "Probable",
     marker: { color: "#9E9E9E", line: { color: "#fff", width: 1 },
               pattern: { shape: "/", fillmode: "overlay", fgcolor: "#ffffff", size: 8, solidity: 0.35 } },
     hoverinfo: "skip", showlegend: true,
@@ -4511,6 +4523,61 @@ function renderSocialDonut(sd) {
     }].concat(calloutAnn),
     paper_bgcolor: "#fafbfc", plot_bgcolor: "#fff",
   }, plotlyConfig("wolf_social_donut"));
+}
+
+// 3b. Social donut — probables merged into their assigned category.
+// Same pool / same colours as renderSocialDonut, but each category becomes one
+// solid wedge sized by (confirmed + probable). The wedge label notes how many
+// of those wolves are probable, and the hover gives the full breakdown.
+function renderSocialDonutMerged(sd) {
+  const N = sd.n_pool;
+  const pctOf = n => N ? (100 * n / N) : 0;
+  const labels = [], values = [], colors = [], text = [], hover = [];
+  for (const s of sd.soc_order) {
+    const tot = sd.social_totals[s].total;
+    if (!tot) continue;
+    const prob = sd.social_totals[s].probable;
+    const certain = tot - prob;
+    const name = SOCIAL_LABELS[s];
+    labels.push(name);
+    values.push(tot);
+    colors.push(SOCIAL_COLORS[s]);
+    const probNote = prob > 0
+      ? `<br><span style="font-size:10px;">(incl. ${prob}*)</span>`
+      : "";
+    text.push(name + "<br>" + tot + " (" + pctOf(tot).toFixed(0) + "%)" + probNote);
+    hover.push("<b>" + name + "</b><br>" + tot +
+      " wolves (" + pctOf(tot).toFixed(1) + "%)<br>" +
+      certain + " confirmed + " + prob + " probable (*)");
+  }
+  const HOLE = 0.55;
+  const DX = 1.0, DY = 0.92;
+  const donut = {
+    type: "pie", hole: HOLE,
+    labels: labels, values: values,
+    sort: false, showlegend: false,
+    domain: { x: [(1 - DX) / 2, (1 + DX) / 2], y: [(1 - DY) / 2, (1 + DY) / 2] },
+    marker: {
+      colors: colors,
+      line: { color: "#fff", width: 2 },
+    },
+    text: text,
+    textinfo: "text",
+    textposition: "inside",
+    insidetextfont: { size: 12, color: "#fff", family: "sans-serif" },
+    hovertext: hover,
+    hoverinfo: "text",
+  };
+  Plotly.newPlot("social-donut-merged-chart", [donut], {
+    margin: { l: 10, r: 10, t: 10, b: 10 },
+    showlegend: false,
+    annotations: [{
+      text: `<b>${sd.n_pool}</b><br><span style="font-size:11px;color:#888;">wolves</span>`,
+      xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false,
+      font: { size: 22, color: "#333", family: "sans-serif" },
+    }],
+    paper_bgcolor: "#fafbfc", plot_bgcolor: "#fff",
+  }, plotlyConfig("wolf_social_donut_merged"));
 }
 
 // (chart 5b — Per-polygon % — removed at user request, redundant with chart 1)
@@ -4682,24 +4749,22 @@ function renderSigsColorMatrix(sd) {
   const luColors = sd.landuse_colors || {};
   let html = `<table class="sigs-matrix"><thead><tr>`;
   html += `<th>Pack (n)</th>`;
-  html += `<th>Land use</th><th>Type</th>`;
+  html += `<th>Polygon</th><th>Type</th>`;
   for (const c of cols) html += `<th class="sigs-col-color">${c}${c === "D8" ? " colour" : ""}</th>`;
   html += `</tr></thead><tbody>`;
   for (const pack of sd.packs) {
     // Polygon name shown as a tooltip on the pack-name cell — dropped as its own
     // column 2026-05-30 to free space for the colour cells.
     const polyTip = pack.main_polygon ? `polygon: ${pack.main_polygon}` : "";
-    html += `<tr><td class="pack-name" title="${escapeHtml(polyTip)}">${escapeHtml(pack.display)} <span style="color:#888;">(${pack.n})</span></td>`;
-    // Land use + Type
+    const packDisplay = String(pack.display || "").replace(/\b([a-z])/g, m => m.toUpperCase());
+    html += `<tr><td class="pack-name" title="${escapeHtml(polyTip)}">${escapeHtml(packDisplay)} <span style="color:#888;">(${pack.n})</span></td>`;
+    // Polygon name (text colour encodes the land-use category) + Type
     const lu = pack.land_use || "Unclassified";
-    const luBg = luColors[lu] || "#888";
-    const luFg = _sigsTextOn(luBg);
-    html += `<td class="sigs-meta sigs-landuse" style="background:${luBg};color:${luFg};">${escapeHtml(lu)}</td>`;
+    const luColor = luColors[lu] || "#888";
+    const polyName = pack.main_polygon || "—";
+    html += `<td class="sigs-meta sigs-landuse" title="${escapeHtml(lu)}" style="background:#fff;color:${luColor};font-weight:600;">${escapeHtml(polyName)}</td>`;
     const gt = pack.group_type || "";
-    // pack = bold, group = medium — leave colours subtle so the region cells stay the visual focus
-    const gtBg = (gt === "pack") ? "#37474F" : (gt === "group") ? "#90A4AE" : "#ECEFF1";
-    const gtFg = _sigsTextOn(gtBg);
-    html += `<td class="sigs-meta sigs-group-type" style="background:${gtBg};color:${gtFg};font-weight:600;">${escapeHtml(gt)}</td>`;
+    html += `<td class="sigs-meta sigs-group-type" style="background:#fff;color:#000;font-weight:600;">${escapeHtml(gt)}</td>`;
     for (const region of cols) {
       const rd = pack.regions[region];
       const dist = rd ? rd.colors : null;

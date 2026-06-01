@@ -112,7 +112,7 @@ STATUS_COLORS = {
     "unambiguous": "#43A047",
     "asymmetric": "#1E88E5",
     "partial_ambiguous": "#9E9E9E",
-    "P": "#FB8C00",
+    "P": "#EF9A9A",
     "N": "#E53935",
     "empty": "#757575",
     "unknown": "#FFEB3B",
@@ -143,7 +143,7 @@ ID_BUCKET_COLORS = {
     "Shared 36+":         "#6D4C41",  # brown — extreme over-sharing
     "Asymmetric":         "#1E88E5",  # blue
     "Partial-ambiguous":  "#9E9E9E",  # gray
-    "P":                  "#FB8C00",  # warm orange
+    "P":                  "#EF9A9A",  # light red — same hue family as N
     "N":                  "#E53935",  # red
     "Empty":              "#000000",  # black — should be 0 once user fixes data
 }
@@ -427,7 +427,7 @@ tr:hover td { background: #fafbfc; }
     <code>n_unique</code> = number of <em>distinct codes</em> among them.
     Many wolves can share the same unambiguous code (e.g., D9 has 78 unambiguous wolves but only 4 distinct codes).
   </div>
-  <h3 style="margin-top: 16px;">Per-region summary</h3>
+  <h3 style="margin-top: 16px;">Per-Region Summary</h3>
   <div id="summary-table"></div>
   <div id="overview-plot" style="height: 420px; margin-top: 20px;"></div>
 </div>
@@ -513,7 +513,7 @@ tr:hover td { background: #fafbfc; }
     Brown / red at the top = wolves whose code is shared with many others (or the region
     was unobservable). Hover any segment for exact wolf count.
   </div>
-  <h3 style="margin-top: 20px;">Verification table (counts per bucket)</h3>
+  <h3 style="margin-top: 20px;">Verification Table (Counts Per Bucket)</h3>
   <div id="id-table" style="font-size: 12px; overflow-x: auto;"></div>
 </div>
 
@@ -707,8 +707,8 @@ function renderOverview() {
     text, textposition: "outside",
     hovertemplate: "<b>%{x}</b><br>n_unique=%{y}<br>%{text}<extra></extra>",
   }], {
-    title: "Distinct codes per region (version C)",
-    yaxis: { title: "n_unique (distinct codes)" },
+    title: "Distinct Codes Per Region (Version C)",
+    yaxis: { title: "n_unique (Distinct Codes)" },
     margin: { t: 50, b: 50 },
     showlegend: false,
   }, { responsive: true });
@@ -754,8 +754,8 @@ function renderRankFreq() {
       }], {
         title: { text: `${r} <sub>n_unique=${sm.n_unique} • H=${sm.shannon_entropy_bits.toFixed(2)}</sub>`, font: { size: 14 } },
         margin: { t: 40, l: 40, r: 14, b: 35 },
-        xaxis: { title: "rank" },
-        yaxis: { title: "count", type: yscale, autorange: true },
+        xaxis: { title: "Rank" },
+        yaxis: { title: "Count", type: yscale, autorange: true },
         showlegend: false,
         height: 280,
       }, { responsive: true, displayModeBar: false });
@@ -779,8 +779,8 @@ function renderRankFreq() {
       };
     });
     Plotly.newPlot("rf-overlay", traces, {
-      title: `Rank-frequency overlay — version ${version}`,
-      xaxis: { title: "Code rank (most → least frequent)" },
+      title: `Rank-Frequency Overlay — Version ${version}`,
+      xaxis: { title: "Code Rank (Most → Least Frequent)" },
       yaxis: { title: "Wolf count", type: yscale },
       legend: { orientation: "v", x: 1.02, y: 1, font: { size: 12 } },
       margin: { t: 50, r: 110 },
@@ -831,10 +831,10 @@ function renderComposition() {
 
   Plotly.newPlot("comp-plot", traces, {
     barmode: "stack",
-    title: `Composition per region (${mode==="percent" ? "percent" : "absolute"})`,
+    title: `Composition Per Region (${mode==="percent" ? "Percent" : "Absolute"})`,
     xaxis: { title: "Region", tickfont: { size: 13 } },
     yaxis: {
-      title: mode==="percent" ? "% of wolves" : "Wolf count",
+      title: mode==="percent" ? "% Of Wolves" : "Wolf Count",
       range: mode==="percent" ? [0,108] : [0, DATA.n_total*1.1],
     },
     legend: { orientation: "h", y: -0.18 },
@@ -887,10 +887,10 @@ function renderIdentification() {
 
   Plotly.newPlot("id-plot", traces, {
     barmode: "stack",
-    title: `Identification power per region — wolf bucket assignment (${mode==="percent" ? "percent" : "absolute"})`,
+    title: `Identification Power Per Region — Wolf Bucket Assignment (${mode==="percent" ? "Percent" : "Absolute"})`,
     xaxis: { title: "Region", tickfont: { size: 13 } },
     yaxis: {
-      title: mode==="percent" ? "% of wolves" : "Wolf count",
+      title: mode==="percent" ? "% Of Wolves" : "Wolf Count",
       range: mode==="percent" ? [0,108] : [0, DATA.n_total*1.1],
     },
     legend: { orientation: "v", x: 1.02, y: 1, font: { size: 11 } },
@@ -954,13 +954,13 @@ function renderCapacity() {
 
   Plotly.newPlot("capacity-plot", traces, {
     title: "Identification Capacity Map",
-    xaxis: { title: "% usable (visibility)", range: [55, 102] },
-    yaxis: { title: "Shannon entropy (bits)", range: [0, 6.8] },
+    xaxis: { title: "% Usable (Visibility)", range: [55, 102] },
+    yaxis: { title: "Shannon Entropy (Bits)", range: [0, 6.8] },
     shapes: shapes,
     annotations: [
       { x: 0.99, y: 0.99, xref:"paper", yref:"paper", text: "⭐ <b>IDEAL</b>",
         showarrow:false, font:{color:"#43A047", size:14}, xanchor:"right", yanchor:"top" },
-      { x: 0.01, y: 0.01, xref:"paper", yref:"paper", text: "❌ useless",
+      { x: 0.01, y: 0.01, xref:"paper", yref:"paper", text: "❌ Useless",
         showarrow:false, font:{color:"#E53935", size:13}, xanchor:"left", yanchor:"bottom" },
     ],
     legend: { orientation: "h", y: -0.18 },
@@ -1006,11 +1006,11 @@ function renderColorPattern() {
 
   Plotly.newPlot("cp-plot", traces, {
     grid: { rows: 1, columns: 2, pattern: "independent" },
-    title: `${r} — colour and pattern split`,
-    xaxis:  { title: "Colour value" },
-    yaxis:  { title: "Wolf count" },
-    xaxis2: { title: "Pattern value" },
-    yaxis2: { title: "Wolf count" },
+    title: `${r} — Colour And Pattern Split`,
+    xaxis:  { title: "Colour Value" },
+    yaxis:  { title: "Wolf Count" },
+    xaxis2: { title: "Pattern Value" },
+    yaxis2: { title: "Wolf Count" },
     showlegend: false,
     margin: { t: 50, b: 60 },
   }, { responsive: true });
