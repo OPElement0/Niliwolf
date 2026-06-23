@@ -558,7 +558,7 @@ ID_BUCKET_ORDER = [
     "Shared 21-35",
     "Shared 36+",
     "Asymmetric",
-    "Partial-ambiguous",
+    "Partial-Ambiguous",
     "P",
     "N",
     "Empty",
@@ -610,7 +610,7 @@ def identification_buckets(processed: pd.DataFrame, region: str) -> dict[str, in
         elif st == "P":
             buckets["P"] += 1
         elif st == "partial_ambiguous":
-            buckets["Partial-ambiguous"] += 1
+            buckets["Partial-Ambiguous"] += 1
         elif st == "asymmetric":
             buckets["Asymmetric"] += 1
         elif st == "empty":
@@ -622,7 +622,7 @@ def identification_buckets(processed: pd.DataFrame, region: str) -> dict[str, in
         elif st == "unknown":
             # All unknowns should be resolved by classification; if any leak
             # through, treat them as partial-ambiguous (conservative).
-            buckets["Partial-ambiguous"] += 1
+            buckets["Partial-Ambiguous"] += 1
     return buckets
 
 

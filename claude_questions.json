@@ -258,14 +258,14 @@
       "kind": "row",
       "serial": "Y46",
       "target_column": "pack name",
-      "question": "Y46 (currently social dynamic=lone, pack name=lone). Single observation 2020-10-11 at camera 10 in Yehudia. Under your stricter same-camera + same-date rule (2026-05-13), Y46 has TWO valid pack candidates because camera 10 was used by members of two different packs around that date: (A) golden pack — Y39 was at cam 10 with range overlapping 2020-10-11; (B) yehodiya trio — Y47 was also at cam 10 in the same window. Which pack is the right candidate, or should Y46 stay lone because we have only ONE observation (start == end, so we can't really verify both endpoints)?",
+      "question": "Y46 (currently social dynamic=lone, pack name=lone). Single observation 2020-10-11 at camera 10 in Yehudia. Under your stricter same-camera + same-date rule (2026-05-13), Y46 has TWO valid pack candidates because camera 10 was used by members of two different packs around that date: (A) golden pack — Y39 was at cam 10 with range overlapping 2020-10-11; (B) yehudiya trio — Y47 was also at cam 10 in the same window. Which pack is the right candidate, or should Y46 stay lone because we have only ONE observation (start == end, so we can't really verify both endpoints)?",
       "evidence": {
         "cam": 10,
         "date": "2020-10-11",
         "single_observation": true,
         "candidates": [
           "golden pack via Y39",
-          "yehodiya trio via Y47"
+          "yehudiya trio via Y47"
         ],
         "current_classification": "lone"
       },
@@ -276,14 +276,14 @@
       "kind": "row",
       "serial": "Y37",
       "target_column": "pack name",
-      "question": "Y37 (currently social dynamic=empty, pack name=empty). Single observation 2020-11-05 at camera 7 in Yehudia. Under your stricter same-camera + same-date rule, Y37 has TWO valid pack candidates at camera 7: (A) dark pack — Y29 at cam 7 in this window; (B) yehodiya trio — Y48 at cam 7. Same caveat as Y46 (only one observation date, can't verify two endpoints). Which pack candidate, or should Y37 be classified `lone` (or `unknown`) due to insufficient data?",
+      "question": "Y37 (currently social dynamic=empty, pack name=empty). Single observation 2020-11-05 at camera 7 in Yehudia. Under your stricter same-camera + same-date rule, Y37 has TWO valid pack candidates at camera 7: (A) dark pack — Y29 at cam 7 in this window; (B) yehudiya trio — Y48 at cam 7. Same caveat as Y46 (only one observation date, can't verify two endpoints). Which pack candidate, or should Y37 be classified `lone` (or `unknown`) due to insufficient data?",
       "evidence": {
         "cam": 7,
         "date": "2020-11-05",
         "single_observation": true,
         "candidates": [
           "dark pack via Y29",
-          "yehodiya trio via Y48"
+          "yehudiya trio via Y48"
         ],
         "current_classification": "(empty)"
       },
@@ -292,10 +292,10 @@
     {
       "id": "cq_lone_wolves_within_threshold",
       "kind": "general",
-      "question": "8 wolves you currently classify as `lone` are within the time threshold of a pack in the same polygon (your rule says lone requires ≥10 days, or ≥14 days in Yehudia). My algorithm reclassifies them as `pack*` / `group*`. The 8: H15m (lone → group* Makhfi new, 8d), Y101 (lone → group* yehodiya trio, 0d!), Y28 (lone → pack* golden pack, 12d in Yehudia ⇒ borderline), Y46 (lone → pack* dark pack, 0d), Sh59 (lone → group* Shaal west*, 0d), Sl65 (lone → group* slopes*, 8d), O66 (lone → pack* Odem East, 0d), Y37 (empty → pack* dark pack, 0d). The 0d cases are particularly clear-cut. Override your classification to the algorithm's, keep `lone` (with behavioral evidence I don't have), or review per-row?",
+      "question": "8 wolves you currently classify as `lone` are within the time threshold of a pack in the same polygon (your rule says lone requires ≥10 days, or ≥14 days in Yehudia). My algorithm reclassifies them as `pack*` / `group*`. The 8: H15m (lone → group* Makhfi new, 8d), Y101 (lone → group* yehudiya trio, 0d!), Y28 (lone → pack* golden pack, 12d in Yehudia ⇒ borderline), Y46 (lone → pack* dark pack, 0d), Sh59 (lone → group* Shaal west*, 0d), Sl65 (lone → group* slopes*, 8d), O66 (lone → pack* Odem East, 0d), Y37 (empty → pack* dark pack, 0d). The 0d cases are particularly clear-cut. Override your classification to the algorithm's, keep `lone` (with behavioral evidence I don't have), or review per-row?",
       "evidence": {
         "wolves": "H15m, Y101, Y28, Y46, Sh59, Sl65, O66, Y37",
-        "key_observation": "Y101 has 0-day gap from yehodiya trio — same date, same polygon"
+        "key_observation": "Y101 has 0-day gap from yehudiya trio — same date, same polygon"
       },
       "severity_hint": "errors"
     },

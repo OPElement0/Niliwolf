@@ -72,7 +72,7 @@ remains at 0 mismatches across all 4 layers.
    | 3 | 9.5 px  | 8.5 px |
    | 4-6 | 8.5 px | 7.5 px |
 7. **Uniform row height** (`tbody td { height: 56px; }`) so short rows like
-   `yehodiya trio` match taller tied-cell rows.
+   `yehudiya trio` match taller tied-cell rows.
 8. Long names wrap at hyphens/spaces (`overflow-wrap: anywhere`); tooltip
    on every coloured cell carries the full name as safety.
 
@@ -235,7 +235,7 @@ hidden without the admin password.
 
 - 12 packs/groups: dark pack (10), golden pack (7), Makhfi original (6),
   Odem west (6), Odem East (5), shaal east (5), slopes (4 probable),
-  yehodiya trio (3), Shaal west (2), Odem South (2), makhfi new (1),
+  yehudiya trio (3), Shaal west (2), Odem South (2), makhfi new (1),
   marom golan (1).
 - 46 confirmed pack members + 6 probable (with `*`).
 - 23 `lone` wolves.

@@ -32,7 +32,7 @@ Discrepancies (need user review): **31**
 | H15m | lone | lone | group* | makhfi unknown | makhfi unknown: start=M6H@cam[22]; end=M6H@cam[22] |
 | S21 | unknown | indeterminate | group | indeterminate | listed as member of indeterminate (4 members) |
 | S104 | unknown | indeterminate | group | indeterminate | listed as member of indeterminate (4 members) |
-| Y46 | lone | lone | pack* | golden pack, yehodiya trio | golden pack: single obs matched Y39 on cam [10] | yehodiya trio: single obs matched Y47 on cam [10] |
+| Y46 | lone | lone | pack* | golden pack, yehudiya trio | golden pack: single obs matched Y39 on cam [10] | yehudiya trio: single obs matched Y47 on cam [10] |
 | Y37 | unknown | indeterminate | group | indeterminate | listed as member of indeterminate (4 members) |
 | Sh57 | unknown | Shaal west* | group | Shaal west | listed as member of Shaal west (2 members) |
 | Sl60 | unknown | slopes* | group | slopes* | listed as member of slopes* (4 members) |
@@ -54,17 +54,17 @@ Discrepancies (need user review): **31**
 
 | pack name | n members | polygons | date range | cameras |
 |---|---|---|---|---|
-| dark pack | 10 | yehodiya | 2020-10-03 — 2020-11-28 | 7 |
+| dark pack | 10 | yehudiya | 2020-10-03 — 2020-11-28 | 7 |
 | Odem west | 7 | odem | 2020-08-29 — 2020-12-11 | 31, 33 |
-| golden pack | 7 | yehodiya | 2020-09-30 — 2020-11-13 | 8, 9, 10 |
+| golden pack | 7 | yehudiya | 2020-09-30 — 2020-11-13 | 8, 9, 10 |
 | shaal east | 7 | shaal | 2020-10-03 — 2020-11-17 | 16, 17 |
 | Makhfi original | 6 | makhfi | 2020-10-26 — 2020-11-26 | 27, 30 |
 | Odem East | 5 | odem | 2020-10-11 — 2020-12-12 | 32, 34, 35 |
-| indeterminate | 4 | odem, saki, yehodiya | 2020-11-05 — 2020-11-28 | 7, 12, 34 |
+| indeterminate | 4 | odem, saki, yehudiya | 2020-11-05 — 2020-11-28 | 7, 12, 34 |
 | slopes* | 4 | slopes | 2020-09-14 — 2020-09-25 | 46, 47 |
 | fire zone group | 3 | firing-zone | 2020-11-03 — 2020-11-03 | 53 |
 | makhfi unknown | 3 | makhfi | 2020-08-26 — 2020-12-02 | 22, 26, 29, 30 |
-| yehodiya trio | 3 | yehodiya | 2020-10-18 — 2020-12-07 | 7, 10 |
+| yehudiya trio | 3 | yehudiya | 2020-10-18 — 2020-12-07 | 7, 10 |
 | Odem South | 2 | odem | 2020-09-28 — 2020-12-07 | 34 |
 | Shaal west | 2 | shaal | 2020-09-13 — 2020-11-30 | 20 |
 | makhfi new | 1 | makhfi | 2020-09-18 — 2020-09-18 | 29 |

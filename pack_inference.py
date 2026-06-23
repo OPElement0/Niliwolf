@@ -34,7 +34,7 @@ from wolf_lib import INPUT_FILE, SHEET_NAME
 
 PROJECT_DIR = Path(__file__).parent
 OUT_MD = PROJECT_DIR / "pack_inference_report.md"
-YEHUDIA_KEYS = {"yehodiya", "yehudia"}  # match polygon names containing these
+YEHUDIA_KEYS = {"yehodiya", "yehudia", "yehudiya"}  # match polygon-name spellings (incl. legacy "yehodiya" typo)
 LONE_THRESHOLD_DEFAULT = 10  # days
 LONE_THRESHOLD_YEHUDIA = 14  # days
 

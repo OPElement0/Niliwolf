@@ -1,6 +1,6 @@
 # Data Quality Report — `wolves_data.xlsx`
 
-**Generated:** 2026-05-29 21:29  
+**Generated:** 2026-06-23 09:09  
 **Source sheet:** `נתוני זיהוי זאבים (2)` (100 rows × 28 cols)
 
 > **From `data_decisions.json`:** 10 finding(s) suppressed (status=decided_keep), 0 carry a user comment, 0 marked `fixed_in_xlsx` but still detected.
@@ -105,7 +105,7 @@
 | Y33 | dark pack | (blank) |
 | Y34 | dark pack | (blank) |
 | Y35 | dark pack | (blank) |
-| Y36 | yehodiya trio | (blank) |
+| Y36 | yehudiya trio | (blank) |
 | Y39 | golden pack | (blank) |
 | Y40 | golden pack | (blank) |
 | Y41 | golden pack | (blank) |

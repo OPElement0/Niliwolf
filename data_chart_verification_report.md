@@ -1,8 +1,8 @@
 # Data-integrity Report — `data_table.html` chart vs. table
 
-**Generated:** 2026-06-02 00:59  
+**Generated:** 2026-06-23 09:09  
 **Source:** `wolves_data.xlsx`, sheet `נתוני זיהוי זאבים (2)`  
-**HTML:** `data_table.html` (build_iso: `2026-06-02 00:59`)
+**HTML:** `data_table.html` (build_iso: `2026-06-23 09:09`)
 
 ## 1. Headline
 
@@ -35,13 +35,13 @@ Compared `PAYLOAD.anatomy.bucket_dist` in the page against `identification_bucke
 
 Reference (chart values, all confirmed correct):
 
-| region | Unique (1) | Shared 2-3 | Shared 4-6 | Shared 7-10 | Shared 11-20 | Shared 21-35 | Shared 36+ | Asymmetric | Partial-ambiguous | P | N | Empty |
+| region | Unique (1) | Shared 2-3 | Shared 4-6 | Shared 7-10 | Shared 11-20 | Shared 21-35 | Shared 36+ | Asymmetric | Partial-Ambiguous | P | N | Empty |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| A1 | 51 | 23 | 9 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 1 | 0 |
+| A1 | 50 | 23 | 10 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 1 | 0 |
 | A2 | 16 | 30 | 24 | 7 | 0 | 0 | 0 | 3 | 2 | 0 | 7 | 0 |
-| B3 | 2 | 7 | 9 | 10 | 0 | 0 | 0 | 1 | 32 | 4 | 24 | 0 |
-| B4 | 1 | 2 | 20 | 17 | 11 | 0 | 0 | 3 | 9 | 9 | 17 | 0 |
-| B5 | 2 | 5 | 13 | 0 | 29 | 0 | 0 | 3 | 11 | 4 | 22 | 0 |
+| B3 | 2 | 8 | 9 | 10 | 0 | 0 | 0 | 1 | 31 | 4 | 24 | 0 |
+| B4 | 0 | 4 | 20 | 17 | 11 | 0 | 0 | 3 | 8 | 9 | 17 | 0 |
+| B5 | 3 | 5 | 13 | 0 | 29 | 0 | 0 | 3 | 10 | 4 | 22 | 0 |
 | C6 | 23 | 23 | 19 | 15 | 0 | 0 | 0 | 0 | 4 | 1 | 4 | 0 |
 | C7 | 1 | 3 | 6 | 8 | 28 | 26 | 0 | 0 | 1 | 3 | 13 | 0 |
 | D8 | 9 | 11 | 14 | 0 | 20 | 0 | 0 | 0 | 30 | 2 | 3 | 0 |
@@ -67,9 +67,9 @@ Reference (per region, status counts, all confirmed):
 |---|---|---|---|---|---|---|---|
 | A1 | 83 | 2 | 3 | 0 | 1 | 0 | 89 |
 | A2 | 77 | 3 | 2 | 0 | 7 | 0 | 89 |
-| B3 | 28 | 1 | 32 | 4 | 24 | 0 | 89 |
-| B4 | 51 | 3 | 9 | 9 | 17 | 0 | 89 |
-| B5 | 49 | 3 | 11 | 4 | 22 | 0 | 89 |
+| B3 | 29 | 1 | 31 | 4 | 24 | 0 | 89 |
+| B4 | 52 | 3 | 8 | 9 | 17 | 0 | 89 |
+| B5 | 50 | 3 | 10 | 4 | 22 | 0 | 89 |
 | C6 | 80 | 0 | 4 | 1 | 4 | 0 | 89 |
 | C7 | 72 | 0 | 1 | 3 | 13 | 0 | 89 |
 | D8 | 54 | 0 | 30 | 2 | 3 | 0 | 89 |

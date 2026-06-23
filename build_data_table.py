@@ -104,7 +104,7 @@ ID_BUCKET_COLORS = {
     "Shared 21-35":       "#F57C00",
     "Shared 36+":         "#6D4C41",
     "Asymmetric":         "#1E88E5",
-    "Partial-ambiguous":  "#9E9E9E",
+    "Partial-Ambiguous":  "#9E9E9E",
     "P":                  "#EF9A9A",
     "N":                  "#E53935",
     "Empty":              "#000000",
@@ -124,8 +124,8 @@ STATUS_LABELS = {
     "unambiguous":        "Full",
     "asymmetric":         "Asymmetric",
     "partial_ambiguous":  "Partial",
-    "P":                  "P (unclear)",
-    "N":                  "N (not visible)",
+    "P":                  "P (Unclear)",
+    "N":                  "N (Not Visible)",
     "empty":              "Empty",
     "unknown":            "Unknown",
 }
@@ -332,7 +332,7 @@ CATEGORY_META = {
 # camera-survey pool (wolves with a known polygon); photographer-sourced wolves
 # without a location are EXCLUDED there.
 LAND_USE_BY_POLYGON: dict[str, str] = {
-    "yehodiya":       "Nature Reserve",
+    "yehudiya":       "Nature Reserve",
     "odem":           "Nature Reserve",
     "makhfi":         "Minefield",
     "saki":           "Minefield",
@@ -1945,7 +1945,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   /* Give the four colour columns more room so the names fit on 1-2 lines. */
   .sigs-matrix th.sigs-col-color, .sigs-matrix td.sigs-col-color { min-width: 110px; }
   /* Uniform row height — without this, rows whose cells are all single-modal
-     (e.g. yehodiya trio) render shorter than rows containing tie cells. */
+     (e.g. yehudiya trio) render shorter than rows containing tie cells. */
   .sigs-matrix tbody td { height: 56px; }
   /* Tie cell: strips must fill the td edge-to-edge, even when the row is
      taller than the strips' natural height (no white gaps above/below). */
@@ -2140,169 +2140,53 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div>
       <h1>Wolves Data — Interactive Table <span id="mode-badge" class="mode-badge mode-viewer">VIEWER</span></h1>
       <div class="stats">
-        <div class="stat" title="Canonical analysis pool: every wolf with a code AND ≥1 numeric camera token (research grid). Photographer-only wolves are excluded per the 2026-05-29 mentor decision.">wolves in pool: <strong id="stat-pool">0</strong></div>
-        <div class="stat">visible: <strong id="stat-visible">0</strong></div>
-        <div class="stat">last refresh: <strong id="stat-build">—</strong></div>
+        <div class="stat" title="Canonical analysis pool: every wolf with a code AND ≥1 numeric camera token (research grid). Photographer-only wolves are excluded per the 2026-05-29 mentor decision.">Wolves in Pool: <strong id="stat-pool">0</strong></div>
+        <div class="stat">Visible: <strong id="stat-visible">0</strong></div>
+        <div class="stat">Last Refresh: <strong id="stat-build">—</strong></div>
       </div>
       <div class="legend">
-        <strong>Region groups:</strong>
-        <span style="background:#E91E63;">A — muzzle (A1, A2)</span>
-        <span style="background:#42A5F5;">B — eye (B3, B4, B5)</span>
-        <span style="background:#FF7043;">C — nose/chin (C6, C7)</span>
-        <span style="background:#9C27B0;">D — head side (D8, D9)</span>
+        <strong>Region Groups:</strong>
+        <span style="background:#E91E63;">A — Muzzle (A1, A2)</span>
+        <span style="background:#42A5F5;">B — Eye (B3, B4, B5)</span>
+        <span style="background:#FF7043;">C — Nose/Chin (C6, C7)</span>
+        <span style="background:#9C27B0;">D — Head Side (D8, D9)</span>
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <div id="sync-pill" class="sync-pill sync-offline" title="Local sync status — click for details">starting…</div>
       <button id="admin-login-btn" class="btn-warn" style="padding: 8px 14px; font-size: 13px;">
-        🔒 Admin login
+        🔒 Admin Login
       </button>
     </div>
   </div>
   <div class="controls">
-    <input type="text" id="search-input" placeholder="Search across all columns…" />
-    <label><input type="checkbox" id="show-empty-code" /> show wolves with no code</label>
+    <input type="text" id="search-input" placeholder="Search Across All Columns…" />
+    <label><input type="checkbox" id="show-empty-code" /> Show Wolves with No Code</label>
     <label id="show-photographer-wrap" style="display:none;" title="Wolves observed only by external photographers — excluded from the paper pool. Admin-only.">
-      <input type="checkbox" id="show-photographer" /> show photographer-source wolves
+      <input type="checkbox" id="show-photographer" /> Show Photographer-Source Wolves
     </label>
-    <label><input type="checkbox" id="show-status-bars" checked /> region status badges</label>
+    <label><input type="checkbox" id="show-status-bars" checked /> Region Status Badges</label>
     <div id="col-toggle-wrap" style="position:relative; display:inline-block;">
       <button id="col-toggle-btn" type="button">Columns ▼</button>
       <div id="col-toggle-menu" style="display:none; position:absolute; top:100%; left:0; margin-top:4px;
             background:#fff; border:1px solid #ccc; border-radius:6px; padding:8px;
             box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:200; min-width:220px; max-height:60vh; overflow:auto;">
         <div style="display:flex; gap:6px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid #eee;">
-          <button type="button" id="col-show-all" style="font-size:11px; padding:3px 8px;">Show all</button>
-          <button type="button" id="col-hide-all" style="font-size:11px; padding:3px 8px;">Hide all</button>
+          <button type="button" id="col-show-all" style="font-size:11px; padding:3px 8px;">Show All</button>
+          <button type="button" id="col-hide-all" style="font-size:11px; padding:3px 8px;">Hide All</button>
         </div>
         <div id="col-toggle-list"></div>
       </div>
     </div>
-    <button id="reset-filters">Reset filters</button>
+    <button id="reset-filters">Reset Filters</button>
   </div>
 </header>
 
-<div class="smart-filter-bar" id="smart-filter-bar">
-  <span class="label">Smart filters:</span>
-  <div class="smart-filter-dropdown" id="filter-polygon-wrap">
-    <button type="button" class="smart-filter-btn" id="filter-polygon-btn">
-      📍 Polygon
-      <span class="sel-count" id="filter-polygon-count"></span>
-      <span style="font-size:10px;">▼</span>
-    </button>
-    <div class="smart-filter-menu" id="filter-polygon-menu"></div>
-  </div>
-  <div class="smart-filter-dropdown" id="filter-pack-wrap">
-    <button type="button" class="smart-filter-btn" id="filter-pack-btn">
-      🐺 Pack
-      <span class="sel-count" id="filter-pack-count"></span>
-      <span style="font-size:10px;">▼</span>
-    </button>
-    <div class="smart-filter-menu" id="filter-pack-menu"></div>
-  </div>
-  <div class="smart-filter-dropdown" id="filter-social-wrap">
-    <button type="button" class="smart-filter-btn" id="filter-social-btn">
-      👥 Social
-      <span class="sel-count" id="filter-social-count"></span>
-      <span style="font-size:10px;">▼</span>
-    </button>
-    <div class="smart-filter-menu" id="filter-social-menu"></div>
-  </div>
-  <span style="flex:1;"></span>
-  <button id="smart-filter-clear" style="padding:4px 10px; font-size:11.5px;">Clear smart filters</button>
-</div>
-
-<div class="status-filter-bar" id="status-filter-bar">
-  <span class="label">Filter by region status (any of 9 regions):</span>
-  <span class="status-chip" data-status="unambiguous"   style="--c:#43A047;"><span class="dot" style="background:#43A047;"></span>Full <span class="count" id="cnt-unambiguous">0</span></span>
-  <span class="status-chip" data-status="asymmetric"    style="--c:#1E88E5;"><span class="dot" style="background:#1E88E5;"></span>Asymmetric <span class="count" id="cnt-asymmetric">0</span></span>
-  <span class="status-chip" data-status="partial_ambiguous" style="--c:#9E9E9E;"><span class="dot" style="background:#9E9E9E;"></span>Partial <span class="count" id="cnt-partial_ambiguous">0</span></span>
-  <span class="status-chip" data-status="P"             style="--c:#EF9A9A;"><span class="dot" style="background:#EF9A9A;"></span>P (unclear) <span class="count" id="cnt-P">0</span></span>
-  <span class="status-chip" data-status="N"             style="--c:#E53935;"><span class="dot" style="background:#E53935;"></span>N (not visible) <span class="count" id="cnt-N">0</span></span>
-  <span style="flex:1;"></span>
-  <button id="status-clear" style="padding:4px 10px; font-size:11.5px;">Clear status filter</button>
-</div>
-
-<div id="admin-bar" class="admin-bar">
-  <div><strong>Admin mode active</strong> — click any cell to edit, press <kbd>Enter</kbd> or click outside to commit. <span id="admin-bar-hint" style="color:#6d4c41;"></span></div>
-  <div style="display:flex; gap:6px; flex-wrap:wrap;">
-    <button id="save-table-btn" class="btn-primary" title="Save every table edit to wolves_data.xlsx right now">
-      💾 Save table edits <span id="save-table-count"></span>
-    </button>
-    <button id="review-issues-btn">⚠ Review issues (<span id="review-count">0</span>)</button>
-    <button id="add-row-btn">＋ Add row</button>
-    <button id="logout-btn">Logout</button>
-  </div>
-</div>
-
-<aside id="issue-panel" class="issue-panel">
-  <div class="ip-header">
-    <h3>Fix &amp; Clarify</h3>
-    <div class="ip-header-actions">
-      <button id="ip-download" title="Download all answers as data_decisions.json">💾</button>
-      <button id="ip-load" title="Load saved answers from a JSON file">📥</button>
-      <button class="close-btn" id="ip-close" title="Close">×</button>
-    </div>
-  </div>
-  <input type="file" id="ip-load-file" accept=".json" style="display:none">
-  <div class="ip-panel-tabs">
-    <button class="ip-tab active" data-mode="all">All <span class="ip-tab-count" id="ip-tab-count-all">0</span></button>
-    <button class="ip-tab" data-mode="needs_reply">Needs reply <span class="ip-tab-count" id="ip-tab-count-needs_reply">0</span></button>
-    <button class="ip-tab" data-mode="answered">Answered <span class="ip-tab-count" id="ip-tab-count-answered">0</span></button>
-    <button class="ip-tab" data-mode="resolved">Resolved <span class="ip-tab-count" id="ip-tab-count-resolved">0</span></button>
-  </div>
-  <div class="ip-progress" id="ip-progress">
-    <span title="Distinct decisions left (Claude questions + QC categories with open items)">
-      <strong id="ip-decisions-remaining">0</strong> decisions remaining
-    </span>
-    <span title="Items where you've left a comment or set a status"><strong id="ip-answered">0</strong> answered</span>
-    <span title="Total individual items"><strong id="ip-items-total">0</strong> items</span>
-  </div>
-  <div class="ip-list" id="ip-list"></div>
-  <div class="ip-active-card" id="ip-active-card">
-    <div class="ip-active-title" id="ip-active-title">—</div>
-    <div class="ip-active-detail" id="ip-active-detail">—</div>
-    <div class="ip-clarification" id="ip-clarification">
-      <div class="ip-clarification-row">
-        <label for="ip-status-select">Status:</label>
-        <select id="ip-status-select" class="ip-status-select">
-          <option value="open">Open</option>
-          <option value="answered">Answered</option>
-          <option value="decided_keep">Decided to keep</option>
-          <option value="fixed_in_xlsx">Fixed in xlsx</option>
-          <option value="needs_more_data">Need more data</option>
-        </select>
-        <span class="ip-updated" id="ip-updated">—</span>
-      </div>
-      <textarea id="ip-comment" class="ip-comment"
-                placeholder="Your reply / clarification… (saved on blur)"
-                dir="auto" rows="3"></textarea>
-      <span class="ip-save-flash" id="ip-save-flash">✓ saved</span>
-    </div>
-    <div class="ip-actions" id="ip-active-actions"></div>
-  </div>
-  <div class="ip-nav">
-    <button id="ip-prev">◀ Prev</button>
-    <button id="ip-next">Next ▶</button>
-  </div>
-</aside>
-
-<div id="save-bar" class="save-bar">
-  <div><span id="dirty-summary">No unsaved changes</span></div>
-  <div style="display:flex; gap:6px;">
-    <button id="discard-btn" class="btn-danger">Discard</button>
-    <button id="save-btn" class="btn-primary">💾 Save → download wolves_data.xlsx</button>
-  </div>
-</div>
-
-<div id="table-download-bar" class="table-download-bar">
-  <button id="download-xlsx-btn" type="button" title="Download the table to an Excel file — exactly the columns and rows currently shown">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    Download to Excel
-  </button>
-</div>
-
-<div id="data-table"></div>
+<!-- Main wolves data table block moved to the bottom of the page 2026-06-13
+     (Nili): the full table interface (smart-filter-bar, status-filter-bar,
+     admin-bar, issue-panel aside, save-bar, table-download-bar, data-table)
+     now lives just above the footer so the page opens with the anatomy
+     reference and the visualisation tabs first. -->
 
 <!-- ============= Anatomy reference ============= -->
 <div class="section" id="anatomy-section">
@@ -2320,8 +2204,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <table class="region-table" id="region-ref-table">
         <thead>
           <tr>
-            <th>Region</th><th>Group</th><th>Region name</th>
-            <th>Anatomical description</th><th>Variation encoded</th>
+            <th>Region</th><th>Group</th><th>Region Name</th>
+            <th>Anatomical Description</th><th>Variation Encoded</th>
           </tr>
         </thead>
         <tbody><!-- populated by JS --></tbody>
@@ -2357,31 +2241,54 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div id="region-distribution-chart"></div>
   </div>
 
-  <h2><span class="swatch"></span>Per-Region Identification Breakdown</h2>
-  <div class="section-sub">
-    Each column represents one region; each bar holds 100% of the analysed wolves
-    (n = <span id="dist-n-cont">0</span>). <strong>Unique</strong> = wolves whose
-    code in this region appears in no other wolf. The <strong>Shared</strong>
-    portion — every band above the dark-green Unique base — is a
-    <em>continuous</em> heat-map: each band is coloured by the exact number of
-    wolves that share that code (<strong>darkest green</strong> = shared by few,
-    <strong>palest green</strong> = shared by many), and the colour bar on the
-    right maps shade to share-count.
-    <strong>Asymmetric</strong> = wolf carries a different code on its right vs.
-    left side; <strong>Partial</strong> = code is a substring of another code or
-    has a missing character; <strong>P</strong> = a fur marking is visible but
-    too indistinct to assign a code (the presence itself is informative — we
-    know <em>something</em> is there); <strong>N</strong> = no codable view —
-    either the region was never captured in any photo, or it was captured but
-    too poorly (angle, lighting, blur) to read anything from. Segments ≥10% are
-    labelled with their percentage; hover any segment for exact counts. Use
-    Plotly's camera icon to download as PNG.
+  <!-- Original continuous heat-map hidden 2026-06-13 (Nili): the edited copy
+       below is now the main chart. Markup kept intact (just wrapped in
+       display:none) so it can be restored by removing this wrapper. -->
+  <div style="display:none;">
+    <h2><span class="swatch"></span>Per-Region Identification Breakdown</h2>
+    <div class="section-sub">
+      Each column represents one region; each bar holds 100% of the analysed wolves
+      (n = <span id="dist-n-cont">0</span>). <strong>Unique</strong> = wolves whose
+      code in this region appears in no other wolf. The <strong>Shared</strong>
+      portion — every band above the dark-green Unique base — is a
+      <em>continuous</em> heat-map: each band is coloured by the exact number of
+      wolves that share that code (<strong>darkest green</strong> = shared by few,
+      <strong>palest green</strong> = shared by many), and the colour bar on the
+      right maps shade to share-count.
+      <strong>Asymmetric</strong> = wolf carries a different code on its right vs.
+      left side; <strong>Partial</strong> = code is a substring of another code or
+      has a missing character; <strong>P</strong> = a fur marking is visible but
+      too indistinct to assign a code (the presence itself is informative — we
+      know <em>something</em> is there); <strong>N</strong> = no codable view —
+      either the region was never captured in any photo, or it was captured but
+      too poorly (angle, lighting, blur) to read anything from. Segments ≥10% are
+      labelled with their percentage; hover any segment for exact counts. Use
+      Plotly's camera icon to download as PNG.
+    </div>
+    <div id="region-distribution-chart-cont"></div>
   </div>
-  <div id="region-distribution-chart-cont"></div>
+
+  <!-- Edited copy promoted to main chart 2026-06-13 (Nili). Three visual choices
+       vs. the original (still rendered above, just hidden): N rendered black,
+       P rendered medium-dark grey, and Asymmetric folded into the Unique (1)
+       segment instead of getting its own stack. The "Edited Copy For Comparison"
+       suffix and the comparison section-sub are kept in the markup but hidden
+       so they can be restored if the original is ever brought back. -->
+  <h2><span class="swatch"></span>Per-Region Identification Breakdown<span style="font-size:13px;font-weight:600;color:#999;display:none;"> &mdash; Edited Copy For Comparison</span></h2>
+  <div class="section-sub" style="display:none;">
+    Same data and same heat-map as the chart above. Three visual edits to
+    compare against the original:
+    <strong>(1)</strong> <em>N</em> is rendered <strong>black</strong> instead of red;
+    <strong>(2)</strong> <em>P</em> is rendered a <strong>medium-dark grey</strong>
+    (darker than Partial-Ambiguous, lighter than N);
+    <strong>(3)</strong> <em>Asymmetric</em> is folded into the dark-green
+    <strong>Unique (1)</strong> segment instead of getting its own band.
+  </div>
+  <div id="region-distribution-chart-cont-edited"></div>
 
   <!-- Single-region power chart — merged into this tab 2026-05-22 (Nili): both
        charts describe per-region identification ability, so they live together. -->
-  <h2 style="margin-top:42px;"><span class="swatch"></span>Single-Region Power — Bars Sorted By ID Power</h2>
+  <h2 style="margin-top:42px;"><span class="swatch"></span>Single-Region Power — Bars Sorted by ID Power</h2>
   <div class="section-sub" id="idpower-definition">
     <!-- Filled in by JS from PAYLOAD.anatomy.identification_power.definition_note -->
   </div>
@@ -2394,7 +2301,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <!-- ============= Social Dynamics (polygon + pack + social) ============= -->
 <div class="section viz-pane" id="social-section" style="display:none;">
-  <h2><span class="swatch"></span>Social Dynamics — Where The Wolves Live And How They Group</h2>
+  <h2><span class="swatch"></span>Social Dynamics — Where the Wolves Live and How They Group</h2>
   <div class="section-sub">
     <strong>Camera-survey pool only</strong> &nbsp;·&nbsp;
     <span id="social-pool-n">?</span> wolves analysed
@@ -2419,10 +2326,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
 
     <div class="social-card">
-      <h3>2. Land-Use Class — Wolves Per Category, Stacked By Social</h3>
+      <h3>2. Land-Use Class — Wolves per Category, Stacked by Social</h3>
       <div class="card-sub">
         Polygons grouped by land-use class (per the paper's key).
-        <strong>Nature Reserve</strong> = Yehodiya + Odem (most protected).
+        <strong>Nature Reserve</strong> = Yehudiya + Odem (most protected).
         <strong>Minefield</strong> = Makhfi + Saki + Hazeka (no humans).
         <strong>High Culling</strong> = Shaal + Snir + Keshet-Yonatan.
         <strong>Low Culling</strong> = Slopes + Firing-Zone + Masade.
@@ -2431,7 +2338,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
 
     <div class="social-card">
-      <h3>3. Pack Inventory — Sizes And Home Polygons</h3>
+      <h3>3. Pack Inventory — Sizes and Home Polygons</h3>
       <div class="card-sub">
         Each row is one identified pack. <strong>Land-use chip</strong> shows the
         class of the pack's home polygon (blue=Nature Reserve, orange=Minefield,
@@ -2461,7 +2368,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
 
     <div class="social-card">
-      <h3>4. Per-Polygon Stacked By Social Dynamic</h3>
+      <h3>4. Per-Polygon Stacked by Social Dynamic</h3>
       <div class="card-sub">
         Each polygon's bar shows how its wolves split among pack / group / lone /
         unknown. Polygon name colour = land-use class. Hover for breakdown.
@@ -2473,7 +2380,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <!-- ============= Pack Signatures ============= -->
 <div class="section viz-pane" id="signatures-section" style="display:none;">
-  <h2><span class="swatch"></span>Pack Signatures — What Unites And Individualises Within Each Pack</h2>
+  <h2><span class="swatch"></span>Pack Signatures — What Unites and Individualises Within Each Pack</h2>
   <div class="section-sub">
     Each named pack (n ≥ 2): the <em>pattern</em> axis tends to individualise members; the
     <em>colour</em> and <em>contrast</em> axes tend to tag the pack. Each region is split by its
@@ -2488,7 +2395,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div id="sigs-color-matrix"></div>
     </div>
     <div class="sigs-block">
-      <h3>Top 3 Packs Per Region — Colour / Contrast Comparison</h3>
+      <h3>Top 3 Packs per Region — Colour / Contrast Comparison</h3>
       <div class="sub">For each region: the three packs whose colour (A1/A2/C6/D8), contrast (B3/B4/B5/D9), or pattern (C7) is most consistent within the pack. Each vertical bar shows one pack's full within-pack distribution at the region's primary axis; the diagonal-striped grey segment marks wolves without info on this axis (N/P or code missing the relevant half), so each bar represents the whole pack. Packs with fewer than 3 observed wolves on that region are excluded so small-sample 100%s don't dominate.</div>
       <div id="sigs-top3-comparison"></div>
     </div>
@@ -2505,6 +2412,129 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
 </div>
 
+<!-- ============= Main data table (moved here 2026-06-13) ============= -->
+<div class="smart-filter-bar" id="smart-filter-bar">
+  <span class="label">Smart Filters:</span>
+  <div class="smart-filter-dropdown" id="filter-polygon-wrap">
+    <button type="button" class="smart-filter-btn" id="filter-polygon-btn">
+      📍 Polygon
+      <span class="sel-count" id="filter-polygon-count"></span>
+      <span style="font-size:10px;">▼</span>
+    </button>
+    <div class="smart-filter-menu" id="filter-polygon-menu"></div>
+  </div>
+  <div class="smart-filter-dropdown" id="filter-pack-wrap">
+    <button type="button" class="smart-filter-btn" id="filter-pack-btn">
+      🐺 Pack
+      <span class="sel-count" id="filter-pack-count"></span>
+      <span style="font-size:10px;">▼</span>
+    </button>
+    <div class="smart-filter-menu" id="filter-pack-menu"></div>
+  </div>
+  <div class="smart-filter-dropdown" id="filter-social-wrap">
+    <button type="button" class="smart-filter-btn" id="filter-social-btn">
+      👥 Social
+      <span class="sel-count" id="filter-social-count"></span>
+      <span style="font-size:10px;">▼</span>
+    </button>
+    <div class="smart-filter-menu" id="filter-social-menu"></div>
+  </div>
+  <span style="flex:1;"></span>
+  <button id="smart-filter-clear" style="padding:4px 10px; font-size:11.5px;">Clear Smart Filters</button>
+</div>
+
+<div class="status-filter-bar" id="status-filter-bar">
+  <span class="label">Filter by Region Status (Any of 9 Regions):</span>
+  <span class="status-chip" data-status="unambiguous"   style="--c:#43A047;"><span class="dot" style="background:#43A047;"></span>Full <span class="count" id="cnt-unambiguous">0</span></span>
+  <span class="status-chip" data-status="asymmetric"    style="--c:#1E88E5;"><span class="dot" style="background:#1E88E5;"></span>Asymmetric <span class="count" id="cnt-asymmetric">0</span></span>
+  <span class="status-chip" data-status="partial_ambiguous" style="--c:#9E9E9E;"><span class="dot" style="background:#9E9E9E;"></span>Partial <span class="count" id="cnt-partial_ambiguous">0</span></span>
+  <span class="status-chip" data-status="P"             style="--c:#EF9A9A;"><span class="dot" style="background:#EF9A9A;"></span>P (Unclear) <span class="count" id="cnt-P">0</span></span>
+  <span class="status-chip" data-status="N"             style="--c:#E53935;"><span class="dot" style="background:#E53935;"></span>N (Not Visible) <span class="count" id="cnt-N">0</span></span>
+  <span style="flex:1;"></span>
+  <button id="status-clear" style="padding:4px 10px; font-size:11.5px;">Clear Status Filter</button>
+</div>
+
+<div id="admin-bar" class="admin-bar">
+  <div><strong>Admin Mode Active</strong> — click any cell to edit, press <kbd>Enter</kbd> or click outside to commit. <span id="admin-bar-hint" style="color:#6d4c41;"></span></div>
+  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+    <button id="save-table-btn" class="btn-primary" title="Save every table edit to wolves_data.xlsx right now">
+      💾 Save Table Edits <span id="save-table-count"></span>
+    </button>
+    <button id="review-issues-btn">⚠ Review Issues (<span id="review-count">0</span>)</button>
+    <button id="add-row-btn">＋ Add Row</button>
+    <button id="logout-btn">Logout</button>
+  </div>
+</div>
+
+<aside id="issue-panel" class="issue-panel">
+  <div class="ip-header">
+    <h3>Fix &amp; Clarify</h3>
+    <div class="ip-header-actions">
+      <button id="ip-download" title="Download all answers as data_decisions.json">💾</button>
+      <button id="ip-load" title="Load saved answers from a JSON file">📥</button>
+      <button class="close-btn" id="ip-close" title="Close">×</button>
+    </div>
+  </div>
+  <input type="file" id="ip-load-file" accept=".json" style="display:none">
+  <div class="ip-panel-tabs">
+    <button class="ip-tab active" data-mode="all">All <span class="ip-tab-count" id="ip-tab-count-all">0</span></button>
+    <button class="ip-tab" data-mode="needs_reply">Needs Reply <span class="ip-tab-count" id="ip-tab-count-needs_reply">0</span></button>
+    <button class="ip-tab" data-mode="answered">Answered <span class="ip-tab-count" id="ip-tab-count-answered">0</span></button>
+    <button class="ip-tab" data-mode="resolved">Resolved <span class="ip-tab-count" id="ip-tab-count-resolved">0</span></button>
+  </div>
+  <div class="ip-progress" id="ip-progress">
+    <span title="Distinct decisions left (Claude questions + QC categories with open items)">
+      <strong id="ip-decisions-remaining">0</strong> Decisions Remaining
+    </span>
+    <span title="Items where you've left a comment or set a status"><strong id="ip-answered">0</strong> Answered</span>
+    <span title="Total individual items"><strong id="ip-items-total">0</strong> Items</span>
+  </div>
+  <div class="ip-list" id="ip-list"></div>
+  <div class="ip-active-card" id="ip-active-card">
+    <div class="ip-active-title" id="ip-active-title">—</div>
+    <div class="ip-active-detail" id="ip-active-detail">—</div>
+    <div class="ip-clarification" id="ip-clarification">
+      <div class="ip-clarification-row">
+        <label for="ip-status-select">Status:</label>
+        <select id="ip-status-select" class="ip-status-select">
+          <option value="open">Open</option>
+          <option value="answered">Answered</option>
+          <option value="decided_keep">Decided to Keep</option>
+          <option value="fixed_in_xlsx">Fixed in xlsx</option>
+          <option value="needs_more_data">Need More Data</option>
+        </select>
+        <span class="ip-updated" id="ip-updated">—</span>
+      </div>
+      <textarea id="ip-comment" class="ip-comment"
+                placeholder="Your reply / clarification… (saved on blur)"
+                dir="auto" rows="3"></textarea>
+      <span class="ip-save-flash" id="ip-save-flash">✓ saved</span>
+    </div>
+    <div class="ip-actions" id="ip-active-actions"></div>
+  </div>
+  <div class="ip-nav">
+    <button id="ip-prev">◀ Prev</button>
+    <button id="ip-next">Next ▶</button>
+  </div>
+</aside>
+
+<div id="save-bar" class="save-bar">
+  <div><span id="dirty-summary">No Unsaved Changes</span></div>
+  <div style="display:flex; gap:6px;">
+    <button id="discard-btn" class="btn-danger">Discard</button>
+    <button id="save-btn" class="btn-primary">💾 Save → Download wolves_data.xlsx</button>
+  </div>
+</div>
+
+<div id="table-download-bar" class="table-download-bar">
+  <button id="download-xlsx-btn" type="button" title="Download the table to an Excel file — exactly the columns and rows currently shown">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Download to Excel
+  </button>
+</div>
+
+<div id="data-table"></div>
+
 <div class="footer">
   <strong>About this page:</strong>
   Read-only by default. The Admin login (password protected) lets the data owner edit cells in the browser.
@@ -2518,7 +2548,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <div id="pwd-modal" class="modal-bg">
   <div class="modal">
-    <h2>Admin login</h2>
+    <h2>Admin Login</h2>
     <input type="password" id="pwd-input" placeholder="Password" autocomplete="off" />
     <div id="pwd-error">&nbsp;</div>
     <div class="modal-buttons">
@@ -3358,8 +3388,8 @@ function renderRegionDistributionChart() {
       images.push({
         source: icons[r],
         xref: "x", yref: "paper",
-        x: i, y: isMobile ? 1.14 : 1.20,
-        sizex: 0.90, sizey: isMobile ? 0.11 : 0.18,
+        x: i, y: isMobile ? 1.19 : 1.28,
+        sizex: 1.00, sizey: isMobile ? 0.16 : 0.26,
         xanchor: "center", yanchor: "top",
         sizing: "contain",
         layer: "above",
@@ -3390,18 +3420,18 @@ function renderRegionDistributionChart() {
     margin: {
       l: isMobile ? 40 : 56,
       r: isMobile ? 8 : 16,
-      t: isMobile ? 56 : 88,
+      t: isMobile ? 76 : 120,
       b: isMobile ? 110 : 56,   // bigger bottom on mobile so the legend can wrap
     },
     yaxis: {
-      title: { text: "% Of Analysed Wolves", font: { size: isMobile ? 10 : 12 } },
+      title: { text: "% of Analysed Wolves", font: { size: isMobile ? 10 : 12 } },
       range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
       fixedrange: true,
       tickfont: { size: isMobile ? 9 : 11 },
     },
     xaxis: {
       title: isMobile ? "" : {
-        text: "Region (Icon Above Each Bar Shows The Anatomical Area)",
+        text: "Region (Icon Above Each Bar Shows the Anatomical Area)",
         font: { size: 11, color: "#666" },
       },
       tickmode: "array",
@@ -3529,7 +3559,7 @@ function renderRegionDistributionChartContinuous() {
     }
     let tot = 0;
     for (const kStr in wolvesAtK[r]) tot += wolvesAtK[r][kStr];
-    for (const b of ["Asymmetric", "Partial-ambiguous", "P", "N", "Empty"]) {
+    for (const b of ["Asymmetric", "Partial-Ambiguous", "P", "N", "Empty"]) {
       tot += (dist[r] || {})[b] || 0;
     }
     if (tot !== totals[r]) fails.push(r + "/TOTAL: " + tot + " != " + totals[r]);
@@ -3625,9 +3655,9 @@ function renderRegionDistributionChartContinuous() {
   const bucketLegendLabel = {
     "P": "P — Marking Present, Code Unclear",
     "N": "N — Not Codable",
-    "Partial-ambiguous": "Partial-Ambiguous",
+    "Partial-Ambiguous": "Partial-Ambiguous",
   };
-  for (const b of ["Asymmetric", "Partial-ambiguous", "P", "N", "Empty"]) {
+  for (const b of ["Asymmetric", "Partial-Ambiguous", "P", "N", "Empty"]) {
     const counts = regions.map(r => (dist[r] || {})[b] || 0);
     if (counts.every(c => c === 0)) continue;
     const ys = regions.map((r, i) => pct(r, counts[i]));
@@ -3661,11 +3691,11 @@ function renderRegionDistributionChartContinuous() {
     ? { orientation: "h", x: 0.5, xanchor: "center", y: -0.46, yanchor: "top",
         len: 0.92, thickness: 11, outlinewidth: 0, tickmode: "array",
         tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
-        title: { text: "Wolves Sharing The Code  (2 – " + maxK + ")", side: "top", font: { size: 9.5 } } }
+        title: { text: "Wolves Sharing the Code  (2 – " + maxK + ")", side: "top", font: { size: 9.5 } } }
     : { x: 1.015, xanchor: "left", y: 0.5, yanchor: "middle",
         len: 0.74, thickness: 14, outlinewidth: 0, tickmode: "array",
         tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
-        title: { text: "Wolves Sharing The Code<br>(2 – " + maxK + ")", side: "right", font: { size: 10 } } };
+        title: { text: "Wolves Sharing the Code<br>(2 – " + maxK + ")", side: "right", font: { size: 10 } } };
   traces.push({
     type: "scatter", mode: "markers", x: [regions[0]], y: [0],
     showlegend: false, hoverinfo: "skip",
@@ -3682,8 +3712,8 @@ function renderRegionDistributionChartContinuous() {
     if (icons[r]) {
       images.push({
         source: icons[r], xref: "x", yref: "paper",
-        x: i, y: isMobile ? 1.14 : 1.20,
-        sizex: 0.90, sizey: isMobile ? 0.11 : 0.18,
+        x: i, y: isMobile ? 1.19 : 1.28,
+        sizex: 1.00, sizey: isMobile ? 0.16 : 0.26,
         xanchor: "center", yanchor: "top", sizing: "contain", layer: "above",
       });
     } else {
@@ -3706,17 +3736,17 @@ function renderRegionDistributionChartContinuous() {
     margin: {
       l: isMobile ? 40 : 56,
       r: isMobile ? 8 : 92,
-      t: isMobile ? 56 : 88,
+      t: isMobile ? 76 : 120,
       b: isMobile ? 178 : 56,
     },
     yaxis: {
-      title: { text: "% Of Analysed Wolves", font: { size: isMobile ? 10 : 12 } },
+      title: { text: "% of Analysed Wolves", font: { size: isMobile ? 10 : 12 } },
       range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
       fixedrange: true, tickfont: { size: isMobile ? 9 : 11 },
     },
     xaxis: {
       title: isMobile ? "" : {
-        text: "Region (Icon Above Each Bar Shows The Anatomical Area)",
+        text: "Region (Icon Above Each Bar Shows the Anatomical Area)",
         font: { size: 11, color: "#666" },
       },
       tickmode: "array", tickvals: regions, ticktext: ticktext,
@@ -3731,6 +3761,286 @@ function renderRegionDistributionChartContinuous() {
     shapes: shapes, images: images,
     plot_bgcolor: "#fff", paper_bgcolor: "#fff",
   }, plotlyConfig("wolf_region_distribution_continuous"));
+}
+
+// ============================================================================
+// Edited copy of the continuous heat-map chart (2026-06-13, Nili) — same data,
+// three visual edits to compare against the original:
+//   (1) N rendered black instead of red.
+//   (2) P rendered medium-dark grey (darker than Partial-Ambiguous, lighter
+//       than N).
+//   (3) Asymmetric folded into the dark-green Unique (1) segment; no separate
+//       Asymmetric band.
+// Everything else (heat-map shared bands, icons, axes, self-check) stays
+// identical so the two versions can be compared directly.
+// ============================================================================
+function renderRegionDistributionChartContinuousEdited() {
+  if (!window.Plotly) return;
+  const A = PAYLOAD.anatomy;
+  const regions = A.regions;
+  const dist = A.bucket_dist;
+  const codesPR = A.codes_per_region || {};
+  // Local palette override so the original chart's colours stay untouched.
+  const colors = Object.assign({}, A.id_bucket_colors, {
+    "N": "#000000",   // edit (1): N → black
+    "P": "#555555",   // edit (2): P → medium-dark grey
+  });
+
+  // --- Decompose codes_per_region into wolves-at-each-exact-share-count -----
+  const wolvesAtK = {};
+  const presentKs = new Set();
+  let maxK = 2;
+  for (const r of regions) {
+    const m = {};
+    for (const item of (codesPR[r] || [])) {
+      const k = item.count;
+      m[k] = (m[k] || 0) + k;
+      if (k >= 2) { presentKs.add(k); if (k > maxK) maxK = k; }
+    }
+    wolvesAtK[r] = m;
+  }
+  const sharedKs = Array.from(presentKs).sort((a, b) => a - b);
+
+  // --- Per-region totals (each must equal n_pool) --------------------------
+  const totals = {};
+  for (const r of regions) {
+    let t = 0;
+    for (const b of A.id_bucket_order) t += (dist[r] || {})[b] || 0;
+    totals[r] = t;
+  }
+  const nPool = totals[regions[0]] || PAYLOAD.n_pool || 0;
+
+  // --- Self-check: continuous decomposition must rebuild bucket_dist -------
+  // Same logic as the original chart; the categorical extras still include
+  // Asymmetric in the row sum because the underlying dist is unchanged.
+  const CHECK = [
+    ["Unique (1)", 1, 1], ["Shared 2-3", 2, 3], ["Shared 4-6", 4, 6],
+    ["Shared 7-10", 7, 10], ["Shared 11-20", 11, 20],
+    ["Shared 21-35", 21, 35], ["Shared 36+", 36, Infinity],
+  ];
+  const fails = [];
+  for (const r of regions) {
+    for (const c of CHECK) {
+      let s = 0;
+      for (const kStr in wolvesAtK[r]) {
+        const k = +kStr;
+        if (k >= c[1] && k <= c[2]) s += wolvesAtK[r][kStr];
+      }
+      const exp = (dist[r] || {})[c[0]] || 0;
+      if (s !== exp) fails.push(r + "/" + c[0] + ": heat=" + s + " dist=" + exp);
+    }
+    let tot = 0;
+    for (const kStr in wolvesAtK[r]) tot += wolvesAtK[r][kStr];
+    for (const b of ["Asymmetric", "Partial-Ambiguous", "P", "N", "Empty"]) {
+      tot += (dist[r] || {})[b] || 0;
+    }
+    if (tot !== totals[r]) fails.push(r + "/TOTAL: " + tot + " != " + totals[r]);
+  }
+  const host = document.getElementById("region-distribution-chart-cont-edited");
+  const prevWarn = document.getElementById("cont-edited-chart-selfcheck-warn");
+  if (prevWarn) prevWarn.remove();
+  if (fails.length) {
+    console.error("[continuous chart — edited] SELF-CHECK FAILED:", fails);
+    if (host) host.insertAdjacentHTML("beforebegin",
+      '<div id="cont-edited-chart-selfcheck-warn" style="background:#FDECEA;' +
+      'border:1px solid #E53935;color:#B71C1C;padding:8px 12px;' +
+      'border-radius:6px;font-size:12px;margin:8px 0;">&#9888; Edited continuous-chart ' +
+      'self-check failed (' + fails.length + ' mismatch(es)) &mdash; see console.</div>');
+  }
+
+  // --- text-colour helper (black/white by background luminance) ------------
+  function hexText(hex) {
+    const m = /^#([0-9a-f]{6})/i.exec(hex || "");
+    if (!m) return "#000";
+    const n = parseInt(m[1], 16);
+    const lum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+    return lum > 165 ? "#222" : "#fff";
+  }
+
+  const isMobile = (typeof window.matchMedia === "function")
+                    && window.matchMedia("(max-width: 768px)").matches;
+  const pct = (r, n) => totals[r] ? 100 * n / totals[r] : 0;
+  const traces = [];
+
+  // (1) Unique band — dark green, with the per-region Asymmetric count folded
+  // in (edit (3)). The hover wording reflects the merge so the user sees that
+  // asymmetric wolves are now included in this segment.
+  {
+    const uniqueCounts  = regions.map(r => wolvesAtK[r][1] || 0);
+    const asymCounts    = regions.map(r => (dist[r] || {})["Asymmetric"] || 0);
+    const counts        = regions.map((r, i) => uniqueCounts[i] + asymCounts[i]);
+    const ys = regions.map((r, i) => pct(r, counts[i]));
+    traces.push({
+      // Short label per Nili (2026-06-13): asymmetric wolves are themselves
+      // unique (a different code on each side is still a one-of-a-kind
+      // fingerprint), so "Unique" alone is accurate. Hover still shows the
+      // breakdown so the merge stays transparent.
+      name: "Unique", type: "bar", x: regions, y: ys,
+      customdata: regions.map((r, i) => [counts[i], uniqueCounts[i], asymCounts[i]]),
+      text: ys.map(y => y >= 10 ? y.toFixed(0) + "%" : ""),
+      textposition: "inside", insidetextanchor: "middle",
+      textfont: { color: hexText(colors["Unique (1)"]), size: 11, family: "sans-serif" },
+      cliponaxis: false,
+      marker: { color: colors["Unique (1)"], line: { width: 0.5, color: "rgba(0,0,0,0.18)" } },
+      legendrank: 1,
+      hovertemplate: "<b>%{x}</b><br>Unique (incl. asymmetric)<br>" +
+        "Total: %{customdata[0]} wolves (%{y:.1f}%)<br>" +
+        "&nbsp;&nbsp;Unique (code in no other wolf): %{customdata[1]}<br>" +
+        "&nbsp;&nbsp;Asymmetric (different code R vs L): %{customdata[2]}<extra></extra>",
+    });
+  }
+
+  const rgbText = rgb => (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]) > 165 ? "#222" : "#fff";
+
+  // Continuous heat-map anchors (same as the original chart).
+  const heatAnchors = [
+    [2,  [0x2E, 0x7D, 0x32]],
+    [4,  [0x43, 0xA0, 0x47]],
+    [7,  [0x66, 0xBB, 0x6A]],
+    [11, [0xA5, 0xD6, 0xA7]],
+    [21, [0xC8, 0xE6, 0xC9]],
+  ].filter(a => a[0] < maxK);
+  heatAnchors.push([maxK, [0xE8, 0xF5, 0xE9]]);
+
+  // (2) Shared bands — one trace per exact share-count k.
+  for (const k of sharedKs) {
+    const counts = regions.map(r => wolvesAtK[r][k] || 0);
+    const ys = regions.map((r, i) => pct(r, counts[i]));
+    traces.push({
+      name: "shared x" + k, type: "bar", x: regions,
+      y: ys, customdata: counts,
+      showlegend: false,
+      text: ys.map(y => y >= 10 ? y.toFixed(0) + "%" : ""),
+      textposition: "inside", insidetextanchor: "middle", cliponaxis: false,
+      textfont: { color: rgbText(heatRGB(k, heatAnchors)), size: 10, family: "sans-serif" },
+      marker: { color: heatColor(k, heatAnchors), line: { width: 0 } },
+      hovertemplate: "<b>%{x}</b><br>code shared by " + k + " wolves<br>" +
+        "%{customdata} wolves (%{y:.1f}%)<extra></extra>",
+    });
+  }
+
+  // (3) Non-resolvable categories — Asymmetric is intentionally OMITTED here
+  // (edit (3): merged into the Unique trace above).
+  const bucketLegendLabel = {
+    "P": "P — Marking Present, Code Unclear",
+    "N": "N — Not Codable",
+    "Partial-Ambiguous": "Partial-Ambiguous",
+  };
+  // User-requested legend order: Unique → N → P → Partial-Ambiguous.
+  // Unique already has legendrank: 1 above; the rest follow here.
+  const bucketLegendRank = {
+    "N": 2,
+    "P": 3,
+    "Partial-Ambiguous": 4,
+    "Empty": 5,
+  };
+  for (const b of ["Partial-Ambiguous", "P", "N", "Empty"]) {
+    const counts = regions.map(r => (dist[r] || {})[b] || 0);
+    if (counts.every(c => c === 0)) continue;
+    const ys = regions.map((r, i) => pct(r, counts[i]));
+    traces.push({
+      name: bucketLegendLabel[b] || b, type: "bar", x: regions, y: ys, customdata: counts,
+      text: ys.map(y => y >= 10 ? y.toFixed(0) + "%" : ""),
+      textposition: "inside", insidetextanchor: "middle",
+      textfont: { color: hexText(colors[b]), size: 11, family: "sans-serif" },
+      cliponaxis: false,
+      marker: { color: colors[b], line: { width: 0.5, color: "rgba(0,0,0,0.18)" } },
+      legendrank: bucketLegendRank[b] || 99,
+      hovertemplate: "<b>%{x}</b><br>" + b +
+        "<br>%{customdata} wolves (%{y:.1f}%)<extra></extra>",
+    });
+  }
+
+  // (4) Colour-bar carrier — same as the original.
+  const denom = maxK > 2 ? maxK - 2 : 1;
+  const colorscale = heatAnchors.map(a =>
+    [(a[0] - 2) / denom, "rgb(" + a[1][0] + "," + a[1][1] + "," + a[1][2] + ")"]);
+  const cbarTicks = [2];
+  for (const v of [10, 20, 30, 40, 50, 60]) {
+    if (v < maxK - 3) cbarTicks.push(v);
+  }
+  cbarTicks.push(maxK);
+  const cbarText = cbarTicks.map(v => "" + v);
+  const colorbar = isMobile
+    ? { orientation: "h", x: 0.5, xanchor: "center", y: -0.46, yanchor: "top",
+        len: 0.92, thickness: 11, outlinewidth: 0, tickmode: "array",
+        tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
+        title: { text: "Wolves Sharing the Code  (2 – " + maxK + ")", side: "top", font: { size: 9.5 } } }
+    : { x: 1.015, xanchor: "left", y: 0.5, yanchor: "middle",
+        len: 0.74, thickness: 14, outlinewidth: 0, tickmode: "array",
+        tickvals: cbarTicks, ticktext: cbarText, tickfont: { size: 9 },
+        title: { text: "Wolves Sharing the Code<br>(2 – " + maxK + ")", side: "right", font: { size: 10 } } };
+  traces.push({
+    type: "scatter", mode: "markers", x: [regions[0]], y: [0],
+    showlegend: false, hoverinfo: "skip",
+    marker: {
+      size: 0.1, opacity: 0, color: [2], colorscale: colorscale,
+      cmin: 2, cmax: maxK, showscale: true, colorbar: colorbar,
+    },
+  });
+
+  // --- region icons / colour stripe above each bar (same as original) ------
+  const icons = A.region_icons || {};
+  const images = [], shapes = [];
+  regions.forEach((r, i) => {
+    if (icons[r]) {
+      images.push({
+        source: icons[r], xref: "x", yref: "paper",
+        x: i, y: isMobile ? 1.19 : 1.28,
+        sizex: 1.00, sizey: isMobile ? 0.16 : 0.26,
+        xanchor: "center", yanchor: "top", sizing: "contain", layer: "above",
+      });
+    } else {
+      shapes.push({
+        type: "rect", xref: "x", yref: "paper",
+        x0: i - 0.4, x1: i + 0.4, y0: 1.005, y1: 1.028,
+        line: { width: 0 }, fillcolor: A.group_colors[A.region_group[r]],
+      });
+    }
+  });
+  const ticktext = regions.map(r => {
+    const c = A.group_colors[A.region_group[r]];
+    return '<span style="color:' + c + '; font-weight:700; font-size:' +
+      (isMobile ? "12" : "13") + 'px;">' + r + '</span>';
+  });
+
+  Plotly.newPlot("region-distribution-chart-cont-edited", traces, {
+    barmode: "stack", bargap: 0.18,
+    height: isMobile ? 560 : undefined,
+    margin: {
+      l: isMobile ? 40 : 56,
+      r: isMobile ? 8 : 92,
+      t: isMobile ? 76 : 120,
+      b: isMobile ? 178 : 56,
+    },
+    yaxis: {
+      title: { text: "% of Analysed Wolves", font: { size: isMobile ? 10 : 12 } },
+      range: [0, 100], ticksuffix: "%", gridcolor: "#eee",
+      fixedrange: true, tickfont: { size: isMobile ? 9 : 11 },
+    },
+    xaxis: {
+      title: isMobile ? "" : {
+        text: "Region (Icon Above Each Bar Shows the Anatomical Area)",
+        font: { size: 11, color: "#666" },
+      },
+      tickmode: "array", tickvals: regions, ticktext: ticktext,
+      tickfont: { size: isMobile ? 11 : 13 }, fixedrange: true,
+    },
+    legend: {
+      orientation: "h", x: 0.5, xanchor: "center",
+      y: isMobile ? -0.18 : -0.22,
+      font: { size: isMobile ? 9 : 11 },
+      // legendrank on each trace drives the order (Unique → N → P → Partial).
+      // Auto-width: each entry gets just enough space for its label, so the
+      // long "P — Marking Present, Code Unclear" no longer overlaps its
+      // neighbour. With the shortened "Unique" label the 4 entries fit on a
+      // single line on desktop (mobile may wrap, which is the right behaviour
+      // there since the labels would otherwise crush together).
+      traceorder: "normal",
+    },
+    shapes: shapes, images: images,
+    plot_bgcolor: "#fff", paper_bgcolor: "#fff",
+  }, plotlyConfig("wolf_region_distribution_continuous_edited"));
 }
 
 // ============================================================================
@@ -3829,16 +4139,16 @@ const SOCIAL_COLORS = {
   unknown: "#9E9E9E",   // gray
 };
 const SOCIAL_LABELS = {
-  pack:    "pack",
-  group:   "group",
-  lone:    "lone",
-  unknown: "unknown",
+  pack:    "Pack",
+  group:   "Group",
+  lone:    "Lone",
+  unknown: "Unknown",
 };
 
 // Polygon palette (12 colours, fixed so the per-pack chart and any future
 // per-polygon visual stay consistent). The "(no polygon)" label maps to gray.
 const POLYGON_COLORS = {
-  "Yehodiya":       "#2E7D32",
+  "Yehudiya":       "#2E7D32",
   "Odem":           "#5E35B1",
   "Makhfi":         "#00838F",
   "makhfi":         "#00838F",   // case-insensitive fallback
@@ -4063,7 +4373,7 @@ function renderSocialPackChart(sd) {
     barmode: "stack",
     margin: { l: 130, r: 32, t: 10, b: 44 },
     xaxis: {
-      title: { text: "Wolves In Pack (Solid = Certain, Hatched = Probable*)", font: { size: 11 } },
+      title: { text: "Wolves in Pack (Solid = Certain, Hatched = Probable*)", font: { size: 11 } },
       gridcolor: "#eee", fixedrange: true,
     },
     yaxis: { fixedrange: true, tickfont: { size: 11 }, automargin: true },
@@ -4144,8 +4454,8 @@ function renderPackTableA(sd) {
   const thead = `<thead><tr>
     <th class="sortable" data-sort="name">Pack</th>
     <th class="sortable" data-sort="type">Type</th>
-    <th class="sortable" data-sort="lu">Land-use</th>
-    <th class="sortable" data-sort="polygon">Home polygon</th>
+    <th class="sortable" data-sort="lu">Land-Use</th>
+    <th class="sortable" data-sort="polygon">Home Polygon</th>
     <th class="num sortable" data-sort="certain">Certain</th>
     <th class="num sortable" data-sort="probable">Probable*</th>
     <th class="num sortable" data-sort="total">Total</th>
@@ -4230,7 +4540,7 @@ function renderPackTableB(sd) {
   const thead = `<thead><tr>
     <th>Pack</th>
     <th>Type</th>
-    <th>Home polygon</th>
+    <th>Home Polygon</th>
     <th class="num">Certain</th>
     <th class="num">Probable*</th>
     <th class="num">Total</th>
@@ -4299,7 +4609,7 @@ function renderPackTableC(sd) {
     <th>Pack</th>
     <th>Type</th>
     <th class="num">n</th>
-    <th>Land-use</th>
+    <th>Land-Use</th>
     <th>Polygon</th>
     <th>Members</th>
   </tr></thead>`;
@@ -4543,7 +4853,7 @@ function renderSocialDonutMerged(sd) {
     values.push(tot);
     colors.push(SOCIAL_COLORS[s]);
     const probNote = prob > 0
-      ? `<br><span style="font-size:10px;">(incl. ${prob}*)</span>`
+      ? `<br><span style="font-size:13px;">(incl. ${prob}*)</span>`
       : "";
     text.push(name + "<br>" + tot + " (" + pctOf(tot).toFixed(0) + "%)" + probNote);
     hover.push("<b>" + name + "</b><br>" + tot +
@@ -4564,7 +4874,8 @@ function renderSocialDonutMerged(sd) {
     text: text,
     textinfo: "text",
     textposition: "inside",
-    insidetextfont: { size: 12, color: "#fff", family: "sans-serif" },
+    insidetextorientation: "horizontal",
+    insidetextfont: { size: 16, color: "#fff", family: "sans-serif" },
     hovertext: hover,
     hoverinfo: "text",
   };
@@ -4572,9 +4883,9 @@ function renderSocialDonutMerged(sd) {
     margin: { l: 10, r: 10, t: 10, b: 10 },
     showlegend: false,
     annotations: [{
-      text: `<b>${sd.n_pool}</b><br><span style="font-size:11px;color:#888;">wolves</span>`,
+      text: `<b>${sd.n_pool}</b><br><span style="font-size:14px;color:#888;">wolves</span>`,
       xref: "paper", yref: "paper", x: 0.5, y: 0.5, showarrow: false,
-      font: { size: 22, color: "#333", family: "sans-serif" },
+      font: { size: 28, color: "#333", family: "sans-serif" },
     }],
     paper_bgcolor: "#fafbfc", plot_bgcolor: "#fff",
   }, plotlyConfig("wolf_social_donut_merged"));
@@ -4636,19 +4947,20 @@ function _sigsColorFor(letter, region) {
 // memory/reference_colour_names.md; keep the two in sync if the scale
 // is ever extended.
 const COLOR_NAMES = {
-  A1: { e: "very dark brown", f: "dark brown-gray", g: "dark gray", h: "gray",
-        i: "light gray-brown", j: "light gray-gold", k: "bright ginger",
-        l: "gold-honey-ginger", m: "white" },
-  A2: { e: "very dark brown", f: "dark brown-gray", g: "dark gray", h: "gray",
-        i: "light gray-brown", j: "light gray-gold", k: "honey-ginger",
-        l: "light gray" },
-  C6: { e: "very dark brown", f: "dark brown", g: "bright brown", h: "bright gray",
-        i: "gray-brown", j: "ginger", k: "sand", l: "beige" },
-  D8: { "1": "very dark brown", "2": "dark brown", "3": "grayish brown",
-        "4": "light honey-brown", "5": "honey-ginger", "6": "light gold",
-        "7": "light gray-cream", "8": "beige" },
+  A1: { e: "Very Dark Brown", f: "Dark Brown-Gray", g: "Dark Gray", h: "Gray",
+        i: "Light Gray-Brown", j: "Light Gray-Gold", k: "Bright Ginger",
+        l: "Gold-Honey-Ginger", m: "White" },
+  A2: { e: "Very Dark Brown", f: "Dark Brown-Gray", g: "Dark Gray", h: "Gray",
+        i: "Light Gray-Brown", j: "Light Gray-Gold", k: "Honey-Ginger",
+        l: "Light Gray" },
+  C6: { e: "Very Dark Brown", f: "Dark Brown", g: "Bright Brown", h: "Bright Gray",
+        i: "Gray-Brown", j: "Ginger", k: "Sand", l: "Beige" },
+  D8: { "1": "Very Dark Brown", "2": "Dark Brown", "3": "Grayish Brown",
+        "4": "Light Honey-Brown", "5": "Honey-Ginger", "6": "Light Gold",
+        "7": "Light Gray-Cream", "8": "Beige" },
 };
 function _sigsColorName(letter, region) {
+  if (letter === "missing") return "Missing";
   const m = COLOR_NAMES[region];
   if (m && letter in m) return m[letter];
   return letter;   // fall back to raw letter for unknowns
@@ -4701,11 +5013,11 @@ function renderSigsPackCards(sd) {
   for (const pack of sd.packs) {
     html += `<div class="sigs-pack-card">`;
     html += `<h4>${escapeHtml(pack.display)}</h4>`;
-    html += `<div class="meta">n=${pack.n} · ${escapeHtml(pack.main_polygon || "—")} · members: ${pack.members.map(escapeHtml).join(", ")}</div>`;
+    html += `<div class="meta">n=${pack.n} · ${escapeHtml(polyDisplay(pack.main_polygon) || "—")} · members: ${pack.members.map(escapeHtml).join(", ")}</div>`;
     html += `<div class="sigs-summary-pills">`;
-    html += `<span class="sigs-pill">${pack.summary.identical_full}/9 identical full</span>`;
-    html += `<span class="sigs-pill pat">pattern modal avg ${Math.round(100 * pack.summary.avg_pattern_modal_pct)}%</span>`;
-    html += `<span class="sigs-pill col">colour modal avg ${Math.round(100 * pack.summary.avg_color_modal_pct)}%</span>`;
+    html += `<span class="sigs-pill">${pack.summary.identical_full}/9 Identical Full</span>`;
+    html += `<span class="sigs-pill pat">Pattern Modal Avg ${Math.round(100 * pack.summary.avg_pattern_modal_pct)}%</span>`;
+    html += `<span class="sigs-pill col">Colour Modal Avg ${Math.round(100 * pack.summary.avg_color_modal_pct)}%</span>`;
     html += `</div>`;
     for (const region of regions) {
       const rd = pack.regions[region];
@@ -4721,17 +5033,17 @@ function renderSigsPackCards(sd) {
         if (rd.patterns && Object.keys(rd.patterns).length > 0) {
           const entries = Object.entries(rd.patterns).sort((a, b) => b[1] - a[1]);
           const total = entries.reduce((s, e) => s + e[1], 0);
-          html += `<div class="sigs-axis-row"><div class="sigs-axis-label">pattern</div><div class="sigs-bar">${_sigsBar(entries, total, "pattern")}</div></div>`;
+          html += `<div class="sigs-axis-row"><div class="sigs-axis-label">Pattern</div><div class="sigs-bar">${_sigsBar(entries, total, "pattern")}</div></div>`;
         }
         if (rd.colors && Object.keys(rd.colors).length > 0) {
           const entries = Object.entries(rd.colors).sort((a, b) => b[1] - a[1]);
           const total = entries.reduce((s, e) => s + e[1], 0);
-          html += `<div class="sigs-axis-row"><div class="sigs-axis-label">colour</div><div class="sigs-bar">${_sigsBar(entries, total, "colour", region)}</div></div>`;
+          html += `<div class="sigs-axis-row"><div class="sigs-axis-label">Colour</div><div class="sigs-bar">${_sigsBar(entries, total, "colour", region)}</div></div>`;
         }
         if (rd.contrasts && Object.keys(rd.contrasts).length > 0) {
           const entries = Object.entries(rd.contrasts).sort((a, b) => b[1] - a[1]);
           const total = entries.reduce((s, e) => s + e[1], 0);
-          const lbl = (region === "D9") ? "level" : "a/b";
+          const lbl = (region === "D9") ? "Level" : "a/b";
           html += `<div class="sigs-axis-row"><div class="sigs-axis-label">${lbl}</div><div class="sigs-bar">${_sigsBar(entries, total, "contrast", region)}</div></div>`;
         }
       }
@@ -4755,15 +5067,15 @@ function renderSigsColorMatrix(sd) {
   for (const pack of sd.packs) {
     // Polygon name shown as a tooltip on the pack-name cell — dropped as its own
     // column 2026-05-30 to free space for the colour cells.
-    const polyTip = pack.main_polygon ? `polygon: ${pack.main_polygon}` : "";
+    const polyTip = pack.main_polygon ? `polygon: ${polyDisplay(pack.main_polygon)}` : "";
     const packDisplay = String(pack.display || "").replace(/\b([a-z])/g, m => m.toUpperCase());
     html += `<tr><td class="pack-name" title="${escapeHtml(polyTip)}">${escapeHtml(packDisplay)} <span style="color:#888;">(${pack.n})</span></td>`;
     // Polygon name (text colour encodes the land-use category) + Type
     const lu = pack.land_use || "Unclassified";
     const luColor = luColors[lu] || "#888";
-    const polyName = pack.main_polygon || "—";
+    const polyName = polyDisplay(pack.main_polygon) || "—";
     html += `<td class="sigs-meta sigs-landuse" title="${escapeHtml(lu)}" style="background:#fff;color:${luColor};font-weight:600;">${escapeHtml(polyName)}</td>`;
-    const gt = pack.group_type || "";
+    const gt = SOCIAL_LABELS[pack.group_type] || pack.group_type || "";
     html += `<td class="sigs-meta sigs-group-type" style="background:#fff;color:#000;font-weight:600;">${escapeHtml(gt)}</td>`;
     for (const region of cols) {
       const rd = pack.regions[region];
@@ -4832,7 +5144,7 @@ function renderSigsTopPacksComparison(sd) {
   const regionNames = PAYLOAD.anatomy.region_names;
   const regionGroup = PAYLOAD.anatomy.region_group;
   const groupColors = PAYLOAD.anatomy.group_colors;
-  const AXIS_LABEL = { colors: "colour", contrasts: "contrast", patterns: "pattern" };
+  const AXIS_LABEL = { colors: "Colour", contrasts: "Contrast", patterns: "Pattern" };
 
   let html = `<div class="sigs-top3-grid">`;
   for (const region of regions) {
@@ -6117,6 +6429,7 @@ function init() {
   if (window.Plotly) {
     renderRegionDistributionChart();
     renderRegionDistributionChartContinuous();
+    renderRegionDistributionChartContinuousEdited();
     renderIdentificationPowerTab();
   } else {
     const wait = setInterval(() => {
@@ -6124,6 +6437,7 @@ function init() {
         clearInterval(wait);
         renderRegionDistributionChart();
         renderRegionDistributionChartContinuous();
+        renderRegionDistributionChartContinuousEdited();
         renderIdentificationPowerTab();
       }
     }, 80);
@@ -6144,6 +6458,9 @@ function init() {
         }
         if (document.getElementById("region-distribution-chart-cont")) {
           renderRegionDistributionChartContinuous();
+        }
+        if (document.getElementById("region-distribution-chart-cont-edited")) {
+          renderRegionDistributionChartContinuousEdited();
         }
         // The single-region power chart shares this tab — re-render it too.
         if (document.getElementById("idpower-single-chart")) {

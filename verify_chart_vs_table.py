@@ -192,7 +192,7 @@ def verify_table_chart_cross(rows_in_html: list[dict], html_dist: dict, n_pool: 
     Status grouping:
         unambiguous total  == sum of all "Shared" buckets + "Unique (1)"
         asymmetric         == "Asymmetric"
-        partial_ambiguous  == "Partial-ambiguous"
+        partial_ambiguous  == "Partial-Ambiguous"
         P                  == "P"
         N                  == "N"
         (empty rows are excluded — they're not in the chart pool)
@@ -213,7 +213,7 @@ def verify_table_chart_cross(rows_in_html: list[dict], html_dist: dict, n_pool: 
         bd = html_dist.get(region, {})
         ch_unambig = sum(int(bd.get(b, 0)) for b in UNAMBIG_BUCKETS)
         ch_asym    = int(bd.get("Asymmetric", 0))
-        ch_partial = int(bd.get("Partial-ambiguous", 0))
+        ch_partial = int(bd.get("Partial-Ambiguous", 0))
         ch_P       = int(bd.get("P", 0))
         ch_N       = int(bd.get("N", 0))
         ch_empty   = int(bd.get("Empty", 0))
@@ -381,11 +381,11 @@ def write_report(
                 region,
                 unambig_n,
                 bd.get("Asymmetric", 0),
-                bd.get("Partial-ambiguous", 0),
+                bd.get("Partial-Ambiguous", 0),
                 bd.get("P", 0),
                 bd.get("N", 0),
                 bd.get("Empty", 0),
-                unambig_n + bd.get("Asymmetric", 0) + bd.get("Partial-ambiguous", 0) +
+                unambig_n + bd.get("Asymmetric", 0) + bd.get("Partial-Ambiguous", 0) +
                   bd.get("P", 0) + bd.get("N", 0) + bd.get("Empty", 0),
             ])
         lines.append(md_table(

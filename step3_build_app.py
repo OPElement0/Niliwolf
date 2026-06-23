@@ -122,11 +122,11 @@ STATUS_COLORS = {
 STATUS_ORDER = ["unambiguous", "asymmetric", "partial_ambiguous", "P", "N"]
 
 STATUS_LABELS = {
-    "unambiguous": "Unambiguous (clean code)",
-    "asymmetric": "Asymmetric (R/L split)",
-    "partial_ambiguous": "Partial / ambiguous",
-    "P": "P — unclear",
-    "N": "N — not visible",
+    "unambiguous": "Unambiguous (Clean Code)",
+    "asymmetric": "Asymmetric (R/L Split)",
+    "partial_ambiguous": "Partial / Ambiguous",
+    "P": "P — Unclear",
+    "N": "N — Not Visible",
     "empty": "Empty",
     "unknown": "Unknown",
 }
@@ -142,7 +142,7 @@ ID_BUCKET_COLORS = {
     "Shared 21-35":       "#F57C00",
     "Shared 36+":         "#6D4C41",  # brown — extreme over-sharing
     "Asymmetric":         "#1E88E5",  # blue
-    "Partial-ambiguous":  "#9E9E9E",  # gray
+    "Partial-Ambiguous":  "#9E9E9E",  # gray
     "P":                  "#EF9A9A",  # light red — same hue family as N
     "N":                  "#E53935",  # red
     "Empty":              "#000000",  # black — should be 0 once user fixes data
@@ -388,13 +388,13 @@ tr:hover td { background: #fafbfc; }
 <header>
   <h1>🐺 Wolf Pelt Pattern Analysis <small>Interactive Dashboard</small></h1>
   <div class="stats">
-    <div class="stat">Total wolves: <span class="stat-value" id="stat-wolves">--</span></div>
-    <div class="stat">Pelt regions: <span class="stat-value">9</span></div>
-    <div class="stat">Anatomical groups: <span class="stat-value">4</span></div>
-    <div class="stat">Collection window: <span class="stat-value">3 months</span></div>
+    <div class="stat">Total Wolves: <span class="stat-value" id="stat-wolves">--</span></div>
+    <div class="stat">Pelt Regions: <span class="stat-value">9</span></div>
+    <div class="stat">Anatomical Groups: <span class="stat-value">4</span></div>
+    <div class="stat">Collection Window: <span class="stat-value">3 months</span></div>
   </div>
   <div class="legend-anatomy">
-    <strong>Anatomical groups:</strong>
+    <strong>Anatomical Groups:</strong>
     <span style="background:#E91E63;">A — Muzzle</span>
     <span style="background:#42A5F5;">B — Eye</span>
     <span style="background:#FF7043;">C — Nose &amp; Chin</span>
@@ -436,21 +436,21 @@ tr:hover td { background: #fafbfc; }
   <div class="controls">
     <label>Layout:
       <select id="rf-layout">
-        <option value="grid">3×3 Grid (one panel per region)</option>
-        <option value="overlay">Overlay (all 9 on shared axes)</option>
+        <option value="grid">3×3 Grid (One Panel per Region)</option>
+        <option value="overlay">Overlay (All 9 on Shared Axes)</option>
       </select>
     </label>
-    <label>Y-scale:
+    <label>Y-Scale:
       <select id="rf-yscale">
-        <option value="log">Logarithmic (log10)</option>
+        <option value="log">Logarithmic (Log10)</option>
         <option value="linear">Linear</option>
       </select>
     </label>
-    <label>Data version:
+    <label>Data Version:
       <select id="rf-version">
-        <option value="C">C — clean (excludes N/P/partial)</option>
-        <option value="B">B — without N/P</option>
-        <option value="A">A — raw (everything)</option>
+        <option value="C">C — Clean (Excludes N/P/Partial)</option>
+        <option value="B">B — Without N/P</option>
+        <option value="A">A — Raw (Everything)</option>
       </select>
     </label>
   </div>
@@ -467,15 +467,15 @@ tr:hover td { background: #fafbfc; }
     <label>Display:
       <select id="comp-mode">
         <option value="percent">Percent (0–100%)</option>
-        <option value="absolute">Absolute (wolf count)</option>
+        <option value="absolute">Absolute (Wolf Count)</option>
       </select>
     </label>
-    <label>Sort bars by:
+    <label>Sort Bars by:
       <select id="comp-order">
-        <option value="anatomy">Anatomical group</option>
-        <option value="entropy">Shannon entropy ↓</option>
-        <option value="usable">% usable ↓</option>
-        <option value="unique">Distinct codes (n_unique) ↓</option>
+        <option value="anatomy">Anatomical Group</option>
+        <option value="entropy">Shannon Entropy ↓</option>
+        <option value="usable">% Usable ↓</option>
+        <option value="unique">Distinct Codes (n_unique) ↓</option>
       </select>
     </label>
   </div>
@@ -493,14 +493,14 @@ tr:hover td { background: #fafbfc; }
     <label>Display:
       <select id="id-mode">
         <option value="percent">Percent (0–100%)</option>
-        <option value="absolute">Absolute (wolf count)</option>
+        <option value="absolute">Absolute (Wolf Count)</option>
       </select>
     </label>
-    <label>Sort bars by:
+    <label>Sort Bars by:
       <select id="id-order">
-        <option value="anatomy">Anatomical group</option>
-        <option value="unique">% Unique (best ID first)</option>
-        <option value="entropy">Shannon entropy ↓</option>
+        <option value="anatomy">Anatomical Group</option>
+        <option value="unique">% Unique (Best ID First)</option>
+        <option value="entropy">Shannon Entropy ↓</option>
       </select>
     </label>
   </div>
@@ -513,7 +513,7 @@ tr:hover td { background: #fafbfc; }
     Brown / red at the top = wolves whose code is shared with many others (or the region
     was unobservable). Hover any segment for exact wolf count.
   </div>
-  <h3 style="margin-top: 20px;">Verification Table (Counts Per Bucket)</h3>
+  <h3 style="margin-top: 20px;">Verification Table (Counts per Bucket)</h3>
   <div id="id-table" style="font-size: 12px; overflow-x: auto;"></div>
 </div>
 
@@ -530,10 +530,10 @@ tr:hover td { background: #fafbfc; }
   <div class="controls">
     <label>Region:
       <select id="cp-region">
-        <option value="A1">A1 (lower muzzle)</option>
-        <option value="A2">A2 (upper muzzle)</option>
-        <option value="C6">C6 (nose tip)</option>
-        <option value="D8">D8 (upper head side)</option>
+        <option value="A1">A1 (Lower Muzzle)</option>
+        <option value="A2">A2 (Upper Muzzle)</option>
+        <option value="C6">C6 (Nose Tip)</option>
+        <option value="D8">D8 (Upper Head Side)</option>
       </select>
     </label>
   </div>
@@ -547,21 +547,21 @@ tr:hover td { background: #fafbfc; }
 
 <div class="tab-content" id="tab-wolves">
   <div class="controls">
-    <input type="text" id="wolf-search" placeholder="🔍 Search by serial number..." style="min-width: 200px;">
-    <label>Geographic area:
+    <input type="text" id="wolf-search" placeholder="🔍 Search by Serial Number..." style="min-width: 200px;">
+    <label>Geographic Area:
       <select id="wolf-area"><option value="">All</option></select>
     </label>
-    <label>Pelt region:
-      <select id="wolf-region-col"><option value="">no filter</option></select>
+    <label>Pelt Region:
+      <select id="wolf-region-col"><option value="">No Filter</option></select>
     </label>
     <label>Status:
       <select id="wolf-status">
         <option value="">All</option>
-        <option value="unambiguous">unambiguous</option>
-        <option value="asymmetric">asymmetric</option>
-        <option value="partial_ambiguous">partial_ambiguous</option>
-        <option value="N">N (not visible)</option>
-        <option value="P">P (unclear)</option>
+        <option value="unambiguous">Unambiguous</option>
+        <option value="asymmetric">Asymmetric</option>
+        <option value="partial_ambiguous">Partial-Ambiguous</option>
+        <option value="N">N (Not Visible)</option>
+        <option value="P">P (Unclear)</option>
       </select>
     </label>
     <span id="wolf-count" style="margin-left:auto; font-size:13px; color:#6c7a89;"></span>
@@ -672,7 +672,7 @@ function renderOverview() {
   `;
 
   let html = '<table><thead><tr>';
-  ["Region","Group","n_total","n_unambiguous","n_unique","H (bits)","Gini-Simpson","Top code(s)","Top freq","%N","%P","% usable"]
+  ["Region","Group","n_total","n_unambiguous","n_unique","H (bits)","Gini-Simpson","Top Code(s)","Top Freq","%N","%P","% Usable"]
     .forEach(c => html += `<th>${c}</th>`);
   html += '</tr></thead><tbody>';
   DATA.summary.forEach(row => {
@@ -707,7 +707,7 @@ function renderOverview() {
     text, textposition: "outside",
     hovertemplate: "<b>%{x}</b><br>n_unique=%{y}<br>%{text}<extra></extra>",
   }], {
-    title: "Distinct Codes Per Region (Version C)",
+    title: "Distinct Codes per Region (Version C)",
     yaxis: { title: "n_unique (Distinct Codes)" },
     margin: { t: 50, b: 50 },
     showlegend: false,
@@ -781,7 +781,7 @@ function renderRankFreq() {
     Plotly.newPlot("rf-overlay", traces, {
       title: `Rank-Frequency Overlay — Version ${version}`,
       xaxis: { title: "Code Rank (Most → Least Frequent)" },
-      yaxis: { title: "Wolf count", type: yscale },
+      yaxis: { title: "Wolf Count", type: yscale },
       legend: { orientation: "v", x: 1.02, y: 1, font: { size: 12 } },
       margin: { t: 50, r: 110 },
     }, { responsive: true });
@@ -831,10 +831,10 @@ function renderComposition() {
 
   Plotly.newPlot("comp-plot", traces, {
     barmode: "stack",
-    title: `Composition Per Region (${mode==="percent" ? "Percent" : "Absolute"})`,
+    title: `Composition per Region (${mode==="percent" ? "Percent" : "Absolute"})`,
     xaxis: { title: "Region", tickfont: { size: 13 } },
     yaxis: {
-      title: mode==="percent" ? "% Of Wolves" : "Wolf Count",
+      title: mode==="percent" ? "% of Wolves" : "Wolf Count",
       range: mode==="percent" ? [0,108] : [0, DATA.n_total*1.1],
     },
     legend: { orientation: "h", y: -0.18 },
@@ -887,10 +887,10 @@ function renderIdentification() {
 
   Plotly.newPlot("id-plot", traces, {
     barmode: "stack",
-    title: `Identification Power Per Region — Wolf Bucket Assignment (${mode==="percent" ? "Percent" : "Absolute"})`,
+    title: `Identification Power per Region — Wolf Bucket Assignment (${mode==="percent" ? "Percent" : "Absolute"})`,
     xaxis: { title: "Region", tickfont: { size: 13 } },
     yaxis: {
-      title: mode==="percent" ? "% Of Wolves" : "Wolf Count",
+      title: mode==="percent" ? "% of Wolves" : "Wolf Count",
       range: mode==="percent" ? [0,108] : [0, DATA.n_total*1.1],
     },
     legend: { orientation: "v", x: 1.02, y: 1, font: { size: 11 } },
@@ -1006,7 +1006,7 @@ function renderColorPattern() {
 
   Plotly.newPlot("cp-plot", traces, {
     grid: { rows: 1, columns: 2, pattern: "independent" },
-    title: `${r} — Colour And Pattern Split`,
+    title: `${r} — Colour and Pattern Split`,
     xaxis:  { title: "Colour Value" },
     yaxis:  { title: "Wolf Count" },
     xaxis2: { title: "Pattern Value" },
@@ -1054,7 +1054,7 @@ function renderWolvesTable() {
     wolves = wolves.filter(w => DATA.all_regions.some(r => w[`${r}_status`] === statusFilter));
   }
 
-  $("wolf-count").textContent = `Showing ${wolves.length} of ${DATA.n_total} wolves`;
+  $("wolf-count").textContent = `Showing ${wolves.length} of ${DATA.n_total} Wolves`;
 
   let html = '<table><thead><tr>';
   html += '<th>Serial</th><th>Area</th><th>Pictures</th>';
