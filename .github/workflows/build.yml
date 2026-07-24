@@ -1,0 +1,52 @@
+name: Build dashboards
+
+# When wolves_data.xlsx changes on main (e.g. a commit from the cloud editor),
+# rebuild BOTH the public viewer (data_table.html) and the private editor, then
+# commit them back. The public GitHub Pages site refreshes automatically ~1-2 min
+# later. Nothing needs to run on Nili's PC.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'wolves_data.xlsx'
+  workflow_dispatch: {}   # allow a manual rebuild from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-dashboards
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg          # headless matplotlib (wolf_lib imports pyplot)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Rebuild viewer + editor from wolves_data.xlsx
+        run: python build_data_table.py --both
+
+      - name: Commit rebuilt dashboards
+        run: |
+          git config user.name  "wolf-paper-bot"
+          git config user.email "OPElement0@users.noreply.github.com"
+          git add data_table.html edit-7q2m9x4p.html
+          if git diff --cached --quiet; then
+            echo "No dashboard changes to commit."
+          else
+            # [skip ci] + the path filter above both prevent a rebuild loop:
+            # this commit only touches the HTML, never wolves_data.xlsx.
+            git commit -m "CI: rebuild dashboards from wolves_data.xlsx [skip ci]"
+            git push
+          fi

@@ -1,0 +1,8 @@
+# Runtime dependencies for the wolf-paper build pipeline (used by GitHub Actions
+# and for local runs). wolf_lib imports matplotlib + scipy at module load, so
+# they are required even though the dashboard build itself is table/JSON only.
+pandas
+numpy
+scipy
+matplotlib
+openpyxl

@@ -4,6 +4,29 @@
 
 ---
 
+## ✅ PUBLIC / PRIVATE SPLIT — two builds (2026-07-24)
+
+The dashboard is now built in **two variants** from the same
+`build_data_table.py` (`--viewer` / `--editor` / `--both`):
+
+- **`data_table.html` = PUBLIC viewer** (what the paper editor gets, GitHub
+  Pages). Read-only: no admin login (empty `PWD_HASH` can't match any input),
+  no embedded workbook, no internal JSON, **photographer rows excluded (89
+  rows)**. This is the link `https://opelement0.github.io/Niliwolf/data_table.html`.
+- **`edit-7q2m9x4p.html` = PRIVATE cloud editor** (obscure, unlisted; NOT linked
+  from `index.html`). Nili edits from any PC; **Save commits `wolves_data.xlsx`
+  to GitHub via the Contents API using a Personal Access Token** she pastes once
+  per browser (never embedded). See `setupGithubEditor`/`ghSave` in the JS.
+- **CI** (`.github/workflows/build.yml`): a push that changes `wolves_data.xlsx`
+  → rebuild `--both` → commit HTML back → public site refreshes (~1–2 min).
+- **Never share the `edit-7q2m9x4p.html` link.** Writes need the PAT, but keep
+  it unlisted anyway.
+- Local workflow unchanged conceptually: `update.bat` builds `--both` + opens
+  the editor; `publish.bat` pushes. Internal files (CSV dumps, old xlsx, decision
+  JSON, reports) are now git-ignored — do **not** re-add them to the public repo.
+
+---
+
 ## ✅ PHOTOGRAPHER-SOURCE WOLVES EXCLUDED (2026-05-29)
 
 Mentor decision (Nili reported 2026-05-29): wolves observed **only by external

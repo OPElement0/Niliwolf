@@ -15,9 +15,11 @@ It prevents accidental edits, not determined attackers.
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -37,7 +39,19 @@ from wolf_lib import (
 from step1d_dataqc import run_checks
 
 OUT_PATH = OUTPUT_DIR / "data_table.html"
+# The private editor is written to an obscure, unlisted filename. It is NOT
+# referenced by index.html; Nili keeps this link privately and edits from any
+# PC. Writes are gated by a GitHub token, so the unlisted URL only needs to be
+# hard to stumble upon, not cryptographically secret (the data it shows is the
+# same data the public viewer already shows).
+EDITOR_OUT_PATH = OUTPUT_DIR / "edit-7q2m9x4p.html"
 PASSWORD = "112358"
+
+# GitHub target the cloud editor commits to (Contents API). The public viewer
+# never uses these — they are only wired up in the editor build.
+GH_REPO = "OPElement0/Niliwolf"
+GH_BRANCH = "main"
+GH_DATA_PATH = "wolves_data.xlsx"
 SCHEMATIC_PATH = OUTPUT_DIR / "assets" / "wolf_schematic.jpg"
 DEFINITIONS_TABLE_PATH = OUTPUT_DIR / "assets" / "region_definitions_table.jpg"
 CLAUDE_QUESTIONS_PATH = OUTPUT_DIR / "claude_questions.json"
@@ -1139,7 +1153,12 @@ def load_prefilled_decisions() -> dict:
     return decs
 
 
-def main() -> None:
+def main(variant: str = "editor") -> None:
+    # variant == "viewer" → public, read-only data_table.html (no admin code
+    #   reachable, no embedded workbook, no internal JSON, photographer wolves
+    #   excluded). variant == "editor" → private cloud editor (full admin UI +
+    #   GitHub-commit persistence).
+    viewer = (variant == "viewer")
     if not INPUT_FILE.exists():
         raise SystemExit(f"Source not found: {INPUT_FILE}")
 
@@ -1241,6 +1260,10 @@ def main() -> None:
         # Tag row provenance so the front-end can hide photographer-only
         # wolves in viewer mode (admin can opt-in to view/export them).
         record["_source"] = str(row.get("_cams_source", "empty"))
+        # Public viewer: photographer-only wolves are excluded from the paper
+        # pool, so we do not embed them at all (not merely hide them).
+        if viewer and record["_source"] == "photographer":
+            continue
         rows.append(record)
 
     # Drop the internal _cams_source from the exported column list — it's
@@ -1254,8 +1277,15 @@ def main() -> None:
     else:
         n_visible = len(df)
 
-    pwd_hash = hashlib.sha256(PASSWORD.encode("utf-8")).hexdigest()
-    xlsx_b64 = base64.b64encode(INPUT_FILE.read_bytes()).decode("ascii")
+    if viewer:
+        # No admin path in the public viewer: an empty hash can never match
+        # sha256(anything), so login is mathematically impossible. No embedded
+        # workbook either — nothing to download or reconstruct.
+        pwd_hash = ""
+        xlsx_b64 = ""
+    else:
+        pwd_hash = hashlib.sha256(PASSWORD.encode("utf-8")).hexdigest()
+        xlsx_b64 = base64.b64encode(INPUT_FILE.read_bytes()).decode("ascii")
     schematic_prefix, schematic_b64 = _encode_image_b64(SCHEMATIC_PATH)
     deftable_prefix, deftable_b64 = _encode_image_b64(DEFINITIONS_TABLE_PATH)
 
@@ -1315,9 +1345,10 @@ def main() -> None:
         "n_visible_default": n_visible,
         "n_pool": len(df_pool),
         "build_iso": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
-        "issues": issues_payload,
-        "claude_questions": claude_questions,
-        "prefilled_decisions": prefilled_decisions,
+        # Internal QC/decision data is never shipped to the public viewer.
+        "issues": ({} if viewer else issues_payload),
+        "claude_questions": ([] if viewer else claude_questions),
+        "prefilled_decisions": ({} if viewer else prefilled_decisions),
         "anatomy": anatomy,
         "filter_options": filter_options,
     }
@@ -1330,11 +1361,16 @@ def main() -> None:
     html = html.replace("__XLSX_BASE64__", xlsx_b64)
     html = html.replace("__SCHEMATIC_SRC__", (schematic_prefix + schematic_b64) if schematic_b64 else "")
     html = html.replace("__DEFTABLE_SRC__", (deftable_prefix + deftable_b64) if deftable_b64 else "")
+    html = html.replace("__BUILD_VARIANT__", variant)
+    html = html.replace("__GH_REPO__", GH_REPO)
+    html = html.replace("__GH_BRANCH__", GH_BRANCH)
+    html = html.replace("__GH_DATA_PATH__", GH_DATA_PATH)
     html = html.replace("__PAYLOAD_JSON__", payload_json)
 
-    OUT_PATH.write_text(html, encoding="utf-8")
+    out_path = OUT_PATH if viewer else EDITOR_OUT_PATH
+    out_path.write_text(html, encoding="utf-8")
     size_kb = len(html.encode("utf-8")) / 1024
-    print(f"  wrote: {OUT_PATH}")
+    print(f"  variant: {variant}  ->  {out_path.name}")
     print(f"  size : {size_kb:.1f} KB  ({len(rows)} rows × {len(columns)} cols)")
     print(f"  pool : {len(df_pool)} wolves processed for status / buckets")
     print(f"  imgs : schematic={'yes' if schematic_b64 else 'MISSING'}  "
@@ -2578,6 +2614,11 @@ const PAYLOAD = __PAYLOAD_JSON__;
 const PWD_HASH = "__PWD_HASH__";
 const XLSX_BASE64 = "__XLSX_BASE64__";
 const STORAGE_KEY = "wolves_data_table_edits_v1";
+// Build variant: "viewer" (public, read-only) or "editor" (private cloud editor).
+const BUILD_VARIANT = "__BUILD_VARIANT__";
+const VIEWER = BUILD_VARIANT === "viewer";
+// GitHub target for the cloud editor's Save (Contents API). Unused in the viewer.
+const GH = { repo: "__GH_REPO__", branch: "__GH_BRANCH__", dataPath: "__GH_DATA_PATH__" };
 
 const REGION_GROUP = {
   "A1": "A", "A2": "A",
@@ -3084,6 +3125,156 @@ async function saveAsXlsx() {
   URL.revokeObjectURL(url);
 
   alert("File downloaded as wolves_data.xlsx.\n\nNext steps:\n1. Move the file into the project folder (replacing the current one).\n2. Run update.bat to refresh the analyses.\n3. The dashboard and this table will both rebuild.");
+}
+
+// ============================================================================
+// Cloud editor — persist edits by committing wolves_data.xlsx back to GitHub
+// via the Contents API. Wired up only in the editor build (BUILD_VARIANT ===
+// "editor"). The GitHub token is entered by the user and stored per-browser in
+// localStorage; it is NEVER embedded in the page. This is what lets Nili edit
+// from any PC: open the private editor link, connect a token once per device,
+// edit, Save → a commit lands on the repo and CI rebuilds the public viewer.
+// ============================================================================
+const GH_TOKEN_KEY = "wolves_gh_pat_v1";
+let ghLatestWorkbookB64 = null;   // most recent full workbook fetched from GitHub
+
+function ghToken() { try { return localStorage.getItem(GH_TOKEN_KEY) || ""; } catch (e) { return ""; } }
+function ghSetToken(t) { try { if (t) localStorage.setItem(GH_TOKEN_KEY, t); else localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} }
+
+async function ghApi(path, opts) {
+  return fetch("https://api.github.com" + path, Object.assign({
+    headers: {
+      "Authorization": "Bearer " + ghToken(),
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  }, opts || {}));
+}
+
+function ghSetStatus(msg, kind) {
+  const el = $("gh-status");
+  if (el) { el.textContent = msg; el.style.color = kind === "err" ? "#c62828" : (kind === "ok" ? "#2e7d32" : "#555"); }
+}
+
+async function ghConnect() {
+  const t = $("gh-token-input").value.trim();
+  if (!t) { ghSetStatus("Paste a token first.", "err"); return; }
+  ghSetToken(t);
+  ghSetStatus("Checking token…", "");
+  try {
+    const r = await ghApi("/repos/" + GH.repo);
+    if (r.ok) {
+      $("gh-token-input").value = "";
+      ghSetStatus("Connected ✓ — token saved on this device.", "ok");
+    } else {
+      ghSetToken("");
+      ghSetStatus("Token rejected (HTTP " + r.status + "). Check scope: repo contents read/write.", "err");
+    }
+  } catch (e) { ghSetStatus("Network error: " + e.message, "err"); }
+}
+
+// Rebuild the table from a freshly-fetched workbook (base64 of the .xlsx).
+function ghApplyWorkbook(b64, note) {
+  ghLatestWorkbookB64 = (b64 || "").replace(/\s/g, "");
+  const binStr = atob(ghLatestWorkbookB64);
+  const bytes = new Uint8Array(binStr.length);
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  const wb = XLSX.read(bytes, { type: "array" });
+  const ws = wb.Sheets[PAYLOAD.sheet_name];
+  const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+  // Preserve region-status badges by serial where we can (statuses are computed
+  // server-side; they refresh fully on the next CI rebuild).
+  const statusBySerial = {};
+  (table ? table.getData() : PAYLOAD.rows).forEach(r => { statusBySerial[r["serial number"]] = r._status; });
+  const rows = json.map((r, i) => {
+    const rec = { _row_index: i };
+    for (const c of PAYLOAD.columns) rec[c] = (r[c] === undefined || r[c] === null) ? "" : r[c];
+    rec._status = statusBySerial[rec["serial number"]] || {};
+    rec._source = "research";
+    return rec;
+  });
+  baselineRows = JSON.parse(JSON.stringify(rows));
+  if (table) table.replaceData(JSON.parse(JSON.stringify(rows)));
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  ghSetStatus((note || "Loaded latest data") + " ✓ (" + rows.length + " rows)", "ok");
+}
+
+async function ghLoadLatest() {
+  if (!ghToken()) { ghSetStatus("Connect a token first.", "err"); return; }
+  ghSetStatus("Loading latest from GitHub…", "");
+  try {
+    const r = await ghApi("/repos/" + GH.repo + "/contents/" + encodeURIComponent(GH.dataPath) + "?ref=" + encodeURIComponent(GH.branch));
+    if (!r.ok) { ghSetStatus("Fetch failed (HTTP " + r.status + ").", "err"); return; }
+    const meta = await r.json();
+    ghApplyWorkbook(meta.content, "Loaded latest data");
+  } catch (e) { ghSetStatus("Load error: " + e.message, "err"); }
+}
+
+async function ghSave() {
+  if (!ghToken()) { ghSetStatus("Connect a token first.", "err"); return; }
+  if (!table) return;
+  const btn = $("gh-save-btn");
+  if (btn) btn.disabled = true;
+  ghSetStatus("Saving to GitHub…", "");
+  try {
+    // 1. Fetch the current file's SHA (required to update) + freshest bytes so
+    //    we preserve the other sheets and don't clobber a concurrent edit.
+    let sha = null;
+    const meta = await ghApi("/repos/" + GH.repo + "/contents/" + encodeURIComponent(GH.dataPath) + "?ref=" + encodeURIComponent(GH.branch));
+    if (meta.ok) { const j = await meta.json(); sha = j.sha; ghLatestWorkbookB64 = (j.content || "").replace(/\s/g, ""); }
+    // 2. Build the workbook: start from the latest bytes, replace sheet (2).
+    const baseB64 = ghLatestWorkbookB64 || XLSX_BASE64;
+    const binStr = atob(baseB64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    const wb = XLSX.read(bytes, { type: "array" });
+    const data = table.getData();
+    const sheetRows = data.map(r => {
+      const out = {};
+      for (const col of PAYLOAD.columns) { const v = r[col]; out[col] = (v === "" || v === null || v === undefined) ? null : v; }
+      return out;
+    });
+    wb.Sheets[PAYLOAD.sheet_name] = XLSX.utils.json_to_sheet(sheetRows, { header: PAYLOAD.columns });
+    const outB64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+    // 3. Commit via the Contents API.
+    const body = { message: "Edit wolves_data.xlsx via cloud editor", content: outB64, branch: GH.branch };
+    if (sha) body.sha = sha;
+    const put = await ghApi("/repos/" + GH.repo + "/contents/" + encodeURIComponent(GH.dataPath), {
+      method: "PUT", body: JSON.stringify(body),
+    });
+    if (put.ok) {
+      baselineRows = JSON.parse(JSON.stringify(table.getData()));
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+      if ($("save-bar")) $("save-bar").classList.remove("show");
+      if (typeof onChange === "function") onChange();
+      ghSetStatus("Saved to GitHub ✓ — the public site rebuilds in ~2 min.", "ok");
+    } else {
+      const txt = await put.text();
+      ghSetStatus("Save failed (HTTP " + put.status + "). " + txt.slice(0, 140), "err");
+    }
+  } catch (e) { ghSetStatus("Save error: " + e.message, "err"); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+function setupGithubEditor() {
+  const bar = $("admin-bar");
+  if (!bar) return;
+  const box = document.createElement("div");
+  box.id = "gh-box";
+  box.style.cssText = "display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px; padding-top:8px; border-top:1px dashed rgba(0,0,0,.18); width:100%;";
+  box.innerHTML =
+    '<strong style="font-size:12px;">☁ Cloud save:</strong>' +
+    '<input id="gh-token-input" type="password" placeholder="Paste GitHub token" style="font-size:12px; padding:5px 8px; min-width:200px; border:1px solid #bbb; border-radius:5px;" autocomplete="off" />' +
+    '<button id="gh-connect-btn" type="button" style="font-size:12px; padding:5px 10px;">Connect</button>' +
+    '<button id="gh-load-btn" type="button" style="font-size:12px; padding:5px 10px;">↻ Load latest</button>' +
+    '<button id="gh-save-btn" type="button" class="btn-primary" style="font-size:12px; padding:5px 12px; font-weight:600;">☁ Save to GitHub</button>' +
+    '<span id="gh-status" style="font-size:12px;"></span>';
+  bar.appendChild(box);
+  $("gh-connect-btn").addEventListener("click", ghConnect);
+  $("gh-load-btn").addEventListener("click", ghLoadLatest);
+  $("gh-save-btn").addEventListener("click", ghSave);
+  if (ghToken()) ghSetStatus("Token present on this device ✓ — click 'Load latest' to sync, then edit.", "ok");
+  else ghSetStatus("Not connected — paste your GitHub token and click Connect.", "");
 }
 
 // ============================================================================
@@ -6423,8 +6614,15 @@ function init() {
   }
   // Initial chip counts (run after the table is built so getData() works)
   table.on("tableBuilt", () => { refreshStatusChipCounts(); });
-  // Probe the local sync server (no-op if it's not running)
-  syncProbe();
+  // Probe the local sync server (editor only — the public viewer never touches
+  // localhost and hides the admin/sync UI entirely).
+  if (VIEWER) {
+    const lb = $("admin-login-btn"); if (lb) lb.style.display = "none";
+    const sp = $("sync-pill"); if (sp) sp.style.display = "none";
+  } else if (BUILD_VARIANT === "editor") {
+    setupGithubEditor();   // cloud persistence (PAT connect + Save to GitHub)
+    syncProbe();           // also allow local sync if she happens to be on her own PC
+  }
   // Render chart (Plotly is async-loaded via CDN; check)
   if (window.Plotly) {
     renderRegionDistributionChart();
@@ -6486,4 +6684,19 @@ document.addEventListener("DOMContentLoaded", init);
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
-    main()
+    ap = argparse.ArgumentParser(description="Build the wolves data table (editor or public viewer).")
+    grp = ap.add_mutually_exclusive_group()
+    grp.add_argument("--viewer", action="store_true",
+                     help="build the public, read-only data_table.html")
+    grp.add_argument("--editor", action="store_true",
+                     help="build the private cloud editor (default)")
+    ap.add_argument("--both", action="store_true",
+                    help="build both variants in one run")
+    args = ap.parse_args()
+    if args.both:
+        main("editor")
+        main("viewer")
+    elif args.viewer:
+        main("viewer")
+    else:
+        main("editor")

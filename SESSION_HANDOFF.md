@@ -6,7 +6,55 @@
 
 ---
 
-## Last session — 2026-05-30 (most recent — chart polish for paper / mentor share)
+## Last session — 2026-07-24 (public/private split: viewer + cloud editor)
+
+**Big architectural change.** The single `data_table.html` was split into two
+builds so Nili can send the paper editor a **view-only** link while editing
+privately from **any PC**.
+
+### What changed
+- `build_data_table.py` now takes a variant: `--viewer` / `--editor` / `--both`
+  (default `--editor`). One shared `HTML_TEMPLATE`; the variant only changes
+  injected constants + a couple of `init()` guards.
+  - **`data_table.html`** = PUBLIC viewer. `PWD_HASH=""` (admin login
+    mathematically impossible), `XLSX_BASE64=""` (no embedded workbook),
+    `issues/claude_questions/prefilled_decisions` emptied, **photographer rows
+    excluded entirely** (89 rows, not 100). Login button + sync pill hidden;
+    `syncProbe()` not called. Charts + sortable/filter table remain.
+  - **`edit-7q2m9x4p.html`** = PRIVATE cloud editor (obscure, unlisted name; not
+    referenced by `index.html`). Full admin UI + a new **cloud-save** module
+    (`setupGithubEditor` / `ghSave` / `ghLoadLatest` in the JS). Saving commits
+    `wolves_data.xlsx` back to the repo via the **GitHub Contents API** using a
+    **Personal Access Token** the user pastes once per browser (localStorage key
+    `wolves_gh_pat_v1`; never embedded). "↻ Load latest" pulls current data on
+    any device.
+- **GitHub Actions** (`.github/workflows/build.yml` + `requirements.txt`):
+  on any push that changes `wolves_data.xlsx`, CI runs `build_data_table.py
+  --both` and commits the rebuilt HTML back (`[skip ci]` + path filter → no
+  loop). So an edit from any PC → cloud save → public viewer refreshes in
+  ~1–2 min, no local run needed.
+- **Repo hygiene**: `.gitignore` now excludes old/backup/snapshot xlsx, all
+  `*.csv` dumps, internal JSON (`data_decisions.json`, `claude_questions.json`),
+  QC/audit reports, and `wolf_dashboard.html`. Those 19 files were
+  `git rm --cached` (local copies kept). `wolves_data.xlsx` stays tracked (CI
+  needs it; it's the same data the viewer already shows).
+- **Scripts**: `update.bat` now builds `--both` and opens the editor;
+  `publish.bat` added (commit data + dashboards, push).
+
+### ⚠️ Not yet done / needs Nili (GitHub-side, can't be automated from here)
+1. **Create a fine-grained PAT** (repo `OPElement0/Niliwolf`, Contents:
+   Read/Write) and connect it in the editor's "☁ Cloud save" bar.
+2. **Enable Actions write permission**: repo Settings → Actions → General →
+   Workflow permissions → "Read and write permissions".
+3. **First push** of this change was NOT auto-done — confirm before publishing
+   (it makes the editor live + restructures the public repo). Live GitHub commit
+   from the editor is the only path not tested locally (needs the real token).
+- Data itself unchanged this session (still 89-wolf pool; the earlier
+  camera/date edits are already saved). Charts unaffected.
+
+---
+
+## Last session — 2026-05-30 (chart polish for paper / mentor share)
 
 ### What landed in this session
 

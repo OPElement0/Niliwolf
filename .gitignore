@@ -13,6 +13,29 @@ audit_summary.txt
 sync_server.log
 .sync_backups/
 
+# ------------------------------------------------------------------
+# Do NOT publish these to the public repo (2026-07-24 public/private split).
+# The public site needs only index.html + data_table.html (+ the editor,
+# built by CI). Everything below is internal working data.
+# ------------------------------------------------------------------
+# Old / backup / snapshot copies of the source workbook
+*.OLD*.xlsx
+wolves_data.before_*.xlsx
+wolves_data.snapshot_*.xlsx
+# Internal QC / decision / question logs
+data_decisions.json
+claude_questions.json
+data_quality_report.json
+data_quality_report.md
+audit_report.md
+data_chart_verification_report.md
+pack_inference_report.md
+pack_membership_report.md
+# Regenerated CSV analysis outputs
+*.csv
+# Deprecated older dashboard
+wolf_dashboard.html
+
 # OS junk
 .DS_Store
 Thumbs.db

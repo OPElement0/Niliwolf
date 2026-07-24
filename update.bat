@@ -38,8 +38,8 @@ if %ERRORLEVEL% neq 0 (
 echo   Report: data_quality_report.md
 
 echo.
-echo ===== [4/5] Rebuilding interactive data table =====
-%PY% -X utf8 build_data_table.py
+echo ===== [4/5] Rebuilding dashboards (public viewer + private editor) =====
+%PY% -X utf8 build_data_table.py --both
 if %ERRORLEVEL% neq 0 (
   echo.
   echo ERROR in build_data_table.py — see message above.
@@ -58,8 +58,11 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo ===== Done — opening data table =====
-start "" "data_table.html"
+echo ===== Done — opening the private editor =====
+echo   Public view-only page : data_table.html   (this is what the paper editor sees)
+echo   Private editor        : edit-7q2m9x4p.html (edit here; do NOT share this link)
+start "" "edit-7q2m9x4p.html"
 echo.
+echo To publish changes to the public site, run publish.bat (or push wolves_data.xlsx).
 echo Press any key to close this window.
 pause >nul
