@@ -39,7 +39,10 @@ from scipy.stats import entropy as scipy_entropy
 
 REGIONS = ["A1", "A2", "B3", "B4", "B5", "C6", "C7", "D8", "D9"]
 SHEET_NAME = "נתוני זיהוי זאבים (2)"
-OUTPUT_DIR = Path(r"C:\Users\nilim\Desktop\wolf paper")
+# Project directory = the folder this file lives in. This is the real project
+# path locally (C:\Users\nilim\Desktop\wolf paper) AND the checkout dir on
+# GitHub Actions (Linux), so the pipeline is portable across machines.
+OUTPUT_DIR = Path(__file__).resolve().parent
 INPUT_FILE = OUTPUT_DIR / "wolves_data.xlsx"
 
 # Color letters per region (where applicable)
