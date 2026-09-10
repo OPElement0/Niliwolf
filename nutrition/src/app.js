@@ -66,13 +66,15 @@
     },
     subscribeAll() {
       const db = App.db;
+      // Snapshot data is frozen by the platform — deep-clone so the app can edit it in place.
+      const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
       const onErr = (e) => { console.warn("db", e); if (e && e.code === "revoked") { App.mode = "local"; setSyncPill(); } };
       db.collection("settings").onSnapshot((snap) => {
-        snap.docs.forEach((d) => { if (d.id === "profile") App.state.profile = d.data() || {}; if (d.id === "targets") App.state.targets = d.data() || { overrides: {} }; });
+        snap.docs.forEach((d) => { if (d.id === "profile") App.state.profile = clone(d.data()) || {}; if (d.id === "targets") App.state.targets = clone(d.data()) || { overrides: {} }; });
         afterRemote();
       }, onErr);
       const listColl = (name, key) => db.collection(name).onSnapshot((snap) => {
-        App.state[key] = snap.docs.filter((d) => d.exists).map((d) => Object.assign({ id: d.id }, d.data()));
+        App.state[key] = snap.docs.filter((d) => d.exists).map((d) => Object.assign({ id: d.id }, clone(d.data())));
         afterRemote();
       }, onErr);
       listColl("supplements", "supplements");
@@ -81,11 +83,11 @@
       listColl("diagnoses", "diagnoses");
       db.collection("days").onSnapshot((snap) => {
         const days = {};
-        snap.docs.forEach((d) => { if (d.exists) days[d.id] = d.data(); });
+        snap.docs.forEach((d) => { if (d.exists) days[d.id] = clone(d.data()); });
         App.state.days = days;
         afterRemote();
       }, onErr);
-      db.doc("chat/history").onSnapshot((d) => { App.state.chat = d.exists ? d.data() : { turns: [] }; afterRemote(); }, onErr);
+      db.doc("chat/history").onSnapshot((d) => { App.state.chat = d.exists ? clone(d.data()) : { turns: [] }; afterRemote(); }, onErr);
     },
     async set(coll, id, data) {
       writeCache();
@@ -1097,7 +1099,7 @@
   document.addEventListener("click", (e) => {
     const el = e.target.closest("[data-act]"); if (!el) return;
     const fn = actions[el.dataset.act];
-    if (fn) { if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") return; e.preventDefault(); fn(el, e); }
+    if (fn) { if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") return; e.preventDefault(); try { const r = fn(el, e); if (r && r.catch) r.catch((err) => { console.error(err); toast("משהו השתבש: " + (err && err.message ? err.message : err)); }); } catch (err) { console.error(err); toast("משהו השתבש: " + (err && err.message ? err.message : err)); } }
   });
   document.addEventListener("keydown", (e) => {
     const el = e.target;
