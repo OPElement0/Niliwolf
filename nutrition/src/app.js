@@ -376,10 +376,22 @@
     if (diet === "vegetarian") return f.cat !== "meat" && !MEAT_DISHES.includes(f.id);
     return true;
   }
-  function closers(key, n = 3) {
-    const pool = App.state.foods.map(normFood).map((f) => ({ f, bonus: f.favorite ? 1.5 : 1.2 })).concat(GENERIC.filter((f) => f.cat !== "snacks" && dietOk(f)).map((f) => ({ f, bonus: 1 })));
-    return pool.map(({ f, bonus }) => { const p = f.portions[0] || { label: "100 גרם", g: 100 }; const amt = ((f.per100[key] || 0) * p.g) / 100; return { food: f, portion: p, amount: amt, score: amt * bonus }; })
-      .filter((x) => x.amount > 0).sort((a, b) => b.score - a.score).slice(0, n);
+  // Foods that can close the remaining gap of `key`: how many grams (or cups, for drinks) are needed.
+  function closers(key, remaining, n = 8) {
+    const mine = App.state.foods.map(normFood).filter((f) => (f.per100[key] || 0) > 0);
+    const gen = GENERIC.filter((f) => f.cat !== "snacks" && dietOk(f) && (f.per100[key] || 0) > 0);
+    const build = (f, personal) => {
+      const need = (remaining / f.per100[key]) * 100;
+      const p = f.portions[0];
+      const isDrink = f.cat === "drinks";
+      let eq = "";
+      if (isDrink) eq = `${fmt(need / 240, 1)} כוסות`;
+      else if (p && p.g > 0) { const q = need / p.g; if (q >= 0.2 && q <= 12) eq = `≈ ${fmt(q, 1)} ${p.label}`; }
+      return { food: f, personal, need, text: isDrink ? eq : `${fmt(need, 0)} גרם${eq ? " (" + eq + ")" : ""}` };
+    };
+    const a = mine.map((f) => build(f, true)).filter((x) => x.need <= 600).sort((x, y) => x.need - y.need);
+    const b = gen.map((f) => build(f, false)).filter((x) => x.need <= 400).sort((x, y) => x.need - y.need);
+    return a.slice(0, 4).concat(b).slice(0, n);
   }
   function scoreOption(deltaN, g) {
     let score = 0, closes = [];
@@ -482,7 +494,6 @@
         ${doseBoxes(day, s)}
         <div class="grow"><div class="title">${full ? CHECK : ""}${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}</div></div>
       </div>`; });
-    const water = g.find((x) => x.key === "water");
     const glucoseCard = App.state.profile.track_glucose ? `<div class="card"><div class="card-head"><h3>מדידות סוכר</h3><button class="btn sm" data-act="add-glucose">+ מדידה</button></div>
         ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag)} · ${r.time}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
     $("panel-today").innerHTML = `
@@ -495,7 +506,6 @@
               <div class="card-head"><h2>מה עוד חסר ${isToday ? "היום" : ""}</h2><button class="btn sm ghost" data-act="show-all-nutrients">כל הרכיבים</button></div>
               ${floating.length ? floatRows.join("") + (floating.length > floatShown.length ? `<p class="help" style="margin-top:8px"><button class="btn sm ghost" data-act="show-all-nutrients">+${floating.length - floatShown.length} רכיבים נוספים</button></p>` : "") : `<p class="help">${day.meals.length ? "כרגע אין רכיב נוסף שחסר בולט — רכיבים צפים כאן רק כשהם מפגרים אחרי היעד." : "כשתרשמי אוכל, רכיבים שחסרים יופיעו כאן. לחיצה על רכיב מראה מאיפה הוא הגיע ומה יסגור את הפער."}</p>`}
               ${doneRows}
-              <div class="row" style="margin-top:12px"><button class="btn sm" data-act="quick-add" data-food="g_water">+ כוס מים</button><span class="small ink2">נוזלים: <span class="num">${fmt(water.v)}</span> / ${fmt(water.t)} מ"ל</span></div>
             </div>
             ${glucoseCard}
           </div>
@@ -523,7 +533,8 @@
       ${x.ul ? `<p class="help">גבול עליון בטוח: ${fmt(x.ul)} ${x.unit}</p>` : ""}
       <h3 style="margin-top:14px">מאיפה זה הגיע</h3>
       ${contributions.length || suppC.length ? `<div class="list">${contributions.map((c) => `<div class="item"><div class="grow"><span class="title">${esc(c.name)}</span> <span class="meta">${esc(c.qty)}</span></div><span class="num">${fmt(c.v)}</span></div>`).join("")}${suppC.map((c) => `<div class="item"><div class="grow"><span class="title">${esc(c.name)}</span> <span class="meta">תוסף</span></div><span class="num">${fmt(c.v)}</span></div>`).join("")}</div>` : `<p class="help">עדיין כלום.</p>`}
-      ${x.remaining > 0 && x.kind !== "limit" ? `<h3 style="margin-top:14px">מה יסגור את הפער (${fmt(x.remaining)} ${x.unit})</h3><p class="help">מותאם לסוג התזונה שבפרופיל; המאכלים שלך קודם.</p><div class="chips" style="margin-top:6px">${closers(key, 6).map((c) => `<button class="chip" data-act="quick-add" data-food="${c.food.id}">${esc(c.food.name)} (${esc(c.portion.label)}) +${fmt(c.amount)}</button>`).join("")}</div>` : ""}
+      ${x.remaining > 0 && x.kind !== "limit" ? `<h3 style="margin-top:14px">מה ישלים את הפער (${fmt(x.remaining)} ${x.unit})</h3><p class="help">כמה צריך מכל מאכל כדי לסגור את הפער. המאכלים שלך ראשונים; הצעות מותאמות לסוג התזונה בפרופיל.</p>
+      <div class="list">${closers(key, x.remaining).map((c) => `<div class="item"><div class="grow"><div class="title">${c.personal ? "★ " : ""}${esc(c.food.name)}</div><div class="meta">${esc(c.text)}</div></div><button class="btn sm" data-act="quick-add" data-food="${c.food.id}" title="הוספת מנה רגילה ליומן">אכלתי</button></div>`).join("") || `<p class="help">אין במאגר מאכל מתאים.</p>`}</div>` : ""}
       <div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
   }
   function allNutrientsModal() {
