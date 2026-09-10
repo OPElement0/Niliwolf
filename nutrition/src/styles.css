@@ -355,3 +355,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .pl-food { background: var(--purple-soft); color: var(--purple); }
 .pl-part { background: var(--blue-soft); color: var(--blue); }
 .row-status .status-pill { white-space: nowrap; }
+
+/* ---------- focus card ---------- */
+.card.focus { background: var(--accent-soft); border-color: transparent; }
+.focus-line { font-size: 1.1rem; font-weight: 700; line-height: 1.4; text-wrap: balance; }

@@ -359,6 +359,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .pl-part { background: var(--blue-soft); color: var(--blue); }
 .row-status .status-pill { white-space: nowrap; }
 
+/* ---------- focus card ---------- */
+.card.focus { background: var(--accent-soft); border-color: transparent; }
+.focus-line { font-size: 1.1rem; font-weight: 700; line-height: 1.4; text-wrap: balance; }
+
 </style>
 
 <div id="lock" class="lock" hidden>
@@ -1593,7 +1597,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
   function combinedPill(x, k) {
     const u = urgencyOf(x, k), plan = planOf(x, k);
     if (u.level === "good" || u.level === "over" || x.kind === "limit") return urgencyPill(u);
-    return `<span class="status-two">${urgencyDot(u)}${planPill(plan, x, k)}</span>`;
+    return planPill(plan, x, k);
   }
   function urgencyPill(u) { const cls = { good: "st-good", yellow: "st-yellow", orange: "st-warn", red: "st-bad", over: "st-over" }[u.level] || "st-info"; return `<span class="status-pill ${cls}">${esc(u.label)}</span>`; }
   function barHtml(x, thin) {
@@ -1708,7 +1712,8 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
         <div class="sub"><span>${x.remaining > 0 ? `נשאר ${fmt(x.remaining)}` : `+${fmt(x.v - x.t)} מעל היעד`}</span>${x.supp ? `<span>מתוספים ${fmt(x.supp)}</span>` : ""}${extra}</div>
       </div>`;
     }).join("");
-    const noteRows = notes.filter((n) => n.level !== "info" || n.changed).map((n) => `<div class="note ${n.level === "alert" ? "alert" : n.level === "warn" ? "warn" : "info"}">${esc(n.text)}</div>`);
+    const noteRows = []; // static rule notes (labs, diet) live in the pregnancy tab
+    const focus = focusSentence(g, day, isToday);
     const overs = g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)}).</div>`)
       .concat(g.filter((x) => x.ul && !NUT_BY[x.key].ulSoft && x.v >= x.ul * 0.85 && x.v < x.ul).map((x) => `<div class="note warn"><b>⚠ ${x.he} מתקרב לגבול העליון הבטוח:</b> ${fmt(x.v)} מתוך ${fmt(x.ul)} ${x.unit} (${Math.round((x.v / x.ul) * 100)}%). כדאי לא להוסיף עוד היום.</div>`))
       .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)}. ${esc(NUT_BY[x.key].ulNote || "")}</div>`));
@@ -1730,8 +1735,8 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const softOver = (x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul;
     const nutRow = (x) => { const u = urgencyOf(x, App.date), plan = planOf(x, App.date); return `<div class="nut-row ${x.status === "over" ? "row-over" : nearUL(x) ? "row-near" : ""}" data-act="nutrient-detail" data-key="${x.key}">
         ${donut(x.pct, u.level, 40)}
-        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
-        ${!isDone(x) && x.status !== "over" && !nearUL(x) && !softOver(x) ? `<div class="row-status">${combinedPill(x, App.date)}</div>` : ""}
+        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : !isDone(x) ? ` ${planPill(plan, x, App.date)}` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
+
         ${isDone(x) || x.status === "over" || nearUL(x) || softOver(x) ? ulGauge(x) : ""}
       </div>`; };
     const floatRows = missing.map(nutRow);
@@ -1744,8 +1749,8 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
         ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag)} · ${r.time}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
     $("panel-today").innerHTML = `
       <div class="stack">
+        <div class="card focus"><p class="focus-line">${esc(focus)}</p><p class="small ink2" style="margin-top:4px">${esc(headline)}</p>${overs.length ? `<div class="stack" style="gap:6px;margin-top:10px">${overs.join("")}</div>` : ""}</div>
         ${isToday ? `<div class="card now" id="now-card">${nowCardHtml()}</div>` : ""}
-        <div class="card soft"><p><b>${esc(headline)}</b></p>${noteRows.length || overs.length ? `<div class="stack" style="gap:6px;margin-top:10px">${overs.join("")}${noteRows.join("")}</div>` : ""}</div>
         <div class="hero">${heroTiles}</div>
         <div class="grid two">
           <div class="stack">
@@ -1771,6 +1776,29 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
           </div>
         </div>
       </div>`;
+  }
+  // One bold sentence: the main food focus for the rest of the day.
+  const FOCUS_WORDS = { protein: "חלבון", carbs: "פחמימה מלאה", fat: "שומן", kcal: "אנרגיה", iron: "ברזל (קטניות/טחינה)", calcium: "סידן", fiber: "סיבים", vitC: "ירק או פרי טרי", folate: "ירוקים וקטניות", magnesium: "אגוזים וזרעים", zinc: "גרעינים וקטניות", potassium: "ירקות ופירות", iodine: "יוד (נורי/מלח מועשר)", choline: "סויה", b6: "בננה/תפוח אדמה", vitA: "ירקות כתומים", omega3: "אומגה-3", b12: "B12", vitD: "ויטמין D" };
+  function focusSentence(g, day, isToday) {
+    if (!day.meals.length) return isToday ? "עדיין לא נרשם אוכל היום — התחילי עם ארוחה שיש בה חלבון ופחמימה מלאה." : "לא נרשם אוכל בתאריך הזה.";
+    const URG = { red: 0, orange: 1, yellow: 2 };
+    const need = g.filter((x) => x.t > 0 && x.kind !== "limit" && x.status !== "good" && x.status !== "over").map((x) => ({ x, plan: planOf(x, App.date), u: urgencyOf(x, App.date) })).filter((o) => o.plan && o.plan.cls !== "supp");
+    if (!need.length) {
+      const pendingUnits = App.state.supplements.filter((s) => s.active !== false).reduce((a, s) => a + (suppDoses(s) - suppTaken(day, s)), 0);
+      return pendingUnits > 0 ? `התזונה כיסתה את מה שצריך ${isToday ? "להיום" : ""} — נשאר רק לסמן ${pendingUnits} יחידות תוספים.` : "היום מושלם — כל היעדים הושגו.";
+    }
+    need.sort((a, b) => (URG[a.u.level] ?? 2) - (URG[b.u.level] ?? 2) || (HERO.includes(b.x.key) ? 1 : 0) - (HERO.includes(a.x.key) ? 1 : 0) || a.x.pct - b.x.pct);
+    const top = need.filter((o) => o.u.level !== "yellow").slice(0, 3);
+    const picks = (top.length ? top : need.slice(0, 2)).map((o) => FOCUS_WORDS[o.x.key] || o.x.he);
+    const prot = g.find((x) => x.key === "protein"), kc = g.find((x) => x.key === "kcal");
+    let meals = 1;
+    if (prot && prot.remaining > 0) meals = Math.max(1, Math.ceil(prot.remaining / 25));
+    else if (kc && kc.remaining > 400) meals = Math.max(1, Math.ceil(kc.remaining / 500));
+    meals = Math.min(meals, 3);
+    const mealsTxt = meals === 1 ? "ארוחה אחת" : meals === 2 ? "שתי ארוחות" : "שלוש ארוחות";
+    const list = picks.length === 1 ? picks[0] : picks.slice(0, -1).join(", ") + " ו" + picks[picks.length - 1];
+    const soft = !top.length;
+    return soft ? `המצב טוב — עוד קצת ${list} ${isToday ? "היום" : ""} וזה מושלם.` : `דרוש עוד לפחות ${mealsTxt} עם ${list} ${isToday ? "להיום" : ""} להשלמת החוסר.`;
   }
   function nutrientDetail(key) {
     const x = gaps(App.date).find((y) => y.key === key), day = getDay(App.date);
