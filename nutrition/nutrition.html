@@ -155,7 +155,7 @@ main { display: block; padding-block: 8px; }
 .disclaimer { color: var(--muted); font-size: 0.78rem; padding-block: 24px 8px; text-align: center; max-width: 60ch; margin-inline: auto; }
 
 /* ---------- hero tiles ---------- */
-.hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
 @media (max-width: 560px) { .hero { grid-template-columns: 1fr; } }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; position: relative; }
 .tile:hover { border-color: var(--line-strong); }
@@ -549,7 +549,7 @@ window.NUTRIENTS = [
   // key, Hebrew label, unit, group, always-show, upper limit (UL), kind
   { key: "kcal",      he: "קלוריות",        unit: "קק\"ל", group: "macro",   ul: null, kind: "target" },
   { key: "protein",   he: "חלבון",          unit: "גרם",   group: "macro",   ul: null, kind: "target", hero: true },
-  { key: "carbs",     he: "פחמימות",        unit: "גרם",   group: "macro",   ul: null, kind: "target", hero: true },
+  { key: "carbs",     he: "פחמימות",        unit: "גרם",   group: "macro",   ul: null, kind: "target" },
   { key: "fiber",     he: "סיבים",          unit: "גרם",   group: "macro",   ul: null, kind: "target" },
   { key: "fat",       he: "שומן",           unit: "גרם",   group: "macro",   ul: null, kind: "guide" },
   { key: "iron",      he: "ברזל",           unit: "מ\"ג",  group: "mineral", ul: 45,   ulSoft: true, kind: "target", hero: true },
@@ -1431,7 +1431,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       if (!x.t || d <= 0) return;
       if (x.kind === "limit") { if (x.v + d > x.t) score -= ((x.v + d - x.t) / x.t) * 2; return; }
       if (x.ul && x.v + d > x.ul) { score -= 2; closes.push({ key: x.key, over: true }); return; }
-      const w = HERO.includes(x.key) ? 3 : 1;
+      const w = HERO.includes(x.key) ? 3 : x.key === "carbs" ? 2 : 1;
       const gain = Math.min(d, x.remaining) / x.t;
       if (gain > 0.05) closes.push({ key: x.key, gain });
       score += w * gain;
@@ -1487,7 +1487,6 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const supps = App.state.supplements.filter((s) => s.active !== false);
     const missingSupps = supps.filter((s) => suppTaken(day, s) < suppDoses(s));
     const dosesTotal = supps.reduce((a, s) => a + suppDoses(s), 0), dosesTaken = supps.reduce((a, s) => a + suppTaken(day, s), 0);
-    const floating = floatingGaps();
     const hour = new Date().getHours();
     const isToday = App.date === dateKeyOf(new Date());
     const headline = (() => {
@@ -1514,13 +1513,16 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const noteRows = notes.filter((n) => n.level !== "info" || n.changed).map((n) => `<div class="note ${n.level === "alert" ? "alert" : n.level === "warn" ? "warn" : "info"}">${esc(n.text)}</div>`);
     const overs = g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)}).</div>`)
       .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)} (הגבול לאדם בריא). בטיפול בחסר ברזל לפי הנחיית רופא/ה זה מקובל; אם לא — כדאי לוודא.</div>`));
-    const floatShown = floating.filter((x) => x.reason !== null).sort((a, b) => (a.reason.startsWith("ממוצע") ? 1 : 0) - (b.reason.startsWith("ממוצע") ? 1 : 0) || a.pct - b.pct).slice(0, 10);
-    const floatRows = floatShown.map((x) => `<div class="nut-row" data-act="nutrient-detail" data-key="${x.key}">
+    const rest = g.filter((x) => x.t > 0 && !HERO.includes(x.key));
+    const isDone = (x) => (x.kind === "limit" ? x.status === "good" : x.status === "good");
+    const missing = rest.filter((x) => !isDone(x)).sort((a, b) => (a.status === "over" ? -1 : 0) - (b.status === "over" ? -1 : 0) || a.pct - b.pct);
+    const doneList = rest.filter(isDone).sort((a, b) => b.pct - a.pct);
+    const nutRow = (x) => `<div class="nut-row" data-act="nutrient-detail" data-key="${x.key}">
         ${donut(x.pct, x.status, 40)}
-        <div class="grow"><div><b>${x.he}</b> <span class="small ink2">· ${esc(x.reason)}</span></div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
-      </div>`);
-    const doneList = g.filter((x) => x.t > 0 && !HERO.includes(x.key) && (x.kind === "limit" ? x.status === "good" && day.meals.length : x.status === "good"));
-    const doneRows = doneList.length ? `<div class="chips" style="margin-top:12px">${doneList.map((x) => `<button class="chip done" data-act="nutrient-detail" data-key="${x.key}">${CHECK}${x.he} <span class="num">${Math.round(x.pct * 100)}%</span></button>`).join("")}</div>` : "";
+        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
+      </div>`;
+    const floatRows = missing.map(nutRow);
+    const doneRows = doneList.length ? `<h3 style="margin-top:16px;margin-bottom:4px">${CHECK}הושלם ${isToday ? "היום" : ""} <span class="small ink2">(${doneList.length})</span></h3>${doneList.map(nutRow).join("")}` : "";
     const suppRows = supps.map((s) => { const full = suppTaken(day, s) >= suppDoses(s); return `<div class="supp ${full ? "on" : ""}">
         ${doseBoxes(day, s)}
         <div class="grow"><div class="title">${full ? CHECK : ""}${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}</div></div>
@@ -1534,8 +1536,8 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
         <div class="grid two">
           <div class="stack">
             <div class="card">
-              <div class="card-head"><h2>מה עוד חסר ${isToday ? "היום" : ""}</h2><button class="btn sm ghost" data-act="show-all-nutrients">כל הרכיבים</button></div>
-              ${floating.length ? floatRows.join("") + (floating.length > floatShown.length ? `<p class="help" style="margin-top:8px"><button class="btn sm ghost" data-act="show-all-nutrients">+${floating.length - floatShown.length} רכיבים נוספים</button></p>` : "") : `<p class="help">${day.meals.length ? "כרגע אין רכיב נוסף שחסר בולט — רכיבים צפים כאן רק כשהם מפגרים אחרי היעד." : "כשתרשמי אוכל, רכיבים שחסרים יופיעו כאן. לחיצה על רכיב מראה מאיפה הוא הגיע ומה יסגור את הפער."}</p>`}
+              <div class="card-head"><h2>מה עוד חסר ${isToday ? "היום" : ""} <span class="small ink2">(${missing.length})</span></h2><button class="btn sm ghost" data-act="show-all-nutrients">טבלה</button></div>
+              ${missing.length ? floatRows.join("") : `<p class="help">הכול הושלם.</p>`}
               ${doneRows}
             </div>
             ${glucoseCard}

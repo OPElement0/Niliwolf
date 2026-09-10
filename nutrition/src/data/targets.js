@@ -4,7 +4,7 @@ window.NUTRIENTS = [
   // key, Hebrew label, unit, group, always-show, upper limit (UL), kind
   { key: "kcal",      he: "קלוריות",        unit: "קק\"ל", group: "macro",   ul: null, kind: "target" },
   { key: "protein",   he: "חלבון",          unit: "גרם",   group: "macro",   ul: null, kind: "target", hero: true },
-  { key: "carbs",     he: "פחמימות",        unit: "גרם",   group: "macro",   ul: null, kind: "target", hero: true },
+  { key: "carbs",     he: "פחמימות",        unit: "גרם",   group: "macro",   ul: null, kind: "target" },
   { key: "fiber",     he: "סיבים",          unit: "גרם",   group: "macro",   ul: null, kind: "target" },
   { key: "fat",       he: "שומן",           unit: "גרם",   group: "macro",   ul: null, kind: "guide" },
   { key: "iron",      he: "ברזל",           unit: "מ\"ג",  group: "mineral", ul: 45,   ulSoft: true, kind: "target", hero: true },
