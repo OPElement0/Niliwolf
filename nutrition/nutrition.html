@@ -323,6 +323,12 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 @media (max-width: 480px) { .ulg { min-width: 84px; } }
 .ulg.soft .ulg-text { color: var(--warn); font-weight: 600; }
 
+/* ---------- now card ---------- */
+.card.now { border-color: var(--accent); border-width: 1.5px; }
+.now-head { display: flex; align-items: center; gap: 14px; }
+.clock { font-size: 2rem; font-weight: 700; letter-spacing: 0.02em; color: var(--accent); line-height: 1; min-width: 92px; text-align: center; direction: ltr; }
+.note.good { background: var(--good-soft); border-inline-start: 3px solid var(--good); }
+
 </style>
 
 <div id="lock" class="lock" hidden>
@@ -502,6 +508,9 @@ window.FOODS_GENERIC = [
   ["cashew","קשיו",["אגוזי קשיו"],"nuts",[["חופן",30]],{kcal:553,protein:18,carbs:30,fiber:3.3,fat:44,iron:6.7,calcium:37,folate:25,zinc:5.8,magnesium:292,potassium:660,sodium:12,choline:61,b6:0.42}],
   ["peanuts","בוטנים",[],"nuts",[["חופן",30]],{kcal:567,protein:26,carbs:16,fiber:8.5,fat:49,iron:4.6,calcium:92,folate:240,zinc:3.3,magnesium:168,potassium:705,sodium:18,choline:53,b6:0.35}],
   ["sesame","שומשום מלא",["שומשום"],"nuts",[["כף",9]],{kcal:573,protein:18,carbs:23,fiber:12,fat:50,iron:14.6,calcium:975,folate:97,zinc:7.8,magnesium:351,potassium:468,sodium:11}],
+  ["nori","אצת נורי (דף)",["נורי","דף נורי","אצות"],"veg",[["דף",3],["2 דפים",6]],{kcal:35,protein:5.8,carbs:5,fiber:0.3,fat:0.3,iron:1.8,calcium:70,folate:146,vitC:39,vitA:260,zinc:1,magnesium:2,potassium:356,sodium:48,iodine:2300,choline:0}],
+  ["iodized_salt","מלח מועשר ביוד",["מלח יוד","מלח מיודד"],"veg",[["רבע כפית",1.5],["קמצוץ",0.5]],{kcal:0,protein:0,carbs:0,fiber:0,fat:0,sodium:38000,iodine:3000}],
+  ["prunes","שזיפים מיובשים",["שזיף מיובש"],"fruit",[["יחידה",9],["5 יחידות",45]],{kcal:240,protein:2.2,carbs:64,fiber:7,fat:0.4,iron:0.9,calcium:43,folate:4,vitC:0.6,vitA:39,zinc:0.4,magnesium:41,potassium:732,sodium:2,iodine:30,b6:0.2}],
   // ---- prepared dishes ----
   ["shakshuka","שקשוקה",["שקשוקה 2 ביצים"],"dishes",[["מנה (2 ביצים)",280],["מנה קטנה (ביצה)",160]],{kcal:110,protein:6.5,carbs:4.5,fiber:1.2,fat:7.5,iron:1.1,calcium:45,folate:35,vitC:12,vitA:110,vitD:1.2,b12:0.6,zinc:0.7,magnesium:14,potassium:220,sodium:300,omega3:20,iodine:25,choline:150,b6:0.12}],
   ["omelet","חביתה",["חביתה 2 ביצים","אומלט"],"dishes",[["מנה (2 ביצים)",110],["חביתה מביצה אחת",55]],{kcal:154,protein:11,carbs:1,fiber:0,fat:12,iron:1.1,calcium:45,folate:40,vitA:135,vitD:2,b12:1,zinc:0.95,magnesium:9,potassium:115,sodium:250,omega3:35,iodine:45,choline:265,b6:0.1}],
@@ -1334,6 +1343,11 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
   function setSuppTaken(day, s, n) {
     day.supplement_doses = day.supplement_doses || {};
     n = clamp(n, 0, suppDoses(s));
+    const prev = suppTaken(day, s);
+    day.supplement_times = day.supplement_times || {};
+    const times = (day.supplement_times[s.id] || []).slice(0, prev);
+    while (times.length < n) times.push(israelNow().str);
+    day.supplement_times[s.id] = times.slice(0, n);
     day.supplement_doses[s.id] = n;
     day.supplements_taken = (day.supplements_taken || []).filter((id) => id !== s.id);
     if (n >= suppDoses(s)) day.supplements_taken.push(s.id);
@@ -1506,6 +1520,56 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     return `<input class="qty num" id="${id}-qty" type="number" step="0.25" min="0" value="${qty}"> <select class="unit" id="${id}-unit">${opts}</select>`;
   }
 
+  // ------------------------------------------------------------ "now" (Israel clock) status
+  function israelNow() {
+    let h, m;
+    try { const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date()); h = Number(parts.find((x) => x.type === "hour").value) % 24; m = Number(parts.find((x) => x.type === "minute").value); }
+    catch (e) { const d = new Date(); h = d.getHours(); m = d.getMinutes(); }
+    return { h, m, min: h * 60 + m, str: `${pad(h)}:${pad(m)}` };
+  }
+  const toMin = (t) => { const [h, m] = String(t || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+  const minStr = (mm) => `${pad(Math.floor(((mm % 1440) + 1440) % 1440 / 60))}:${pad(((mm % 60) + 60) % 60)}`;
+  function nowStatus() {
+    const now = israelNow(), todayK = dateKeyOf(new Date()), day = getDay(todayK);
+    const g = gaps(todayK), items = [];
+    const meals = day.meals.filter((m) => m.time && toMin(m.time) <= now.min).sort((x, y) => toMin(x.time) - toMin(y.time));
+    const last = meals[meals.length - 1];
+    let head = "";
+    const wanted = g.filter((x) => x.t > 0 && x.kind !== "limit" && x.status !== "good").sort((x, y) => (HERO.includes(y.key) ? 1 : 0) - (HERO.includes(x.key) ? 1 : 0) || x.pct - y.pct).slice(0, 3).map((x) => x.he);
+    if (!last) {
+      head = now.h < 6 ? "לילה — אין מה לרשום עדיין." : now.h < 11 ? "עדיין לא אכלת היום — התחילי בארוחת בוקר עם חלבון ופחמימה מלאה." : "עדיין לא נרשם אוכל היום — אם אכלת, רשמי; אם לא, זה הזמן לאכול.";
+      if (now.h >= 6) items.push({ level: "warn", text: head });
+    } else {
+      const d = digestion(last), start = toMin(last.time), ready = start + d.hours * 60, since = now.min - start;
+      const sinceTxt = since < 60 ? `${since} דק'` : `${fmt(since / 60, 1)} שעות`;
+      if (now.min < ready) { head = `הקיבה עדיין מעכלת את ${last.name} (עד ~${minStr(ready)}) — חטיף קל בסדר, ארוחה מעמיסה עדיף אחר כך.`; items.push({ level: "info", text: head }); }
+      else if (since >= 240 && now.h < 23) { head = `עברו ${sinceTxt} מאז ${last.name} — כדאי לאכול משהו עכשיו (חלבון + פחמימה מלאה).`; items.push({ level: "warn", text: head }); }
+      else { head = `אפשר לאכול (הארוחה האחרונה לפני ${sinceTxt}).${wanted.length ? " כדאי לכוון ל: " + wanted.join(", ") + "." : ""}`; items.push({ level: "good", text: head }); }
+      if (d.glLabel === "גבוה" && now.min < start + 150) items.push({ level: "warn", text: `עומס פחמימות גבוה ב-${last.name} (${fmt(d.netCarbs, 0)} גרם נטו) — עד ~${minStr(start + 150)} להימנע מעוד פחמימות (מתוקים, לחם, פירות מיובשים).` });
+    }
+    // iron vs calcium / coffee timing
+    const ironSupps = App.state.supplements.filter((s) => s.active !== false && (suppNutrients(s).iron || 0) >= 10);
+    const ironTimes = ironSupps.flatMap((s) => ((day.supplement_times || {})[s.id] || []).map(toMin)).filter((t) => t <= now.min);
+    const lastIron = ironTimes.length ? Math.max(...ironTimes) : null;
+    const ironMeal = meals.filter((m) => (m.nutrients.iron || 0) >= 3 && now.min - toMin(m.time) < 120).pop();
+    const calMeal = meals.filter((m) => (m.nutrients.calcium || 0) >= 200 && now.min - toMin(m.time) < 120).pop();
+    if (lastIron != null && now.min - lastIron < 120) items.push({ level: "warn", text: `לקחת ברזל ב-${minStr(lastIron)} — עד ~${minStr(lastIron + 120)} להימנע מסידן (חלב צמחי מועשר, הרבה טחינה/שומשום, כדור סידן) ומקפה/תה.` });
+    else if (ironMeal) items.push({ level: "info", text: `${ironMeal.name} עשיר בברזל — קפה/תה ומקורות סידן עדיף להרחיק עד ~${minStr(toMin(ironMeal.time) + 120)}; ויטמין C (פלפל, הדרים, עגבנייה) משפר ספיגה.` });
+    const ironPending = ironSupps.some((s) => suppTaken(day, s) < suppDoses(s));
+    if (calMeal && ironPending && !(lastIron != null && now.min - lastIron < 120)) items.push({ level: "info", text: `${calMeal.name} עשיר בסידן (${minStr(toMin(calMeal.time))}) — את כדור הברזל עדיף לקחת אחרי ~${minStr(toMin(calMeal.time) + 120)}, עם מים או מיץ הדרים.` });
+    // evening
+    if (now.h >= 21) items.push({ level: "info", text: "ערב: ארוחה גדולה לפני השינה מכבידה (צרבת); חטיף קטן עם חלבון מייצב את הסוכר בלילה." });
+    const pendingUnits = App.state.supplements.filter((s) => s.active !== false).reduce((acc, s) => acc + (suppDoses(s) - suppTaken(day, s)), 0);
+    if (pendingUnits > 0 && now.h >= 19) items.push({ level: "warn", text: `נותרו ${pendingUnits} יחידות תוספים שלא סומנו היום.` });
+    return { now, head, items };
+  }
+  function nowCardHtml() {
+    const st = nowStatus();
+    return `<div class="now-head"><div class="clock num">${st.now.str}</div><div class="grow"><div class="eyebrow">עכשיו · שעון ישראל</div><p><b>${esc(st.head)}</b></p></div></div>
+      ${st.items.length > 1 ? `<div class="stack" style="gap:6px;margin-top:8px">${st.items.slice(1).map((i) => `<div class="note ${i.level}">${esc(i.text)}</div>`).join("")}</div>` : ""}`;
+  }
+  setInterval(() => { const el = $("now-card"); if (el && !document.querySelector(".modal-bg")) el.innerHTML = nowCardHtml(); }, 60 * 1000);
+
   // ------------------------------------------------------------ rendering
   function render() {
     if (hasPin() && !unlocked) { showLock(); return; }
@@ -1583,6 +1647,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
         ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag)} · ${r.time}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
     $("panel-today").innerHTML = `
       <div class="stack">
+        ${isToday ? `<div class="card now" id="now-card">${nowCardHtml()}</div>` : ""}
         <div class="card soft"><p><b>${esc(headline)}</b></p>${noteRows.length || overs.length ? `<div class="stack" style="gap:6px;margin-top:10px">${overs.join("")}${noteRows.join("")}</div>` : ""}</div>
         <div class="hero">${heroTiles}</div>
         <div class="grid two">

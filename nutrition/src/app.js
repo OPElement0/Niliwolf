@@ -296,6 +296,11 @@
   function setSuppTaken(day, s, n) {
     day.supplement_doses = day.supplement_doses || {};
     n = clamp(n, 0, suppDoses(s));
+    const prev = suppTaken(day, s);
+    day.supplement_times = day.supplement_times || {};
+    const times = (day.supplement_times[s.id] || []).slice(0, prev);
+    while (times.length < n) times.push(israelNow().str);
+    day.supplement_times[s.id] = times.slice(0, n);
     day.supplement_doses[s.id] = n;
     day.supplements_taken = (day.supplements_taken || []).filter((id) => id !== s.id);
     if (n >= suppDoses(s)) day.supplements_taken.push(s.id);
@@ -468,6 +473,56 @@
     return `<input class="qty num" id="${id}-qty" type="number" step="0.25" min="0" value="${qty}"> <select class="unit" id="${id}-unit">${opts}</select>`;
   }
 
+  // ------------------------------------------------------------ "now" (Israel clock) status
+  function israelNow() {
+    let h, m;
+    try { const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date()); h = Number(parts.find((x) => x.type === "hour").value) % 24; m = Number(parts.find((x) => x.type === "minute").value); }
+    catch (e) { const d = new Date(); h = d.getHours(); m = d.getMinutes(); }
+    return { h, m, min: h * 60 + m, str: `${pad(h)}:${pad(m)}` };
+  }
+  const toMin = (t) => { const [h, m] = String(t || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+  const minStr = (mm) => `${pad(Math.floor(((mm % 1440) + 1440) % 1440 / 60))}:${pad(((mm % 60) + 60) % 60)}`;
+  function nowStatus() {
+    const now = israelNow(), todayK = dateKeyOf(new Date()), day = getDay(todayK);
+    const g = gaps(todayK), items = [];
+    const meals = day.meals.filter((m) => m.time && toMin(m.time) <= now.min).sort((x, y) => toMin(x.time) - toMin(y.time));
+    const last = meals[meals.length - 1];
+    let head = "";
+    const wanted = g.filter((x) => x.t > 0 && x.kind !== "limit" && x.status !== "good").sort((x, y) => (HERO.includes(y.key) ? 1 : 0) - (HERO.includes(x.key) ? 1 : 0) || x.pct - y.pct).slice(0, 3).map((x) => x.he);
+    if (!last) {
+      head = now.h < 6 ? "לילה — אין מה לרשום עדיין." : now.h < 11 ? "עדיין לא אכלת היום — התחילי בארוחת בוקר עם חלבון ופחמימה מלאה." : "עדיין לא נרשם אוכל היום — אם אכלת, רשמי; אם לא, זה הזמן לאכול.";
+      if (now.h >= 6) items.push({ level: "warn", text: head });
+    } else {
+      const d = digestion(last), start = toMin(last.time), ready = start + d.hours * 60, since = now.min - start;
+      const sinceTxt = since < 60 ? `${since} דק'` : `${fmt(since / 60, 1)} שעות`;
+      if (now.min < ready) { head = `הקיבה עדיין מעכלת את ${last.name} (עד ~${minStr(ready)}) — חטיף קל בסדר, ארוחה מעמיסה עדיף אחר כך.`; items.push({ level: "info", text: head }); }
+      else if (since >= 240 && now.h < 23) { head = `עברו ${sinceTxt} מאז ${last.name} — כדאי לאכול משהו עכשיו (חלבון + פחמימה מלאה).`; items.push({ level: "warn", text: head }); }
+      else { head = `אפשר לאכול (הארוחה האחרונה לפני ${sinceTxt}).${wanted.length ? " כדאי לכוון ל: " + wanted.join(", ") + "." : ""}`; items.push({ level: "good", text: head }); }
+      if (d.glLabel === "גבוה" && now.min < start + 150) items.push({ level: "warn", text: `עומס פחמימות גבוה ב-${last.name} (${fmt(d.netCarbs, 0)} גרם נטו) — עד ~${minStr(start + 150)} להימנע מעוד פחמימות (מתוקים, לחם, פירות מיובשים).` });
+    }
+    // iron vs calcium / coffee timing
+    const ironSupps = App.state.supplements.filter((s) => s.active !== false && (suppNutrients(s).iron || 0) >= 10);
+    const ironTimes = ironSupps.flatMap((s) => ((day.supplement_times || {})[s.id] || []).map(toMin)).filter((t) => t <= now.min);
+    const lastIron = ironTimes.length ? Math.max(...ironTimes) : null;
+    const ironMeal = meals.filter((m) => (m.nutrients.iron || 0) >= 3 && now.min - toMin(m.time) < 120).pop();
+    const calMeal = meals.filter((m) => (m.nutrients.calcium || 0) >= 200 && now.min - toMin(m.time) < 120).pop();
+    if (lastIron != null && now.min - lastIron < 120) items.push({ level: "warn", text: `לקחת ברזל ב-${minStr(lastIron)} — עד ~${minStr(lastIron + 120)} להימנע מסידן (חלב צמחי מועשר, הרבה טחינה/שומשום, כדור סידן) ומקפה/תה.` });
+    else if (ironMeal) items.push({ level: "info", text: `${ironMeal.name} עשיר בברזל — קפה/תה ומקורות סידן עדיף להרחיק עד ~${minStr(toMin(ironMeal.time) + 120)}; ויטמין C (פלפל, הדרים, עגבנייה) משפר ספיגה.` });
+    const ironPending = ironSupps.some((s) => suppTaken(day, s) < suppDoses(s));
+    if (calMeal && ironPending && !(lastIron != null && now.min - lastIron < 120)) items.push({ level: "info", text: `${calMeal.name} עשיר בסידן (${minStr(toMin(calMeal.time))}) — את כדור הברזל עדיף לקחת אחרי ~${minStr(toMin(calMeal.time) + 120)}, עם מים או מיץ הדרים.` });
+    // evening
+    if (now.h >= 21) items.push({ level: "info", text: "ערב: ארוחה גדולה לפני השינה מכבידה (צרבת); חטיף קטן עם חלבון מייצב את הסוכר בלילה." });
+    const pendingUnits = App.state.supplements.filter((s) => s.active !== false).reduce((acc, s) => acc + (suppDoses(s) - suppTaken(day, s)), 0);
+    if (pendingUnits > 0 && now.h >= 19) items.push({ level: "warn", text: `נותרו ${pendingUnits} יחידות תוספים שלא סומנו היום.` });
+    return { now, head, items };
+  }
+  function nowCardHtml() {
+    const st = nowStatus();
+    return `<div class="now-head"><div class="clock num">${st.now.str}</div><div class="grow"><div class="eyebrow">עכשיו · שעון ישראל</div><p><b>${esc(st.head)}</b></p></div></div>
+      ${st.items.length > 1 ? `<div class="stack" style="gap:6px;margin-top:8px">${st.items.slice(1).map((i) => `<div class="note ${i.level}">${esc(i.text)}</div>`).join("")}</div>` : ""}`;
+  }
+  setInterval(() => { const el = $("now-card"); if (el && !document.querySelector(".modal-bg")) el.innerHTML = nowCardHtml(); }, 60 * 1000);
+
   // ------------------------------------------------------------ rendering
   function render() {
     if (hasPin() && !unlocked) { showLock(); return; }
@@ -545,6 +600,7 @@
         ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag)} · ${r.time}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
     $("panel-today").innerHTML = `
       <div class="stack">
+        ${isToday ? `<div class="card now" id="now-card">${nowCardHtml()}</div>` : ""}
         <div class="card soft"><p><b>${esc(headline)}</b></p>${noteRows.length || overs.length ? `<div class="stack" style="gap:6px;margin-top:10px">${overs.join("")}${noteRows.join("")}</div>` : ""}</div>
         <div class="hero">${heroTiles}</div>
         <div class="grid two">

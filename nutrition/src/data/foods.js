@@ -124,6 +124,9 @@ window.FOODS_GENERIC = [
   ["cashew","קשיו",["אגוזי קשיו"],"nuts",[["חופן",30]],{kcal:553,protein:18,carbs:30,fiber:3.3,fat:44,iron:6.7,calcium:37,folate:25,zinc:5.8,magnesium:292,potassium:660,sodium:12,choline:61,b6:0.42}],
   ["peanuts","בוטנים",[],"nuts",[["חופן",30]],{kcal:567,protein:26,carbs:16,fiber:8.5,fat:49,iron:4.6,calcium:92,folate:240,zinc:3.3,magnesium:168,potassium:705,sodium:18,choline:53,b6:0.35}],
   ["sesame","שומשום מלא",["שומשום"],"nuts",[["כף",9]],{kcal:573,protein:18,carbs:23,fiber:12,fat:50,iron:14.6,calcium:975,folate:97,zinc:7.8,magnesium:351,potassium:468,sodium:11}],
+  ["nori","אצת נורי (דף)",["נורי","דף נורי","אצות"],"veg",[["דף",3],["2 דפים",6]],{kcal:35,protein:5.8,carbs:5,fiber:0.3,fat:0.3,iron:1.8,calcium:70,folate:146,vitC:39,vitA:260,zinc:1,magnesium:2,potassium:356,sodium:48,iodine:2300,choline:0}],
+  ["iodized_salt","מלח מועשר ביוד",["מלח יוד","מלח מיודד"],"veg",[["רבע כפית",1.5],["קמצוץ",0.5]],{kcal:0,protein:0,carbs:0,fiber:0,fat:0,sodium:38000,iodine:3000}],
+  ["prunes","שזיפים מיובשים",["שזיף מיובש"],"fruit",[["יחידה",9],["5 יחידות",45]],{kcal:240,protein:2.2,carbs:64,fiber:7,fat:0.4,iron:0.9,calcium:43,folate:4,vitC:0.6,vitA:39,zinc:0.4,magnesium:41,potassium:732,sodium:2,iodine:30,b6:0.2}],
   // ---- prepared dishes ----
   ["shakshuka","שקשוקה",["שקשוקה 2 ביצים"],"dishes",[["מנה (2 ביצים)",280],["מנה קטנה (ביצה)",160]],{kcal:110,protein:6.5,carbs:4.5,fiber:1.2,fat:7.5,iron:1.1,calcium:45,folate:35,vitC:12,vitA:110,vitD:1.2,b12:0.6,zinc:0.7,magnesium:14,potassium:220,sodium:300,omega3:20,iodine:25,choline:150,b6:0.12}],
   ["omelet","חביתה",["חביתה 2 ביצים","אומלט"],"dishes",[["מנה (2 ביצים)",110],["חביתה מביצה אחת",55]],{kcal:154,protein:11,carbs:1,fiber:0,fat:12,iron:1.1,calcium:45,folate:40,vitA:135,vitD:2,b12:1,zinc:0.95,magnesium:9,potassium:115,sodium:250,omega3:35,iodine:45,choline:265,b6:0.1}],

@@ -319,3 +319,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .nut-row.row-near, .nut-row.row-over { background: var(--bad-soft); margin-inline: -8px; padding-inline: 8px; border-radius: var(--radius-sm); }
 @media (max-width: 480px) { .ulg { min-width: 84px; } }
 .ulg.soft .ulg-text { color: var(--warn); font-weight: 600; }
+
+/* ---------- now card ---------- */
+.card.now { border-color: var(--accent); border-width: 1.5px; }
+.now-head { display: flex; align-items: center; gap: 14px; }
+.clock { font-size: 2rem; font-weight: 700; letter-spacing: 0.02em; color: var(--accent); line-height: 1; min-width: 92px; text-align: center; direction: ltr; }
+.note.good { background: var(--good-soft); border-inline-start: 3px solid var(--good); }
