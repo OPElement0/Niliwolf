@@ -39,3 +39,11 @@ wolf_dashboard.html
 # OS junk
 .DS_Store
 Thumbs.db
+
+# ------------------------------------------------------------------
+# nutrition/ — personal (private) pregnancy nutrition dashboard.
+# Only generic code lives in git. Personal data NEVER goes here.
+# ------------------------------------------------------------------
+nutrition/private/
+*.nutrition.json
+nutrition/*.enc

@@ -1,0 +1,68 @@
+<title>מעקב תזונה בהריון</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+__STYLES__
+</style>
+
+<div id="lock" class="lock" hidden>
+  <div class="box">
+    <svg class="logo" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="26" fill="var(--accent-soft)"/><path d="M28 14c-6 0-10 5-10 11 0 8 10 17 10 17s10-9 10-17c0-6-4-11-10-11z" fill="var(--accent)"/><circle cx="28" cy="25" r="4" fill="var(--surface)"/></svg>
+    <h1>מעקב תזונה</h1>
+    <p class="ink2" id="lock-msg">הזיני סיסמה כדי להמשיך</p>
+    <input id="lock-pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••">
+    <button class="btn primary" id="lock-btn">פתחי</button>
+  </div>
+</div>
+
+<div id="app" class="app">
+  <header class="top">
+    <div class="top-row">
+      <h1 class="brand">מעקב תזונה <span class="week" id="brand-week"></span></h1>
+      <span class="pill" id="sync-pill"><span class="dot"></span><span id="sync-text">טוען…</span></span>
+    </div>
+    <p class="summary" id="summary-line">טוען את הנתונים…</p>
+  </header>
+
+  <nav class="tabs" id="tabs" role="tablist" aria-label="ניווט">
+    <button class="tab" role="tab" data-tab="today" aria-selected="true">היום</button>
+    <button class="tab" role="tab" data-tab="log">יומן אכילה</button>
+    <button class="tab" role="tab" data-tab="foods">המאכלים שלי</button>
+    <button class="tab" role="tab" data-tab="supps">תוספים</button>
+    <button class="tab" role="tab" data-tab="whatnext">מה לאכול?</button>
+    <button class="tab" role="tab" data-tab="chat">התייעצות</button>
+    <button class="tab" role="tab" data-tab="pregnancy">נתוני הריון</button>
+    <button class="tab" role="tab" data-tab="history">מעקב לאורך זמן</button>
+    <button class="tab" role="tab" data-tab="settings">הגדרות</button>
+  </nav>
+
+  <main>
+    <section data-panel="today" id="panel-today" class="active" role="tabpanel"></section>
+    <section data-panel="log" id="panel-log" role="tabpanel"></section>
+    <section data-panel="foods" id="panel-foods" role="tabpanel"></section>
+    <section data-panel="supps" id="panel-supps" role="tabpanel"></section>
+    <section data-panel="whatnext" id="panel-whatnext" role="tabpanel"></section>
+    <section data-panel="chat" id="panel-chat" role="tabpanel"></section>
+    <section data-panel="pregnancy" id="panel-pregnancy" role="tabpanel"></section>
+    <section data-panel="history" id="panel-history" role="tabpanel"></section>
+    <section data-panel="settings" id="panel-settings" role="tabpanel"></section>
+  </main>
+
+  <footer class="disclaimer">
+    כלי מעקב אישי בלבד — לא ייעוץ רפואי. היעדים מבוססים על ערכי DRI כלליים להריון (NIH/IOM, משרד הבריאות) וערכי מזון משוערים. יש לאמת החלטות תזונתיות ורפואיות מול הרופא/ה או הדיאטנית.
+  </footer>
+</div>
+<div id="modal-root"></div>
+<div id="tip" class="tip" hidden></div>
+
+<script>
+__DATA__
+</script>
+<script>
+__CHARTS__
+</script>
+<script>
+__CHAT__
+</script>
+<script>
+__APP__
+</script>

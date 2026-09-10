@@ -4,6 +4,24 @@
 
 ---
 
+## ⚠️ `nutrition/` — SEPARATE, PRIVATE PERSONAL PROJECT (2026-09-10)
+
+The folder `nutrition/` is **unrelated to the wolf pipeline**. It is Nili's
+personal pregnancy-nutrition dashboard, published as a **private claude.ai
+Artifact** (capabilities `db` + `sample` + `downloads`), built by
+`nutrition/build_nutrition.py` from `nutrition/src/`. See `nutrition/README.md`.
+
+Rules for that folder:
+- **Only generic code goes into git** (food table, DRI targets, rule engine, UI).
+  **Never commit personal data** — supplements, recipes, lab results, profile,
+  chat history. Those live only in the Artifact's `db`. `.gitignore` blocks
+  `nutrition/private/`, `*.nutrition.json`, `nutrition/*.enc`.
+- Never link it from `index.html` or the public wolf pages. Never add it to
+  `.github/workflows/build.yml`.
+- The page must not reference any external host (the build script fails if it does).
+
+---
+
 ## ✅ PUBLIC / PRIVATE SPLIT — two builds (2026-07-24)
 
 The dashboard is now built in **two variants** from the same
