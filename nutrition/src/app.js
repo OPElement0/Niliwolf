@@ -501,13 +501,17 @@
     $("sync-text").textContent = App.mode === "cloud" ? "מסונכרן בענן" : "מצב מקומי — רק במכשיר הזה";
   }
   function statusPill(st) { const m = { good: ["st-good", "הושג"], warn: ["st-warn", "בדרך"], bad: ["st-bad", "חסר"], over: ["st-over", "מעל הגבול"] }[st]; return `<span class="status-pill ${m[0]}">${m[1]}</span>`; }
+  // Two separate markers: an urgency dot (colour only) and a plan pill (own colours + short text).
+  function urgencyDot(u) { return `<span class="urg-dot urg-${u.level}" title="${esc(u.label)}" aria-label="${esc(u.label)}"></span>`; }
+  function planPill(plan) {
+    if (!plan) return "";
+    const txt = plan.cls === "supp" ? "יושלם מתוספים" : plan.cls === "food" ? "דרוש תזונה" : `עם תוספים ${Math.round(plan.projected * 100)}%`;
+    return `<span class="status-pill pl-${plan.cls}">${esc(txt)}</span>`;
+  }
   function combinedPill(x, k) {
     const u = urgencyOf(x, k), plan = planOf(x, k);
     if (u.level === "good" || u.level === "over" || x.kind === "limit") return urgencyPill(u);
-    const urg = u.level === "red" ? "דחוף" : u.level === "orange" ? "להשלים" : "סביר";
-    const pl = !plan ? "" : plan.cls === "supp" ? "יושלם מתוספים" : plan.cls === "food" ? "דרוש תזונה" : `עם תוספים ${Math.round(plan.projected * 100)}% והשאר תזונה`;
-    const cls = { yellow: "st-yellow", orange: "st-warn", red: "st-bad" }[u.level] || "st-info";
-    return `<span class="status-pill ${cls}">${esc(urg + (pl ? ", " + pl : ""))}</span>`;
+    return `<span class="status-two">${urgencyDot(u)}${planPill(plan)}</span>`;
   }
   function urgencyPill(u) { const cls = { good: "st-good", yellow: "st-yellow", orange: "st-warn", red: "st-bad", over: "st-over" }[u.level] || "st-info"; return `<span class="status-pill ${cls}">${esc(u.label)}</span>`; }
   function barHtml(x, thin) {

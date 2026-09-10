@@ -24,6 +24,10 @@
   --bad-soft: #F8E1E1;
   --yellow: #C9A227;
   --yellow-soft: #FBF3D5;
+  --purple: #6B4FBB;
+  --purple-soft: #ECE6F8;
+  --blue: #2F6FB3;
+  --blue-soft: #E1ECF8;
   --seq-1: #F6E4EC;
   --seq-2: #E9B7CB;
   --seq-3: #D486A6;
@@ -45,6 +49,7 @@
     --good: #5FBF7F; --good-soft: #1F3527; --warn: #E0A040; --warn-soft: #3A2E1A;
     --bad: #E8706A; --bad-soft: #3D2222;
     --yellow: #E6C84A; --yellow-soft: #3B341A;
+    --purple: #B39DF0; --purple-soft: #2E2544; --blue: #7FB0E8; --blue-soft: #1E2C3E;
     --seq-1: #3B2530; --seq-2: #5E3247; --seq-3: #8E4568; --seq-4: #C0608C; --seq-5: #F0A2C2;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25);
     color-scheme: dark;
@@ -59,6 +64,7 @@
   --good: #5FBF7F; --good-soft: #1F3527; --warn: #E0A040; --warn-soft: #3A2E1A;
   --bad: #E8706A; --bad-soft: #3D2222;
   --yellow: #E6C84A; --yellow-soft: #3B341A;
+  --purple: #B39DF0; --purple-soft: #2E2544; --blue: #7FB0E8; --blue-soft: #1E2C3E;
   --seq-1: #3B2530; --seq-2: #5E3247; --seq-3: #8E4568; --seq-4: #C0608C; --seq-5: #F0A2C2;
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25);
   color-scheme: dark;
@@ -343,6 +349,15 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .plan-food { color: var(--accent); }
 .row-status { flex-shrink: 0; margin-inline-start: auto; text-align: center; max-width: 150px; }
 .row-status .status-pill { white-space: normal; display: inline-block; line-height: 1.3; padding: 4px 9px; }
+
+/* ---------- urgency dot + plan pill ---------- */
+.status-two { display: inline-flex; align-items: center; gap: 8px; }
+.urg-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex-shrink: 0; box-shadow: 0 0 0 2px var(--surface); }
+.urg-red { background: var(--bad); } .urg-orange { background: var(--warn); } .urg-yellow { background: var(--yellow); } .urg-good { background: var(--good); } .urg-over { background: var(--bad); }
+.pl-supp { background: var(--good-soft); color: var(--good); }
+.pl-food { background: var(--purple-soft); color: var(--purple); }
+.pl-part { background: var(--blue-soft); color: var(--blue); }
+.row-status .status-pill { white-space: nowrap; }
 
 </style>
 
@@ -1563,13 +1578,17 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     $("sync-text").textContent = App.mode === "cloud" ? "מסונכרן בענן" : "מצב מקומי — רק במכשיר הזה";
   }
   function statusPill(st) { const m = { good: ["st-good", "הושג"], warn: ["st-warn", "בדרך"], bad: ["st-bad", "חסר"], over: ["st-over", "מעל הגבול"] }[st]; return `<span class="status-pill ${m[0]}">${m[1]}</span>`; }
+  // Two separate markers: an urgency dot (colour only) and a plan pill (own colours + short text).
+  function urgencyDot(u) { return `<span class="urg-dot urg-${u.level}" title="${esc(u.label)}" aria-label="${esc(u.label)}"></span>`; }
+  function planPill(plan) {
+    if (!plan) return "";
+    const txt = plan.cls === "supp" ? "יושלם מתוספים" : plan.cls === "food" ? "דרוש תזונה" : `עם תוספים ${Math.round(plan.projected * 100)}%`;
+    return `<span class="status-pill pl-${plan.cls}">${esc(txt)}</span>`;
+  }
   function combinedPill(x, k) {
     const u = urgencyOf(x, k), plan = planOf(x, k);
     if (u.level === "good" || u.level === "over" || x.kind === "limit") return urgencyPill(u);
-    const urg = u.level === "red" ? "דחוף" : u.level === "orange" ? "להשלים" : "סביר";
-    const pl = !plan ? "" : plan.cls === "supp" ? "יושלם מתוספים" : plan.cls === "food" ? "דרוש תזונה" : `עם תוספים ${Math.round(plan.projected * 100)}% והשאר תזונה`;
-    const cls = { yellow: "st-yellow", orange: "st-warn", red: "st-bad" }[u.level] || "st-info";
-    return `<span class="status-pill ${cls}">${esc(urg + (pl ? ", " + pl : ""))}</span>`;
+    return `<span class="status-two">${urgencyDot(u)}${planPill(plan)}</span>`;
   }
   function urgencyPill(u) { const cls = { good: "st-good", yellow: "st-yellow", orange: "st-warn", red: "st-bad", over: "st-over" }[u.level] || "st-info"; return `<span class="status-pill ${cls}">${esc(u.label)}</span>`; }
   function barHtml(x, thin) {
