@@ -8,7 +8,7 @@ window.NUTRIENTS = [
   { key: "fiber",     he: "סיבים",          unit: "גרם",   group: "macro",   ul: null, kind: "target" },
   { key: "fat",       he: "שומן",           unit: "גרם",   group: "macro",   ul: null, kind: "guide" },
   { key: "water",     he: "נוזלים",         unit: "מ\"ל",  group: "macro",   ul: null, kind: "target" },
-  { key: "iron",      he: "ברזל",           unit: "מ\"ג",  group: "mineral", ul: 45,   kind: "target", hero: true },
+  { key: "iron",      he: "ברזל",           unit: "מ\"ג",  group: "mineral", ul: 45,   ulSoft: true, kind: "target", hero: true },
   { key: "calcium",   he: "סידן",           unit: "מ\"ג",  group: "mineral", ul: 2500, kind: "target" },
   { key: "iodine",    he: "יוד",            unit: "מק\"ג", group: "mineral", ul: 1100, kind: "target" },
   { key: "zinc",      he: "אבץ",            unit: "מ\"ג",  group: "mineral", ul: 40,   kind: "target" },

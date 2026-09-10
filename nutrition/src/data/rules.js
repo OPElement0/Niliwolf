@@ -66,7 +66,7 @@ window.RULES = [
   {
     id: "vegetarian",
     when: (c) => c.dietType === "vegetarian" || c.dietType === "vegan",
-    adjust: (t) => { t.iron = Math.round(t.iron * 1.8); t.zinc = Math.round(t.zinc * 1.5); },
+    adjust: (t) => { t.iron = Math.min(45, Math.round(t.iron * 1.8)); t.zinc = Math.round(t.zinc * 1.5); },
     note: (c) => c.dietType === "vegan"
       ? "טבעונות: יעד ברזל ואבץ מוגדל (ספיגה נמוכה מהצומח); B12, ויטמין D, DHA מאצות וסידן — בעיקר מתוספים/מזון מועשר."
       : "צמחונות: יעד ברזל ואבץ מוגדל (ספיגה נמוכה מהצומח); לשים לב ל-B12 ו-DHA.",

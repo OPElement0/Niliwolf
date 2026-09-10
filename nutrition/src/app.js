@@ -300,7 +300,7 @@
   App.dayTotals = dayTotals;
   function statusOf(key, v, t) {
     const meta = NUT_BY[key];
-    if (meta.ul && v > meta.ul) return "over";
+    if (meta.ul && v > meta.ul && !meta.ulSoft) return "over";
     if (meta.kind === "limit") return v > t ? "bad" : v > t * 0.8 ? "warn" : "good";
     const p = t ? v / t : 0;
     return p >= 0.95 ? "good" : p >= 0.6 ? "warn" : "bad";
@@ -432,7 +432,8 @@
       </div>`;
     }).join("");
     const noteRows = notes.filter((n) => n.level !== "info" || n.changed).map((n) => `<div class="note ${n.level === "alert" ? "alert" : n.level === "warn" ? "warn" : "info"}">${esc(n.text)}</div>`);
-    const overs = g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)}).</div>`);
+    const overs = g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)}).</div>`)
+      .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)} (הגבול לאדם בריא). בטיפול בחסר ברזל לפי הנחיית רופא/ה זה מקובל; אם לא — כדאי לוודא.</div>`));
     const floatShown = floating.filter((x) => x.reason !== null).sort((a, b) => (a.reason.startsWith("ממוצע") ? 1 : 0) - (b.reason.startsWith("ממוצע") ? 1 : 0) || a.pct - b.pct).slice(0, 8);
     const floatRows = floatShown.map((x) => `<div class="gap-row" data-act="nutrient-detail" data-key="${x.key}" style="cursor:pointer">
         <div><b>${x.he}</b> <span class="small ink2">· ${esc(x.reason)}</span></div>
@@ -563,14 +564,18 @@
   function parseAiModal() {
     openModal(`<h2>פענוח טקסט חופשי</h2><p class="help">כתבי בחופשיות מה אכלת. הטקסט נשלח ל-Claude רק כשלוחצים "פענחי", ומתקבלת רשימת פריטים לאישור לפני ההוספה.</p>
       <textarea id="ai-text" placeholder="לדוגמה: אכלתי שקשוקה עם 2 פרוסות לחם מלא וסלט, ואחר כך יוגורט עם גרנולה" style="margin-top:10px"></textarea>
+      <div id="ai-photo-wrap" style="margin-top:8px" hidden><label class="btn sm" for="ai-photo" style="cursor:pointer">📷 צרפי תמונה של הארוחה<input id="ai-photo" type="file" accept="image/*" capture="environment" hidden></label> <span class="help" id="ai-photo-name"></span></div>
       <div id="ai-result" style="margin-top:10px"></div>
       <div class="actions"><button class="btn" data-act="modal-close">סגירה</button><button class="btn primary" data-act="ai-parse">פענחי</button></div>`);
+    window.NutriChat.canSendImages().then((ok) => { const w = $("ai-photo-wrap"); if (w && ok) w.hidden = false; });
   }
   async function runAiParse() {
-    const text = $("ai-text").value.trim(); if (!text) return;
+    const text = $("ai-text").value.trim();
+    const photo = $("ai-photo") && $("ai-photo").files && $("ai-photo").files[0];
+    if (!text && !photo) return;
     const out = $("ai-result"); out.innerHTML = `<p class="muted">מפענח…</p>`;
     try {
-      const items = await window.NutriChat.parseMeal(App, text);
+      const items = await window.NutriChat.parseMeal(App, text, photo);
       const rows = items.map((it, i) => {
         const m = searchFoods(String(it.name || ""), 1)[0];
         const unit = UNIT_WORDS[it.unit] || it.unit || "";
@@ -1086,6 +1091,7 @@
     if (act === "hist-key") { histKey = el.value; renderHistory(); }
     if (act === "hist-lab") { histLab = el.value; renderHistory(); }
     if (act === "import-file" && el.files[0]) importData(el.files[0]);
+    if (el.id === "ai-photo") { const n = $("ai-photo-name"); if (n) n.textContent = el.files[0] ? el.files[0].name : ""; }
     if (act === "ing-grams") { const f = window._editFood; f.ingredients[Number(el.dataset.i)].grams = Number(el.value) || 0; f.name = $("ff-name").value; f.servings = Number($("ff-servings").value) || 1; recipeModal(f, false); }
     if (el.id && el.id.startsWith("opt") && (el.id.endsWith("-qty") || el.id.endsWith("-unit"))) { const i = Number(el.id.replace("opt", "").split("-")[0]); const o = options[i]; if (!o) return; o.qty = Number($("opt" + i + "-qty").value) || 0; o.unit = $("opt" + i + "-unit").value; renderWhatNext(); }
   });

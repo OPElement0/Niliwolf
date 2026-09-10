@@ -79,8 +79,14 @@ window.NutriChat = (function () {
     return res;
   }
 
-  // Free-text meal parsing → [{name, qty, unit}]
-  async function parseMeal(app, text) {
+  async function canSendImages() {
+    const sample = await getSample();
+    if (!sample || !sample.limits) return false;
+    try { const caps = await sample.limits(); return !!(caps && caps.images); } catch (e) { return false; }
+  }
+
+  // Free-text (and/or photo) meal parsing → [{name, qty, unit}]
+  async function parseMeal(app, text, image) {
     const sample = await getSample();
     if (!sample) throw { code: "not_granted", message: "sample unavailable" };
     const known = (app.state.foods || []).map((f) => f.name).concat(window.FOODS_GENERIC.map((f) => f[1])).slice(0, 400);
@@ -90,8 +96,10 @@ window.NutriChat = (function () {
 אם פריט לא ברשימה — כתבי את שמו הפשוט ביותר.
 דוגמה: "אכלתי 2 פרוסות לחם מלא עם טחינה וסלט" → [{"name":"לחם מלא","qty":2,"unit":"פרוסה"},{"name":"טחינה מוכנה","qty":1,"unit":"כף"},{"name":"סלט ירקות קצוץ","qty":1,"unit":"קערה"}]
 
-התיאור: ${text}`;
-    const out = await sample.json(prompt, { modelTier: "quick", cache: false });
+${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים בתמונה והעריכי כמויות סבירות; התיאור הכתוב (אם יש) גובר על ההערכה מהתמונה.\n" : ""}התיאור: ${text || "(ראי תמונה)"}`;
+    const opts = { modelTier: image ? "default" : "quick", cache: false };
+    if (image) opts.images = image;
+    const out = await sample.json(prompt, opts);
     return Array.isArray(out) ? out : [];
   }
 
@@ -110,5 +118,5 @@ window.NutriChat = (function () {
     }
   }
 
-  return { getSample, buildContext, send, parseMeal, errorText, INSTRUCTIONS };
+  return { getSample, canSendImages, buildContext, send, parseMeal, errorText, INSTRUCTIONS };
 })();
