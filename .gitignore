@@ -3,8 +3,9 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Claude Code session storage
-.claude/
+# Claude Code session storage (but keep project skills)
+.claude/*
+!.claude/skills/
 
 # Auto-generated transient outputs
 audit_summary.txt

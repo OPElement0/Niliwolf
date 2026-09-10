@@ -9,7 +9,14 @@
 The folder `nutrition/` is **unrelated to the wolf pipeline**. It is Nili's
 personal pregnancy-nutrition dashboard, published as a **private claude.ai
 Artifact** (capabilities `db` + `sample` + `downloads`), built by
-`nutrition/build_nutrition.py` from `nutrition/src/`. See `nutrition/README.md`.
+`nutrition/build_nutrition.py` from `nutrition/src/`.
+
+**For any nutrition-dashboard request, load the project skill
+`.claude/skills/nutrition-dashboard/SKILL.md` first.** It has the Artifact URL
+(`https://claude.ai/code/artifact/e84cf4f0-d8fd-40a5-81ec-ba9146aeef86`), the
+publish/commit recipe, the db schema, the approved UI logic, and the helper CLI
+`nutrition/tools/nutri.js`. Her personal context lives in the Artifact db doc
+`settings/handoff` (read it with `read_db`), never in git.
 
 Rules for that folder:
 - **Only generic code goes into git** (food table, DRI targets, rule engine, UI).
