@@ -1356,7 +1356,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const lim = x.kind === "limit" ? x.t : x.ul;
     if (!lim) return `<div class="ulg none"><span class="help">ללא גבול עליון</span></div>`;
     const r = x.v / lim, W = 100, L = 6, R = 94, y = 9;
-    const px = (f) => L + clamp(f, 0, 1) * (R - L);
+    const px = (f) => R - clamp(f, 0, 1) * (R - L); // 0 on the right, the limit on the left
     const tp = x.kind === "limit" ? px(0.6) : px(x.t / lim), cp = px(0.85);
     const soft = !!NUT_BY[x.key].ulSoft;
     let lvl = r >= 1 ? "over" : r >= 0.85 ? "near" : r >= (x.kind === "limit" ? 0.6 : x.t / lim) ? "mid" : "ok";
@@ -1364,12 +1364,30 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const label = r >= 1 ? (soft ? "מעל הגבול (ראי הערה)" : "מעל הגבול!") : `${Math.round(r * 100)}% מהגבול`;
     return `<div class="ulg ${lvl}" data-tip="${esc(`${x.he}: ${fmt(x.v)} מתוך גבול ${fmt(lim)} ${x.unit} ליום (${Math.round(r * 100)}%)`)}">
       <svg width="${W}" height="18" viewBox="0 0 ${W} 18" direction="ltr" aria-hidden="true">
-        <line x1="${L}" x2="${tp}" y1="${y}" y2="${y}" stroke="var(--good)" stroke-width="4" stroke-linecap="round" opacity=".45"></line>
-        <line x1="${tp}" x2="${cp}" y1="${y}" y2="${y}" stroke="var(--warn)" stroke-width="4" opacity=".5"></line>
-        <line x1="${cp}" x2="${R}" y1="${y}" y2="${y}" stroke="var(--bad)" stroke-width="4" stroke-linecap="round" opacity=".6"></line>
-        <line x1="${R}" x2="${R}" y1="3" y2="15" stroke="var(--bad)" stroke-width="2"></line>
+        <line x1="${tp}" x2="${R}" y1="${y}" y2="${y}" stroke="var(--good)" stroke-width="4" stroke-linecap="round" opacity=".45"></line>
+        <line x1="${cp}" x2="${tp}" y1="${y}" y2="${y}" stroke="var(--warn)" stroke-width="4" opacity=".5"></line>
+        <line x1="${L}" x2="${cp}" y1="${y}" y2="${y}" stroke="var(--bad)" stroke-width="4" stroke-linecap="round" opacity=".6"></line>
+        <line x1="${L}" x2="${L}" y1="3" y2="15" stroke="var(--bad)" stroke-width="2"></line>
         <circle cx="${px(r)}" cy="${y}" r="5" fill="${lvl === "over" || lvl === "near" ? "var(--bad)" : lvl === "mid" || lvl === "soft" ? "var(--warn)" : "var(--good)"}" stroke="var(--surface)" stroke-width="2"></circle>
       </svg><span class="ulg-text">${lvl === "over" || lvl === "near" ? "⚠ " : ""}${label}</span></div>`;
+  }
+  // Hints: when food alone already meets a target and the full supplement would push toward a hard limit.
+  function suppAdvice(k) {
+    const t = targetsFor(), food = dayTotals(k, { includeSupplements: false });
+    const out = [];
+    App.state.supplements.filter((s) => s.active !== false).forEach((s) => {
+      const sn = suppNutrients(s);
+      Object.keys(sn).forEach((key) => {
+        const meta = NUT_BY[key]; if (!meta || !meta.ul) return;
+        const full = sn[key], fv = food[key] || 0, ul = meta.ul, tv = t[key] || 0;
+        if (key === "vitA") return; // prenatal vitamin A is beta-carotene — not counted toward the retinol limit
+        if (meta.ulSoft && key !== "folate") return; // iron under treatment: no reduction hints
+        const counted = key === "folate" ? full : fv + full; // folate UL applies to the synthetic form only
+        if (counted >= ul * 0.85) out.push({ supp: s, key, level: counted >= ul ? "alert" : "warn", text: `${s.name}: עם כל היחידות ${key === "folate" ? "התוסף לבדו מגיע" : "התזונה + התוסף מגיעים"} ל-${fmt(counted)} ${meta.unit} ${meta.he} — ${Math.round((counted / ul) * 100)}% מהגבול העליון (${fmt(ul)}). שווה לדבר על המינון עם הרופא/ה; לא להפסיק לבד.` });
+        else if (tv && fv >= tv && fv + full >= ul * 0.6) out.push({ supp: s, key, level: "info", text: `${meta.he}: התזונה לבדה כבר כיסתה את היעד היום (${fmt(fv)} / ${fmt(tv)}); התוסף מוסיף עד ${fmt(fv + full)} — עדיין מתחת לגבול הבטוח (${fmt(ul)}).` });
+      });
+    });
+    return out;
   }
   function dayTotals(k, opts = {}) {
     const day = App.state.days[k] || { meals: [], supplements_taken: [] };
@@ -1581,6 +1599,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
               <div class="card-head"><h2>${dosesTotal && dosesTaken >= dosesTotal ? CHECK : ""}תוספים</h2><span class="small ink2 num">${dosesTaken}/${dosesTotal} יחידות</span></div>
               ${supps.length ? suppRows.join("") : `<p class="help">עדיין לא הוגדרו תוספים. <button class="btn sm ghost" data-act="go-tab" data-tab="supps">הוסיפי בטאב תוספים</button></p>`}
               ${supps.length > 1 ? `<div class="row end" style="margin-top:8px"><button class="btn sm ghost" data-act="take-all-supps">סמני הכול</button></div>` : ""}
+              ${(() => { const adv = suppAdvice(App.date); return adv.length ? `<div class="stack" style="gap:6px;margin-top:10px">${adv.map((a) => `<div class="note ${a.level}">${esc(a.text)}</div>`).join("")}</div>` : `<p class="help" style="margin-top:8px">אין רכיב שבו התזונה + התוספים מתקרבים לגבול עליון — אין סיבה להפחית תוסף היום.</p>`; })()}
             </div>
             <div class="card">
               <div class="card-head"><h2>נאכל ${isToday ? "היום" : ""}</h2><button class="btn sm ghost" data-act="go-tab" data-tab="log">ליומן</button></div>
@@ -1624,8 +1643,17 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const d = digestion(m), n = m.nutrients || {}, t = targetsFor();
     const cap = t.carbsPerMeal;
     const glNote = d.glLabel === "גבוה" ? "עומס פחמימות גבוה — בארוחה הבאה כדאי חלבון/ירקות בלי הרבה פחמימה, והליכה קצרה אחרי האוכל מרככת את העלייה בסוכר." : d.glLabel === "בינוני" ? "עומס פחמימות בינוני — רווח של 2–3 שעות לפני ארוחה פחמימתית נוספת." : "עומס פחמימות נמוך — לא צפוי פיק משמעותי; אפשר לאכול שוב כשרעבה.";
+    const food = foodById(m.food_id);
+    const units = food ? unitOptions(food) : [m.unit];
     openModal(`<h2>${esc(m.name)}</h2>
-      <p class="ink2 small">${m.time} · ${m.qty} ${esc(m.unit)} · ${m.grams} גרם</p>
+      <div class="inline-form" style="margin-top:6px">
+        <div class="field short"><label for="me-time">שעה</label><input id="me-time" type="time" value="${esc(m.time || "")}" style="min-height:36px;padding:4px 8px"></div>
+        <div class="field short"><label for="me-qty">כמות</label><input id="me-qty" class="num" type="number" step="0.25" min="0" value="${m.qty}" style="min-height:36px;padding:4px 8px"></div>
+        <div class="field short"><label for="me-unit">יחידה</label><select id="me-unit" style="min-height:36px;padding:4px 8px">${units.map((u) => `<option ${u === m.unit ? "selected" : ""}>${esc(u)}</option>`).join("")}</select></div>
+        <button class="btn sm primary" data-act="meal-save" data-id="${m.id}">שמירה</button>
+        <button class="btn sm danger" data-act="meal-del-modal" data-id="${m.id}">מחיקה</button>
+      </div>
+      <p class="ink2 small" style="margin-top:6px">${m.grams} גרם${food ? "" : " · המאכל המקורי לא קיים יותר — שינוי כמות ישנה את הערכים יחסית"}</p>
       <div class="mini-list" style="margin-top:10px"><div><span>קלוריות</span><b class="num">${fmt(n.kcal, 0)}</b></div><div><span>חלבון</span><b class="num">${fmt(n.protein)} גרם</b></div><div><span>פחמימות (נטו)</span><b class="num">${fmt(n.carbs)} (${fmt(d.netCarbs)}) גרם</b></div><div><span>סיבים</span><b class="num">${fmt(n.fiber)} גרם</b></div><div><span>שומן</span><b class="num">${fmt(n.fat)} גרם</b></div><div><span>ברזל</span><b class="num">${fmt(n.iron)} מ"ג</b></div></div>
       <div class="card soft" style="margin-top:12px">
         <div class="row between"><b>זמן עיכול משוער</b><span class="score num">~${d.hours} שעות</span></div>
@@ -1677,7 +1705,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       const items = day.meals.filter((m) => test(m.time || "12:00"));
       if (!items.length) return "";
       return `<div class="meal-group"><h4>${name} · ${fmt(items.reduce((a, m) => a + (m.nutrients.kcal || 0), 0), 0)} קק"ל</h4><div class="list">${items.map((m) => `<div class="item">
-          <div class="grow"><div class="title">${esc(m.name)}</div><div class="meta">${m.time} · ${m.grams} גרם · חלבון ${fmt(m.nutrients.protein)} · פחמ' ${fmt(m.nutrients.carbs)} · ברזל ${fmt(m.nutrients.iron)}</div></div>
+          <div class="grow" data-act="meal-detail" data-id="${m.id}" style="cursor:pointer"><div class="title">${esc(m.name)}</div><div class="meta">${m.time} · ${m.grams} גרם · חלבון ${fmt(m.nutrients.protein)} · פחמ' ${fmt(m.nutrients.carbs)} · ברזל ${fmt(m.nutrients.iron)} · <span class="ink2">לחיצה לעריכה</span></div></div>
           <input class="qty num" type="number" step="0.25" min="0" value="${m.qty}" data-act="meal-qty" data-id="${m.id}" aria-label="כמות">
           <span class="small ink2">${esc(m.unit)}</span>
           <button class="iconbtn" data-act="meal-del" data-id="${m.id}" aria-label="מחיקה">✕</button>
@@ -2145,6 +2173,17 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     "nutrient-detail": (el) => nutrientDetail(el.dataset.key),
     "show-all-nutrients": () => allNutrientsModal(),
     "meal-detail": (el) => mealDetail(el.dataset.id),
+    "meal-save": (el) => {
+      const day = getDay(App.date); const m = day.meals.find((x) => x.id === el.dataset.id); if (!m) return;
+      const qty = Number($("me-qty").value) || 0, unit = $("me-unit").value, time = $("me-time").value || m.time;
+      const f = foodById(m.food_id);
+      if (f) { m.grams = Math.round(gramsFor(f, qty, unit)); m.nutrients = nutrientsFor(f, m.grams); }
+      else if (m.qty > 0) { const ratio = qty / m.qty; Object.keys(m.nutrients || {}).forEach((k) => { m.nutrients[k] *= ratio; }); m.grams = Math.round(m.grams * ratio); }
+      m.qty = qty; m.unit = unit; m.time = time;
+      day.meals.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+      saveDay(App.date); closeModal(); render(); toast("הארוחה עודכנה");
+    },
+    "meal-del-modal": (el) => { if (!confirm("למחוק את הארוחה מהיומן?")) return; const day = getDay(App.date); day.meals = day.meals.filter((x) => x.id !== el.dataset.id); saveDay(App.date); closeModal(); render(); },
     "supp-dose": (el) => { const day = getDay(App.date); const s = App.state.supplements.find((x) => x.id === el.dataset.id); if (!s) return; const i = Number(el.dataset.i), c = suppTaken(day, s); setSuppTaken(day, s, i < c ? i : i + 1); saveDay(App.date); render(); },
     "take-all-supps": () => { const day = getDay(App.date); App.state.supplements.filter((s) => s.active !== false).forEach((s) => setSuppTaken(day, s, suppDoses(s))); saveDay(App.date); render(); },
     "quick-add": (el) => { const f = foodById(el.dataset.food); if (!f) return; closeModal(); if (App.tab !== "log") { addMealEntry(App.date, f, 1, f.portions[0] ? f.portions[0].label : "גרם"); toast(`נוסף: ${f.name} (${f.portions[0] ? f.portions[0].label : "100 גרם"})`); render(); } else pickFood(f, 1); },
