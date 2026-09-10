@@ -342,18 +342,20 @@
     if (x.status === "over") return { level: "over", label: "מעל הגבול" };
     if (x.kind === "limit") return x.status === "good" ? { level: "good", label: "בסדר" } : { level: "red", label: "מעל המגבלה" };
     if (x.status === "good") return { level: "good", label: "הושג" };
+    const plan = planOf(x, k);
+    const level = plan && plan.cls === "supp" ? "yellow" : urgencyLevelFor(x.pct, x.key, k);
+    return { level, label: level === "red" ? "דחוף היום" : level === "orange" ? "להשלים" : "סביר, עדיין חסר" };
+  }
+  function urgencyLevelFor(pct, key, k) {
+    if (pct >= 0.95) return "good";
     const isToday = k === dateKeyOf(new Date());
     const hour = new Date().getHours();
     const expected = isToday ? clamp((hour - 6) / 14, 0.15, 1) : 1;
-    const plan = planOf(x, k);
-    const ratio = expected ? x.pct / expected : x.pct;
-    const daily = NUT_BY[x.key].urgency === "daily";
-    let level;
-    if (plan && plan.cls === "supp") level = "yellow";
-    else if (ratio < 0.4) level = daily ? "red" : "orange";
-    else if (ratio < 0.75) level = daily ? "orange" : "yellow";
-    else level = "yellow";
-    return { level, label: level === "red" ? "דחוף היום" : level === "orange" ? "להשלים" : "סביר, עדיין חסר" };
+    const ratio = expected ? pct / expected : pct;
+    const daily = NUT_BY[key].urgency === "daily";
+    if (ratio < 0.4) return daily ? "red" : "orange";
+    if (ratio < 0.75) return daily ? "orange" : "yellow";
+    return "yellow";
   }
   // Small line gauge: where today's intake sits between 0 and the safe upper limit (UL).
   function ulGauge(x) {
@@ -503,15 +505,18 @@
   function statusPill(st) { const m = { good: ["st-good", "הושג"], warn: ["st-warn", "בדרך"], bad: ["st-bad", "חסר"], over: ["st-over", "מעל הגבול"] }[st]; return `<span class="status-pill ${m[0]}">${m[1]}</span>`; }
   // Two separate markers: an urgency dot (colour only) and a plan pill (own colours + short text).
   function urgencyDot(u) { return `<span class="urg-dot urg-${u.level}" title="${esc(u.label)}" aria-label="${esc(u.label)}"></span>`; }
-  function planPill(plan) {
+  function planPill(plan, x, k) {
     if (!plan) return "";
-    const txt = plan.cls === "supp" ? "יושלם מתוספים" : plan.cls === "food" ? "דרוש תזונה" : `עם תוספים ${Math.round(plan.projected * 100)}%`;
-    return `<span class="status-pill pl-${plan.cls}">${esc(txt)}</span>`;
+    if (plan.cls === "supp") return `<span class="status-pill st-good">יושלם מתוספים</span>`;
+    if (plan.cls === "food") return `<span class="status-pill st-info">דרוש תזונה</span>`;
+    const after = urgencyLevelFor(plan.projected, x.key, k); // the colour it would reach after the remaining supplements
+    const cls = { good: "st-good", yellow: "st-yellow", orange: "st-warn", red: "st-bad" }[after] || "st-info";
+    return `<span class="status-pill ${cls}" title="אחרי התוספים שנותרו">${esc(`עם תוספים ${Math.round(plan.projected * 100)}%`)}</span>`;
   }
   function combinedPill(x, k) {
     const u = urgencyOf(x, k), plan = planOf(x, k);
     if (u.level === "good" || u.level === "over" || x.kind === "limit") return urgencyPill(u);
-    return `<span class="status-two">${urgencyDot(u)}${planPill(plan)}</span>`;
+    return `<span class="status-two">${urgencyDot(u)}${planPill(plan, x, k)}</span>`;
   }
   function urgencyPill(u) { const cls = { good: "st-good", yellow: "st-yellow", orange: "st-warn", red: "st-bad", over: "st-over" }[u.level] || "st-info"; return `<span class="status-pill ${cls}">${esc(u.label)}</span>`; }
   function barHtml(x, thin) {
