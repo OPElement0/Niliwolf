@@ -56,7 +56,7 @@ window.NutriChat = (function () {
     if (meals.length) lines.push("מה נאכל היום: " + meals.map((m) => `${m.time || ""} ${m.name} ${m.qty} ${m.unit}`).join("; "));
     else lines.push("עדיין לא נרשם אוכל היום.");
     const supps = (d.supplements || []).filter((s) => s.active !== false);
-    if (supps.length) lines.push("תוספים קבועים: " + supps.map((s) => `${s.name}${(day.supplements_taken || []).includes(s.id) ? " (נלקח)" : " (טרם)"}`).join(", ") + ".");
+    if (supps.length) lines.push("תוספים קבועים (נלקח/יחידות ליום): " + supps.map((s) => `${s.name} ${app.suppTaken(day, s)}/${app.suppDoses(s)}`).join(", ") + ".");
     const favs = (d.foods || []).filter((f) => f.favorite).slice(0, 25);
     if (favs.length) lines.push("מאכלים שהיא אוהבת ויש לה בבית: " + favs.map((f) => f.name).join(", ") + ".");
     return lines.join("\n").slice(0, 7000);

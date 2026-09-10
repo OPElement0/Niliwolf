@@ -29,7 +29,7 @@ window.RULES = [
     id: "vitd_low",
     when: (c) => c.labs.vitD && c.labs.vitD.value < 20,
     adjust: (t) => { t.vitD = Math.max(t.vitD, 25); },
-    note: (c) => `ויטמין D ${c.labs.vitD.value} ng/mL — חסר. מקורות: תוסף, סלמון, ביצים, שמש. לוודא עם הרופא/ה מינון תוסף.`,
+    note: (c) => `ויטמין D ${c.labs.vitD.value} ng/mL — חסר. מקורות: תוסף, שמש${c.dietType === "vegan" ? ", מזון מועשר (משקאות צמחיים)" : ", סלמון, ביצים"}. לוודא עם הרופא/ה מינון תוסף.`,
     level: "warn",
   },
   {
@@ -43,7 +43,7 @@ window.RULES = [
     id: "b12_low",
     when: (c) => c.labs.b12 && c.labs.b12.value < 300,
     adjust: (t) => { t.b12 = Math.max(t.b12, 4); },
-    note: (c) => `B12 ${c.labs.b12.value} pg/mL — ${c.labs.b12.value < 200 ? "חסר" : "גבולי"}. מקורות: ביצים, דגים, מוצרי חלב, בשר; לשקול תוסף.`,
+    note: (c) => `B12 ${c.labs.b12.value} pg/mL — ${c.labs.b12.value < 200 ? "חסר" : "גבולי"}. ${c.dietType === "vegan" ? "בתזונה טבעונית המקור היחיד הוא תוסף/מזון מועשר — לשקול העלאת מינון עם הרופא/ה." : "מקורות: ביצים, דגים, מוצרי חלב, בשר; לשקול תוסף."}`,
     level: (c) => (c.labs.b12.value < 200 ? "alert" : "warn"),
   },
   {

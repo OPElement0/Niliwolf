@@ -282,22 +282,47 @@
   App.rulesNotes = rulesNotes;
 
   function suppNutrients(s) { const out = {}; Object.keys(s.nutrients || {}).forEach((k) => { if (NUT_BY[k] && s.nutrients[k] != null) out[k] = Number(s.nutrients[k]); }); return out; }
+  // doses: a supplement has N units per day; each unit is ticked separately.
+  function suppDoses(s) { return Math.max(1, Math.round(Number(s.doses) || 1)); }
+  function suppTaken(day, s) {
+    if (day.supplement_doses && day.supplement_doses[s.id] != null) return clamp(Number(day.supplement_doses[s.id]) || 0, 0, suppDoses(s));
+    return (day.supplements_taken || []).includes(s.id) ? suppDoses(s) : 0;
+  }
+  function setSuppTaken(day, s, n) {
+    day.supplement_doses = day.supplement_doses || {};
+    n = clamp(n, 0, suppDoses(s));
+    day.supplement_doses[s.id] = n;
+    day.supplements_taken = (day.supplements_taken || []).filter((id) => id !== s.id);
+    if (n >= suppDoses(s)) day.supplements_taken.push(s.id);
+  }
+  function suppFraction(day, s) { return suppTaken(day, s) / suppDoses(s); }
+  const CHECK = `<span class="check-ico" title="הושלם"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 8.5l3 3 7-7"/></svg></span>`;
+  function doseBoxes(day, s) {
+    const n = suppDoses(s), c = suppTaken(day, s);
+    return `<span class="doses" role="group" aria-label="${esc(s.name)}">${Array.from({ length: n }, (_, i) => `<button class="dose ${i < c ? "on" : ""}" data-act="supp-dose" data-id="${s.id}" data-i="${i}" aria-pressed="${i < c}" title="${i + 1}/${n}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 8.5l3 3 7-7"/></svg></button>`).join("")}</span>`;
+  }
+  function donut(pct, status, size) {
+    size = size || 44;
+    const r = (size - 6) / 2, c = 2 * Math.PI * r, p = clamp(pct || 0, 0, 1);
+    const color = status === "good" ? "var(--good)" : status === "warn" ? "var(--warn)" : status === "over" ? "var(--bad)" : "var(--accent)";
+    const label = Math.round((pct || 0) * 100);
+    return `<svg class="donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" direction="ltr" aria-label="${label}%"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="5"></circle><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(c * p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"></circle><text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-size="${size >= 44 ? 11 : 9}" font-weight="700" fill="var(--ink)">${label}%</text></svg>`;
+  }
   function dayTotals(k, opts = {}) {
     const day = App.state.days[k] || { meals: [], supplements_taken: [] };
     const tot = {}; const fromSupp = {};
     (day.meals || []).forEach((m) => { Object.keys(m.nutrients || {}).forEach((n) => { tot[n] = (tot[n] || 0) + m.nutrients[n]; }); });
     if (opts.includeSupplements !== false) {
-      (day.supplements_taken || []).forEach((sid) => {
-        const s = App.state.supplements.find((x) => x.id === sid);
-        if (!s) return;
+      App.state.supplements.forEach((s) => {
+        const fr = suppFraction(day, s); if (!fr) return;
         const sn = suppNutrients(s);
-        Object.keys(sn).forEach((n) => { tot[n] = (tot[n] || 0) + sn[n]; fromSupp[n] = (fromSupp[n] || 0) + sn[n]; });
+        Object.keys(sn).forEach((n) => { const v = sn[n] * fr; tot[n] = (tot[n] || 0) + v; fromSupp[n] = (fromSupp[n] || 0) + v; });
       });
     }
     if (opts.split) return { tot, fromSupp };
     return tot;
   }
-  App.dayTotals = dayTotals;
+  App.dayTotals = dayTotals; App.suppTaken = suppTaken; App.suppDoses = suppDoses;
   function statusOf(key, v, t) {
     const meta = NUT_BY[key];
     if (meta.ul && v > meta.ul && !meta.ulSoft) return "over";
@@ -340,8 +365,17 @@
     }).filter((x) => x.reason).sort((a, b) => (a.status === "over" ? -1 : 0) - (b.status === "over" ? -1 : 0) || a.pct - b.pct);
   }
   // best foods to close a gap: [{food, portion, amount}]
+  const NONVEGAN_DISHES = ["g_shakshuka", "g_omelet", "g_tuna_salad", "g_chicken_soup", "g_pizza", "g_sandwich_cheese", "g_chicken_potatoes", "g_porridge", "g_yogurt_granola", "g_pancake", "g_burekas", "g_protein_powder", "g_coffee_milk", "g_choco_milk", "g_smoothie", "g_icecream", "g_milk_choc", "g_cake", "g_cookie", "g_choc_spread", "g_mayo"];
+  const MEAT_DISHES = ["g_tuna_salad", "g_chicken_soup", "g_chicken_potatoes"];
+  function dietOk(f) {
+    if (!f.generic) return true;
+    const diet = (App.state.profile || {}).diet_type || "omnivore";
+    if (diet === "vegan") return f.cat !== "meat" && f.cat !== "dairy" && !NONVEGAN_DISHES.includes(f.id);
+    if (diet === "vegetarian") return f.cat !== "meat" && !MEAT_DISHES.includes(f.id);
+    return true;
+  }
   function closers(key, n = 3) {
-    const pool = App.state.foods.map(normFood).map((f) => ({ f, bonus: f.favorite ? 1.5 : 1.2 })).concat(GENERIC.filter((f) => f.cat !== "snacks").map((f) => ({ f, bonus: 1 })));
+    const pool = App.state.foods.map(normFood).map((f) => ({ f, bonus: f.favorite ? 1.5 : 1.2 })).concat(GENERIC.filter((f) => f.cat !== "snacks" && dietOk(f)).map((f) => ({ f, bonus: 1 })));
     return pool.map(({ f, bonus }) => { const p = f.portions[0] || { label: "100 גרם", g: 100 }; const amt = ((f.per100[key] || 0) * p.g) / 100; return { food: f, portion: p, amount: amt, score: amt * bonus }; })
       .filter((x) => x.amount > 0).sort((a, b) => b.score - a.score).slice(0, n);
   }
@@ -406,7 +440,8 @@
     const day = getDay(App.date);
     const notes = rulesNotes();
     const supps = App.state.supplements.filter((s) => s.active !== false);
-    const missingSupps = supps.filter((s) => !day.supplements_taken.includes(s.id));
+    const missingSupps = supps.filter((s) => suppTaken(day, s) < suppDoses(s));
+    const dosesTotal = supps.reduce((a, s) => a + suppDoses(s), 0), dosesTaken = supps.reduce((a, s) => a + suppTaken(day, s), 0);
     const floating = floatingGaps();
     const hour = new Date().getHours();
     const isToday = App.date === dateKeyOf(new Date());
@@ -418,33 +453,33 @@
       if (!day.meals.length) s = "עדיין לא נרשם אוכל " + (isToday ? "היום" : "בתאריך הזה") + ".";
       else if (!todo.length) s = "כל שלושת היעדים המרכזיים הושגו. ";
       else s = (done.length ? `הושג: ${done.join(", ")}. ` : "") + "נשאר להשלים: " + todo.map((x) => `${x.he} ${fmt(x.remaining)} ${x.unit}`).join(", ") + ".";
-      if (isToday && missingSupps.length && hour >= 12) s += ` טרם סומנו ${missingSupps.length} תוספים.`;
+      if (isToday && missingSupps.length && hour >= 12) s += ` תוספים: ${dosesTaken}/${dosesTotal} יחידות סומנו.`;
       return s;
     })();
     const heroTiles = HERO.map((k) => {
       const x = g.find((y) => y.key === k);
       const extra = k === "carbs" && t.carbsPerMeal ? `<span>עד ${t.carbsPerMeal} גרם לארוחה</span>` : k === "iron" && ctx.labs.ferritin ? `<span>פריטין ${ctx.labs.ferritin.value}</span>` : "";
       return `<div class="tile" data-act="nutrient-detail" data-key="${k}">
-        <div class="name"><span>${x.he}</span>${statusPill(x.status)}</div>
-        <div class="big num">${fmt(x.v)}<small> / ${fmt(x.t)} ${x.unit}</small></div>
-        ${barHtml(x)}
+        <div class="name"><span>${x.status === "good" ? CHECK : ""}${x.he}</span>${statusPill(x.status)}</div>
+        <div class="tile-main"><div class="big num">${fmt(x.v)}<small> / ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, x.status, 56)}</div>
+        ${barHtml(x, true)}
         <div class="sub"><span>${x.remaining > 0 ? `נשאר ${fmt(x.remaining)}` : `+${fmt(x.v - x.t)} מעל היעד`}</span>${x.supp ? `<span>מתוספים ${fmt(x.supp)}</span>` : ""}${extra}</div>
       </div>`;
     }).join("");
     const noteRows = notes.filter((n) => n.level !== "info" || n.changed).map((n) => `<div class="note ${n.level === "alert" ? "alert" : n.level === "warn" ? "warn" : "info"}">${esc(n.text)}</div>`);
     const overs = g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)}).</div>`)
       .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)} (הגבול לאדם בריא). בטיפול בחסר ברזל לפי הנחיית רופא/ה זה מקובל; אם לא — כדאי לוודא.</div>`));
-    const floatShown = floating.filter((x) => x.reason !== null).sort((a, b) => (a.reason.startsWith("ממוצע") ? 1 : 0) - (b.reason.startsWith("ממוצע") ? 1 : 0) || a.pct - b.pct).slice(0, 8);
-    const floatRows = floatShown.map((x) => `<div class="gap-row" data-act="nutrient-detail" data-key="${x.key}" style="cursor:pointer">
-        <div><b>${x.he}</b> <span class="small ink2">· ${esc(x.reason)}</span></div>
-        <div class="num small">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}</div>
-        ${barHtml(x, true)}
-        ${x.status !== "over" && x.kind !== "limit" ? `<div class="chips" style="grid-column:1/-1">${closers(x.key).map((c) => `<button class="chip" data-act="quick-add" data-food="${c.food.id}" title="הוסיפי ליומן">${esc(c.food.name)} (${esc(c.portion.label)}) +${fmt(c.amount)}</button>`).join("")}</div>` : ""}
+    const floatShown = floating.filter((x) => x.reason !== null).sort((a, b) => (a.reason.startsWith("ממוצע") ? 1 : 0) - (b.reason.startsWith("ממוצע") ? 1 : 0) || a.pct - b.pct).slice(0, 10);
+    const floatRows = floatShown.map((x) => `<div class="nut-row" data-act="nutrient-detail" data-key="${x.key}">
+        ${donut(x.pct, x.status, 40)}
+        <div class="grow"><div><b>${x.he}</b> <span class="small ink2">· ${esc(x.reason)}</span></div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
       </div>`);
-    const suppRows = supps.map((s) => `<div class="supp ${day.supplements_taken.includes(s.id) ? "on" : ""}" data-act="toggle-supp" data-id="${s.id}" role="checkbox" aria-checked="${day.supplements_taken.includes(s.id)}" tabindex="0">
-        <span class="check"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 8.5l3 3 7-7"/></svg></span>
-        <div class="grow"><div class="title">${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}</div></div>
-      </div>`);
+    const doneList = g.filter((x) => x.t > 0 && !HERO.includes(x.key) && (x.kind === "limit" ? x.status === "good" && day.meals.length : x.status === "good"));
+    const doneRows = doneList.length ? `<div class="chips" style="margin-top:12px">${doneList.map((x) => `<button class="chip done" data-act="nutrient-detail" data-key="${x.key}">${CHECK}${x.he} <span class="num">${Math.round(x.pct * 100)}%</span></button>`).join("")}</div>` : "";
+    const suppRows = supps.map((s) => { const full = suppTaken(day, s) >= suppDoses(s); return `<div class="supp ${full ? "on" : ""}">
+        ${doseBoxes(day, s)}
+        <div class="grow"><div class="title">${full ? CHECK : ""}${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}</div></div>
+      </div>`; });
     const water = g.find((x) => x.key === "water");
     const glucoseCard = App.state.profile.track_glucose ? `<div class="card"><div class="card-head"><h3>מדידות סוכר</h3><button class="btn sm" data-act="add-glucose">+ מדידה</button></div>
         ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag)} · ${r.time}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
@@ -456,14 +491,15 @@
           <div class="stack">
             <div class="card">
               <div class="card-head"><h2>מה עוד חסר ${isToday ? "היום" : ""}</h2><button class="btn sm ghost" data-act="show-all-nutrients">כל הרכיבים</button></div>
-              ${floating.length ? floatRows.join("") + (floating.length > floatShown.length ? `<p class="help" style="margin-top:8px"><button class="btn sm ghost" data-act="show-all-nutrients">+${floating.length - floatShown.length} רכיבים נוספים</button></p>` : "") : `<p class="help">${day.meals.length ? "כרגע אין רכיב נוסף שחסר בולט — רכיבים צפים כאן רק כשהם מפגרים אחרי היעד." : "כשתרשמי אוכל, רכיבים שחסרים יופיעו כאן עם הצעות לסגירת הפער."}</p>`}
+              ${floating.length ? floatRows.join("") + (floating.length > floatShown.length ? `<p class="help" style="margin-top:8px"><button class="btn sm ghost" data-act="show-all-nutrients">+${floating.length - floatShown.length} רכיבים נוספים</button></p>` : "") : `<p class="help">${day.meals.length ? "כרגע אין רכיב נוסף שחסר בולט — רכיבים צפים כאן רק כשהם מפגרים אחרי היעד." : "כשתרשמי אוכל, רכיבים שחסרים יופיעו כאן. לחיצה על רכיב מראה מאיפה הוא הגיע ומה יסגור את הפער."}</p>`}
+              ${doneRows}
               <div class="row" style="margin-top:12px"><button class="btn sm" data-act="quick-add" data-food="g_water">+ כוס מים</button><span class="small ink2">נוזלים: <span class="num">${fmt(water.v)}</span> / ${fmt(water.t)} מ"ל</span></div>
             </div>
             ${glucoseCard}
           </div>
           <div class="stack">
             <div class="card">
-              <div class="card-head"><h2>תוספים</h2><span class="small ink2">${day.supplements_taken.filter((id) => supps.some((s) => s.id === id)).length}/${supps.length}</span></div>
+              <div class="card-head"><h2>${dosesTotal && dosesTaken >= dosesTotal ? CHECK : ""}תוספים</h2><span class="small ink2 num">${dosesTaken}/${dosesTotal} יחידות</span></div>
               ${supps.length ? suppRows.join("") : `<p class="help">עדיין לא הוגדרו תוספים. <button class="btn sm ghost" data-act="go-tab" data-tab="supps">הוסיפי בטאב תוספים</button></p>`}
               ${supps.length > 1 ? `<div class="row end" style="margin-top:8px"><button class="btn sm ghost" data-act="take-all-supps">סמני הכול</button></div>` : ""}
             </div>
@@ -478,21 +514,21 @@
   function nutrientDetail(key) {
     const x = gaps(App.date).find((y) => y.key === key), day = getDay(App.date);
     const contributions = day.meals.map((m) => ({ name: m.name, v: m.nutrients[key] || 0, qty: `${m.qty} ${m.unit}` })).filter((c) => c.v > 0).sort((a, b) => b.v - a.v);
-    const suppC = day.supplements_taken.map((id) => App.state.supplements.find((s) => s.id === id)).filter(Boolean).map((s) => ({ name: s.name, v: suppNutrients(s)[key] || 0 })).filter((c) => c.v > 0);
-    openModal(`<h2>${x.he}</h2>
-      <div class="big num" style="font-size:1.6rem;font-weight:700">${fmt(x.v)} <small class="ink2" style="font-size:.9rem;font-weight:500">/ ${fmt(x.t)} ${x.unit} (${Math.round(x.pct * 100)}%)</small></div>
-      ${barHtml(x)}
+    const suppC = App.state.supplements.map((s) => ({ name: `${s.name} (${suppTaken(day, s)}/${suppDoses(s)})`, v: (suppNutrients(s)[key] || 0) * suppFraction(day, s) })).filter((c) => c.v > 0);
+    openModal(`<h2>${x.status === "good" ? CHECK : ""}${x.he}</h2>
+      <div class="tile-main"><div class="big num" style="font-size:1.6rem;font-weight:700">${fmt(x.v)} <small class="ink2" style="font-size:.9rem;font-weight:500">/ ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, x.status, 64)}</div>
+      ${barHtml(x, true)}<div class="legend"><span><i style="background:var(--accent)"></i>ממזון</span><span><i style="background:var(--accent-2)"></i>מתוספים</span></div>
       ${x.ul ? `<p class="help">גבול עליון בטוח: ${fmt(x.ul)} ${x.unit}</p>` : ""}
       <h3 style="margin-top:14px">מאיפה זה הגיע</h3>
       ${contributions.length || suppC.length ? `<div class="list">${contributions.map((c) => `<div class="item"><div class="grow"><span class="title">${esc(c.name)}</span> <span class="meta">${esc(c.qty)}</span></div><span class="num">${fmt(c.v)}</span></div>`).join("")}${suppC.map((c) => `<div class="item"><div class="grow"><span class="title">${esc(c.name)}</span> <span class="meta">תוסף</span></div><span class="num">${fmt(c.v)}</span></div>`).join("")}</div>` : `<p class="help">עדיין כלום.</p>`}
-      ${x.remaining > 0 && x.kind !== "limit" ? `<h3 style="margin-top:14px">מה יסגור את הפער (${fmt(x.remaining)} ${x.unit})</h3><div class="chips" style="margin-top:6px">${closers(key, 6).map((c) => `<button class="chip" data-act="quick-add" data-food="${c.food.id}">${esc(c.food.name)} (${esc(c.portion.label)}) +${fmt(c.amount)}</button>`).join("")}</div>` : ""}
+      ${x.remaining > 0 && x.kind !== "limit" ? `<h3 style="margin-top:14px">מה יסגור את הפער (${fmt(x.remaining)} ${x.unit})</h3><p class="help">מותאם לסוג התזונה שבפרופיל; המאכלים שלך קודם.</p><div class="chips" style="margin-top:6px">${closers(key, 6).map((c) => `<button class="chip" data-act="quick-add" data-food="${c.food.id}">${esc(c.food.name)} (${esc(c.portion.label)}) +${fmt(c.amount)}</button>`).join("")}</div>` : ""}
       <div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
   }
   function allNutrientsModal() {
     const g = gaps(App.date);
     openModal(`<h2>כל הרכיבים — ${esc(fmtDate(App.date))}</h2>
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>רכיב</th><th class="num">הושג</th><th class="num">יעד</th><th class="num">%</th><th></th></tr></thead><tbody>
-      ${g.filter((x) => x.t > 0).map((x) => `<tr data-act="nutrient-detail" data-key="${x.key}" style="cursor:pointer"><td>${x.he}</td><td class="num">${fmt(x.v)}</td><td class="num">${fmt(x.t)} ${x.unit}</td><td class="num td-${x.status === "over" ? "bad" : x.status}">${Math.round(x.pct * 100)}%</td><td>${statusPill(x.status)}</td></tr>`).join("")}
+      ${g.filter((x) => x.t > 0).map((x) => `<tr data-act="nutrient-detail" data-key="${x.key}" style="cursor:pointer"><td>${x.status === "good" ? CHECK : ""}${x.he}</td><td class="num">${fmt(x.v)}</td><td class="num">${fmt(x.t)} ${x.unit}</td><td>${donut(x.pct, x.status, 34)}</td><td>${statusPill(x.status)}</td></tr>`).join("")}
       </tbody></table></div>
       <p class="help" style="margin-top:8px">נתרן הוא מגבלה (לא יעד): ירוק = מתחת למגבלה.</p>
       <div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
@@ -681,16 +717,16 @@
   // ---- Supplements
   function renderSupps() {
     const day = getDay(App.date), supps = App.state.supplements;
-    const streak = (() => { let n = 0, k = dateKeyOf(new Date()); const act = supps.filter((s) => s.active !== false).map((s) => s.id); if (!act.length) return 0; for (let i = 0; i < 400; i++) { const d = App.state.days[k]; if (!d || !act.every((id) => (d.supplements_taken || []).includes(id))) { if (i === 0) { k = addDays(k, -1); continue; } break; } n++; k = addDays(k, -1); } return n; })();
+    const streak = (() => { let n = 0, k = dateKeyOf(new Date()); const act = supps.filter((s) => s.active !== false); if (!act.length) return 0; for (let i = 0; i < 400; i++) { const d = App.state.days[k]; if (!d || !act.every((s) => suppTaken(d, s) >= suppDoses(s))) { if (i === 0) { k = addDays(k, -1); continue; } break; } n++; k = addDays(k, -1); } return n; })();
     $("panel-supps").innerHTML = `<div class="stack">
       <div class="row between"><h2>תוספים קבועים</h2><button class="btn sm primary" data-act="supp-new">+ תוסף</button></div>
       <div class="card">
-        ${supps.length ? supps.map((s) => `<div class="supp ${day.supplements_taken.includes(s.id) ? "on" : ""} ${s.active === false ? "muted" : ""}">
-          <span class="check" data-act="toggle-supp" data-id="${s.id}" role="checkbox" aria-checked="${day.supplements_taken.includes(s.id)}" tabindex="0"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 8.5l3 3 7-7"/></svg></span>
-          <div class="grow" data-act="supp-edit" data-id="${s.id}" style="cursor:pointer"><div class="title">${esc(s.name)}${s.active === false ? " (לא פעיל)" : ""}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${Object.keys(suppNutrients(s)).length ? " · " + Object.entries(suppNutrients(s)).map(([k, v]) => `${NUT_BY[k].he} ${fmt(v)}`).join(", ") : ""}</div></div>
+        ${supps.length ? supps.map((s) => `<div class="supp ${suppTaken(day, s) >= suppDoses(s) ? "on" : ""} ${s.active === false ? "muted" : ""}">
+          ${s.active === false ? "" : doseBoxes(day, s)}
+          <div class="grow" data-act="supp-edit" data-id="${s.id}" style="cursor:pointer"><div class="title">${suppTaken(day, s) >= suppDoses(s) && s.active !== false ? CHECK : ""}${esc(s.name)}${s.active === false ? " (לא פעיל)" : ""}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${Object.keys(suppNutrients(s)).length ? " · " + Object.entries(suppNutrients(s)).map(([k, v]) => `${NUT_BY[k].he} ${fmt(v)}`).join(", ") : ""}</div></div>
         </div>`).join("") : `<div class="empty">עדיין לא הוגדרו תוספים.<br><span class="small">לכל תוסף אפשר להזין מה הוא תורם (ברזל, חומצה פולית…) כדי שהסימון היומי ייכנס לחישוב.</span></div>`}
       </div>
-      <div class="card soft"><b>רצף:</b> <span class="num">${streak}</span> ימים רצופים שכל התוספים סומנו. <span class="help">הסימון היומי הוא לתאריך ${esc(fmtDate(App.date))}.</span></div>
+      <div class="card soft"><b>רצף:</b> <span class="num">${streak}</span> ימים רצופים שכל היחידות סומנו. <span class="help">קובייה לכל יחידה (כדור/כמוסה) — הסימון הוא לתאריך ${esc(fmtDate(App.date))}. לחיצה על השם עורכת את התוסף.</span></div>
     </div>`;
   }
   function suppModal(s) {
@@ -701,9 +737,10 @@
     openModal(`<h2>${isNew ? "תוסף חדש" : "עריכת " + esc(s.name)}</h2>
       <div class="form-grid">
         <div class="field wide"><label for="sf-name">שם</label><input id="sf-name" value="${esc(s.name)}" placeholder="למשל: פרנטל, ברזל, אומגה-3"></div>
-        <div class="field"><label for="sf-dose">מינון יומי (טקסט)</label><input id="sf-dose" value="${esc(s.dose_label || "")}" placeholder="כדור אחד"></div>
+        <div class="field"><label for="sf-doses">כמה יחידות ביום (קוביות לסימון)</label><input id="sf-doses" type="number" min="1" max="12" step="1" value="${suppDoses(s)}"></div>
+        <div class="field"><label for="sf-dose">מינון (טקסט חופשי)</label><input id="sf-dose" value="${esc(s.dose_label || "")}" placeholder="כדור אחד עם האוכל"></div>
         <div class="field"><label for="sf-times">מתי (מופרד בפסיק)</label><input id="sf-times" value="${esc((s.times || []).join(", "))}" placeholder="בוקר, ערב"></div>
-        <div class="field wide"><label>מה התוסף תורם ליום (מהתווית) — נכנס לחישוב היומי כשמסמנים V</label></div>
+        <div class="field wide"><label>מה התוסף תורם <b>ביום שלם</b> (כל היחידות יחד, מהתווית) — נכנס לחישוב לפי כמה יחידות סומנו</label></div>
         ${common.map((k) => `<div class="field"><label for="sf-${k}">${NUT_BY[k].he} (${NUT_BY[k].unit})</label><input id="sf-${k}" type="number" step="any" value="${s.nutrients && s.nutrients[k] != null ? s.nutrients[k] : ""}"></div>`).join("")}
         <div class="field wide"><label><input type="checkbox" id="sf-active" ${s.active !== false ? "checked" : ""} style="vertical-align:middle;margin-inline-end:6px">פעיל (מופיע בצ'קליסט היומי)</label></div>
       </div>
@@ -740,7 +777,7 @@
   }
   function suggestMe() {
     const g = gaps(App.date);
-    const pool = App.state.foods.map(normFood).length ? App.state.foods.map(normFood) : GENERIC.filter((f) => f.cat !== "snacks" && f.cat !== "drinks");
+    const pool = App.state.foods.map(normFood).length ? App.state.foods.map(normFood) : GENERIC.filter((f) => f.cat !== "snacks" && f.cat !== "drinks" && dietOk(f));
     window._suggestions = pool.map((f) => { const p = f.portions[0] || { label: "100 גרם", g: 100 }; const d = nutrientsFor(f, p.g); return Object.assign({ food: f, portion: p }, scoreOption(d, g)); }).sort((a, b) => b.score - a.score).slice(0, 5);
     renderWhatNext();
   }
@@ -857,9 +894,9 @@
     const rank = NUT.filter((x) => x.kind === "target" && t[x.key]).map((x) => { const vals = logged.map((k) => pct(k, x.key)).filter((v) => v != null); const a = vals.length ? vals.reduce((p, c) => p + c, 0) / vals.length : 0; return { key: x.key, label: x.he, p: a, text: Math.round(a * 100) + "%", status: a >= 0.95 ? "good" : a >= 0.6 ? "warn" : "bad", tip: `${x.he}: ממוצע ${Math.round(a * 100)}% מהיעד ב-${vals.length} ימים` }; }).sort((a, b) => a.p - b.p);
     const barsSvg = window.Charts.bars({ items: rank });
     // adherence calendar (last 28 days)
-    const act = App.state.supplements.filter((s) => s.active !== false).map((s) => s.id);
+    const act = App.state.supplements.filter((s) => s.active !== false);
     const calKeys = []; for (let i = 27; i >= 0; i--) calKeys.push(addDays(todayK, -i));
-    const calDays = calKeys.map((k) => { const d = App.state.days[k]; const taken = d ? (d.supplements_taken || []).filter((id) => act.includes(id)).length : 0; const p = act.length ? (d ? taken / act.length : null) : null; return { dow: parseKey(k).getDay(), label: parseKey(k).getDate(), p, tip: `${fmtDate(k)}: ${taken}/${act.length} תוספים` }; });
+    const calDays = calKeys.map((k) => { const d = App.state.days[k]; const units = act.reduce((a, s) => a + suppDoses(s), 0); const taken = d ? act.reduce((a, s) => a + suppTaken(d, s), 0) : 0; const p = units ? (d ? taken / units : null) : null; return { dow: parseKey(k).getDay(), label: parseKey(k).getDate(), p, tip: `${fmtDate(k)}: ${taken}/${units} יחידות` }; });
     const calSvg = act.length ? window.Charts.calendar({ days: calDays }) : `<p class="help">אין תוספים פעילים.</p>`;
     // weight
     const wKeys = Object.keys(App.state.days).filter((k) => App.state.days[k].weight_kg).sort();
@@ -888,7 +925,7 @@
     }
     // summary tiles
     const avgOf = (key) => { const vals = logged.map((k) => totals[k][key] || 0); return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0; };
-    const suppDays = calKeys.filter((k) => { const d = App.state.days[k]; return d && act.length && act.every((id) => (d.supplements_taken || []).includes(id)); }).length;
+    const suppDays = calKeys.filter((k) => { const d = App.state.days[k]; return d && act.length && act.every((s) => suppTaken(d, s) >= suppDoses(s)); }).length;
     $("panel-history").innerHTML = `<div class="stack">
       <div class="row between"><h2>מעקב לאורך זמן</h2><div class="seg">${[[7, "7 ימים"], [30, "30 ימים"], [90, "90 ימים"], [0, "הכול"]].map(([v, l]) => `<button class="${histRange === v ? "on" : ""}" data-act="hist-range" data-v="${v}">${l}</button>`).join("")}</div></div>
       <div class="hero">
@@ -985,8 +1022,8 @@
     "modal-bg": (el, e) => { if (e.target === el) closeModal(); },
     "nutrient-detail": (el) => nutrientDetail(el.dataset.key),
     "show-all-nutrients": () => allNutrientsModal(),
-    "toggle-supp": (el) => { const day = getDay(App.date), id = el.dataset.id; const i = day.supplements_taken.indexOf(id); if (i >= 0) day.supplements_taken.splice(i, 1); else day.supplements_taken.push(id); saveDay(App.date); render(); },
-    "take-all-supps": () => { const day = getDay(App.date); App.state.supplements.filter((s) => s.active !== false).forEach((s) => { if (!day.supplements_taken.includes(s.id)) day.supplements_taken.push(s.id); }); saveDay(App.date); render(); },
+    "supp-dose": (el) => { const day = getDay(App.date); const s = App.state.supplements.find((x) => x.id === el.dataset.id); if (!s) return; const i = Number(el.dataset.i), c = suppTaken(day, s); setSuppTaken(day, s, i < c ? i : i + 1); saveDay(App.date); render(); },
+    "take-all-supps": () => { const day = getDay(App.date); App.state.supplements.filter((s) => s.active !== false).forEach((s) => setSuppTaken(day, s, suppDoses(s))); saveDay(App.date); render(); },
     "quick-add": (el) => { const f = foodById(el.dataset.food); if (!f) return; closeModal(); if (App.tab !== "log") { addMealEntry(App.date, f, 1, f.portions[0] ? f.portions[0].label : "גרם"); toast(`נוסף: ${f.name} (${f.portions[0] ? f.portions[0].label : "100 גרם"})`); render(); } else pickFood(f, 1); },
     "add-glucose": () => openModal(`<h2>מדידת סוכר</h2><div class="form-grid"><div class="field"><label for="gl-v">mg/dL</label><input id="gl-v" type="number" inputmode="numeric"></div><div class="field"><label for="gl-tag">מתי</label><select id="gl-tag"><option>בצום</option><option>שעה אחרי ארוחה</option><option>שעתיים אחרי ארוחה</option><option>לפני שינה</option><option>אחר</option></select></div><div class="field"><label for="gl-t">שעה</label><input id="gl-t" type="time" value="${nowTime()}"></div></div><div class="actions"><button class="btn" data-act="modal-close">ביטול</button><button class="btn primary" data-act="glucose-save">שמירה</button></div>`),
     "glucose-save": () => { const v = Number($("gl-v").value); if (!v) return; const day = getDay(App.date); day.glucose = day.glucose || []; day.glucose.push({ mg_dl: v, tag: $("gl-tag").value, time: $("gl-t").value }); saveDay(App.date); closeModal(); render(); },
@@ -1018,7 +1055,7 @@
     // supps
     "supp-new": () => suppModal(null),
     "supp-edit": (el) => suppModal(App.state.supplements.find((s) => s.id === el.dataset.id)),
-    "supp-save": () => { const s = window._editSupp; s.name = $("sf-name").value.trim(); if (!s.name) { toast("צריך שם"); return; } s.dose_label = $("sf-dose").value.trim(); s.times = $("sf-times").value.split(",").map((x) => x.trim()).filter(Boolean); s.active = $("sf-active").checked; s.nutrients = {}; NUT_KEYS.forEach((k) => { const el = $("sf-" + k); if (el && el.value !== "") s.nutrients[k] = Number(el.value); }); const i = App.state.supplements.findIndex((x) => x.id === s.id); if (i >= 0) App.state.supplements[i] = s; else App.state.supplements.push(s); saveSupp(s); closeModal(); render(); },
+    "supp-save": () => { const s = window._editSupp; s.name = $("sf-name").value.trim(); if (!s.name) { toast("צריך שם"); return; } s.dose_label = $("sf-dose").value.trim(); s.doses = Math.max(1, Math.round(Number($("sf-doses").value) || 1)); s.times = $("sf-times").value.split(",").map((x) => x.trim()).filter(Boolean); s.active = $("sf-active").checked; s.nutrients = {}; NUT_KEYS.forEach((k) => { const el = $("sf-" + k); if (el && el.value !== "") s.nutrients[k] = Number(el.value); }); const i = App.state.supplements.findIndex((x) => x.id === s.id); if (i >= 0) App.state.supplements[i] = s; else App.state.supplements.push(s); saveSupp(s); closeModal(); render(); },
     "supp-del": (el) => { if (!confirm("למחוק את התוסף?")) return; App.state.supplements = App.state.supplements.filter((s) => s.id !== el.dataset.id); Store.del("supplements", el.dataset.id); closeModal(); render(); },
     // what next
     "opt-clear": (el) => { options[Number(el.dataset.i)] = null; renderWhatNext(); },
