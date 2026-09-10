@@ -1714,7 +1714,17 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)}. ${esc(NUT_BY[x.key].ulNote || "")}</div>`));
     const rest = g.filter((x) => x.t > 0 && !HERO.includes(x.key));
     const isDone = (x) => (x.kind === "limit" ? x.status === "good" : x.status === "good");
-    const missing = rest.filter((x) => !isDone(x)).sort((a, b) => (a.status === "over" ? -1 : 0) - (b.status === "over" ? -1 : 0) || a.pct - b.pct);
+    // Order: over-limit first; then items that need food (by urgency red→orange→yellow, then lowest %);
+    // then items that supplements will complete, by % achieved (lowest first).
+    const URG_RANK = { red: 0, orange: 1, yellow: 2, good: 3 };
+    const sortKey = (x) => {
+      if (x.status === "over") return [0, 0, x.pct];
+      if (x.kind === "limit") return [1, 0, -x.pct];
+      const plan = planOf(x, App.date), u = urgencyOf(x, App.date);
+      if (plan && plan.cls === "supp") return [3, 0, x.pct];
+      return [2, URG_RANK[u.level] != null ? URG_RANK[u.level] : 2, x.pct];
+    };
+    const missing = rest.filter((x) => !isDone(x)).map((x) => ({ x, k: sortKey(x) })).sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2]).map((o) => o.x);
     const doneList = rest.filter(isDone).sort((a, b) => b.pct - a.pct);
     const nearUL = (x) => x.ul && !NUT_BY[x.key].ulSoft && x.v >= x.ul * 0.85 && x.v < x.ul;
     const softOver = (x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul;
