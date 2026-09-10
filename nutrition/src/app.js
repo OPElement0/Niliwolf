@@ -314,9 +314,46 @@
   function donut(pct, status, size) {
     size = size || 44;
     const r = (size - 6) / 2, c = 2 * Math.PI * r, p = clamp(pct || 0, 0, 1);
-    const color = status === "good" ? "var(--good)" : status === "warn" ? "var(--warn)" : status === "over" ? "var(--bad)" : "var(--accent)";
+    const color = status === "good" ? "var(--good)" : status === "yellow" ? "var(--yellow)" : status === "orange" || status === "warn" ? "var(--warn)" : status === "red" || status === "over" ? "var(--bad)" : "var(--accent)";
     const label = Math.round((pct || 0) * 100);
     return `<svg class="donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" direction="ltr" aria-label="${label}%"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="5"></circle><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(c * p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"></circle><text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-size="${size >= 44 ? 11 : 9}" font-weight="700" fill="var(--ink)">${label}%</text></svg>`;
+  }
+  // What the not-yet-taken supplement units would still add today, per nutrient.
+  function pendingSupp(k, key) {
+    const day = App.state.days[k] || { meals: [], supplements_taken: [] };
+    let amount = 0; const parts = [];
+    App.state.supplements.filter((s) => s.active !== false).forEach((s) => {
+      const left = suppDoses(s) - suppTaken(day, s); if (left <= 0) return;
+      const v = (suppNutrients(s)[key] || 0) * (left / suppDoses(s)); if (v <= 0) return;
+      amount += v; parts.push({ name: s.name, units: left, v });
+    });
+    return { amount, parts };
+  }
+  function planOf(x, k) {
+    if (x.kind === "limit" || x.status === "good" || x.status === "over") return null;
+    const pend = pendingSupp(k, x.key);
+    const projected = x.t ? (x.v + pend.amount) / x.t : 0;
+    if (pend.amount <= 0) return { cls: "food", projected, text: "דרוש תזונה להשלמה", parts: [] };
+    if (projected >= 0.95) return { cls: "supp", projected, text: `יושלם מתוספים (${pend.parts.map((p) => `${p.name.split(" ")[0]} ×${p.units}`).join(", ")})`, parts: pend.parts };
+    return { cls: "part", projected, text: `יגיע ל-${Math.round(projected * 100)}% מתוספים · השאר מתזונה`, parts: pend.parts };
+  }
+  // Urgency of a deficit: red = must fix today, orange = fix, harm only if prolonged, yellow = fine for a few days, good = done.
+  function urgencyOf(x, k) {
+    if (x.status === "over") return { level: "over", label: "מעל הגבול" };
+    if (x.kind === "limit") return x.status === "good" ? { level: "good", label: "בסדר" } : { level: "red", label: "מעל המגבלה" };
+    if (x.status === "good") return { level: "good", label: "הושג" };
+    const isToday = k === dateKeyOf(new Date());
+    const hour = new Date().getHours();
+    const expected = isToday ? clamp((hour - 6) / 14, 0.15, 1) : 1;
+    const plan = planOf(x, k);
+    const ratio = expected ? x.pct / expected : x.pct;
+    const daily = NUT_BY[x.key].urgency === "daily";
+    let level;
+    if (plan && plan.cls === "supp") level = "yellow";
+    else if (ratio < 0.4) level = daily ? "red" : "orange";
+    else if (ratio < 0.75) level = daily ? "orange" : "yellow";
+    else level = "yellow";
+    return { level, label: level === "red" ? "דחוף היום" : level === "orange" ? "להשלים" : "סביר, עדיין חסר" };
   }
   // Small line gauge: where today's intake sits between 0 and the safe upper limit (UL).
   function ulGauge(x) {
@@ -464,6 +501,7 @@
     $("sync-text").textContent = App.mode === "cloud" ? "מסונכרן בענן" : "מצב מקומי — רק במכשיר הזה";
   }
   function statusPill(st) { const m = { good: ["st-good", "הושג"], warn: ["st-warn", "בדרך"], bad: ["st-bad", "חסר"], over: ["st-over", "מעל הגבול"] }[st]; return `<span class="status-pill ${m[0]}">${m[1]}</span>`; }
+  function urgencyPill(u) { const cls = { good: "st-good", yellow: "st-yellow", orange: "st-warn", red: "st-bad", over: "st-over" }[u.level] || "st-info"; return `<span class="status-pill ${cls}">${esc(u.label)}</span>`; }
   function barHtml(x, thin) {
     const foodPct = clamp(((x.v - x.supp) / (x.t || 1)) * 100, 0, 100), suppPct = clamp((x.supp / (x.t || 1)) * 100, 0, 100 - foodPct);
     return `<div class="bar${thin ? " thin" : ""}"><i class="food" style="width:${foodPct}%"></i><i class="supp" style="width:${suppPct}%"></i></div>`;
@@ -568,11 +606,13 @@
     const heroTiles = HERO.map((k) => {
       const x = g.find((y) => y.key === k);
       const extra = k === "carbs" && t.carbsPerMeal ? `<span>עד ${t.carbsPerMeal} גרם לארוחה</span>` : k === "iron" && ctx.labs.ferritin ? `<span>פריטין ${ctx.labs.ferritin.value}</span>` : "";
+      const u = urgencyOf(x, App.date), plan = planOf(x, App.date);
       return `<div class="tile" data-act="nutrient-detail" data-key="${k}">
-        <div class="name"><span>${x.status === "good" ? CHECK : ""}${x.he}</span>${statusPill(x.status)}</div>
-        <div class="tile-main"><div class="big num">${fmt(x.v)}<small> / ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, x.status, 56)}</div>
+        <div class="name"><span>${x.status === "good" ? CHECK : ""}${x.he}</span>${urgencyPill(u)}</div>
+        <div class="tile-main"><div class="big num">${fmt(x.v)}<small> / ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, u.level, 56)}</div>
         ${barHtml(x, true)}
         <div class="sub"><span>${x.remaining > 0 ? `נשאר ${fmt(x.remaining)}` : `+${fmt(x.v - x.t)} מעל היעד`}</span>${x.supp ? `<span>מתוספים ${fmt(x.supp)}</span>` : ""}${extra}</div>
+        ${plan ? `<div class="plan plan-${plan.cls}">${esc(plan.text)}</div>` : ""}
       </div>`;
     }).join("");
     const noteRows = notes.filter((n) => n.level !== "info" || n.changed).map((n) => `<div class="note ${n.level === "alert" ? "alert" : n.level === "warn" ? "warn" : "info"}">${esc(n.text)}</div>`);
@@ -585,11 +625,11 @@
     const doneList = rest.filter(isDone).sort((a, b) => b.pct - a.pct);
     const nearUL = (x) => x.ul && !NUT_BY[x.key].ulSoft && x.v >= x.ul * 0.85 && x.v < x.ul;
     const softOver = (x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul;
-    const nutRow = (x) => `<div class="nut-row ${x.status === "over" ? "row-over" : nearUL(x) ? "row-near" : ""}" data-act="nutrient-detail" data-key="${x.key}">
-        ${donut(x.pct, x.status, 40)}
-        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
+    const nutRow = (x) => { const u = urgencyOf(x, App.date), plan = planOf(x, App.date); return `<div class="nut-row ${x.status === "over" ? "row-over" : nearUL(x) ? "row-near" : ""}" data-act="nutrient-detail" data-key="${x.key}">
+        ${donut(x.pct, u.level, 40)}
+        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : !isDone(x) ? ` ${urgencyPill(u)}` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div>${plan ? `<div class="plan plan-${plan.cls}">${esc(plan.text)}</div>` : ""}</div>
         ${isDone(x) || x.status === "over" || nearUL(x) || softOver(x) ? ulGauge(x) : ""}
-      </div>`;
+      </div>`; };
     const floatRows = missing.map(nutRow);
     const doneRows = doneList.length ? `<h3 style="margin-top:16px;margin-bottom:4px">${CHECK}הושלם ${isToday ? "היום" : ""} <span class="small ink2">(${doneList.length})</span></h3>${doneList.map(nutRow).join("")}` : "";
     const suppRows = supps.map((s) => { const full = suppTaken(day, s) >= suppDoses(s); return `<div class="supp ${full ? "on" : ""}">
@@ -607,6 +647,7 @@
           <div class="stack">
             <div class="card">
               <div class="card-head"><h2>מה עוד חסר ${isToday ? "היום" : ""} <span class="small ink2">(${missing.length})</span></h2><button class="btn sm ghost" data-act="show-all-nutrients">טבלה</button></div>
+              <div class="legend" style="margin:0 0 8px"><span><i style="background:var(--bad)"></i>דחוף היום</span><span><i style="background:var(--warn)"></i>להשלים (נזק רק אם מתמשך)</span><span><i style="background:var(--yellow)"></i>סביר, עדיין חסר</span><span><i style="background:var(--good)"></i>הושג</span></div>
               ${missing.length ? floatRows.join("") : `<p class="help">הכול הושלם.</p>`}
               ${doneRows}
             </div>
@@ -631,8 +672,11 @@
     const x = gaps(App.date).find((y) => y.key === key), day = getDay(App.date);
     const contributions = day.meals.map((m) => ({ name: m.name, v: m.nutrients[key] || 0, qty: `${m.qty} ${m.unit}` })).filter((c) => c.v > 0).sort((a, b) => b.v - a.v);
     const suppC = App.state.supplements.map((s) => ({ name: `${s.name} (${suppTaken(day, s)}/${suppDoses(s)})`, v: (suppNutrients(s)[key] || 0) * suppFraction(day, s) })).filter((c) => c.v > 0);
-    openModal(`<h2>${x.status === "good" ? CHECK : ""}${x.he}</h2>
-      <div class="tile-main"><div class="big num" style="font-size:1.6rem;font-weight:700">${fmt(x.v)} <small class="ink2" style="font-size:.9rem;font-weight:500">/ ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, x.status, 64)}</div>
+    const u = urgencyOf(x, App.date), plan = planOf(x, App.date), meta = NUT_BY[key];
+    openModal(`<h2>${x.status === "good" ? CHECK : ""}${x.he} ${urgencyPill(u)}</h2>
+      <div class="tile-main"><div class="big num" style="font-size:1.6rem;font-weight:700">${fmt(x.v)} <small class="ink2" style="font-size:.9rem;font-weight:500">/ ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, u.level, 64)}</div>
+      ${plan ? `<div class="plan plan-${plan.cls}" style="margin-top:6px">${esc(plan.text)}${plan.parts.length ? ` — עוד ${fmt(plan.parts.reduce((a, p) => a + p.v, 0))} ${x.unit} מהיחידות שנותרו` : ""}</div>` : ""}
+      ${meta.info ? `<div class="note info" style="margin-top:10px"><div><b>למה זה חשוב ומאיפה:</b> ${esc(meta.info)}</div></div>` : ""}
       ${barHtml(x, true)}<div class="legend"><span><i style="background:var(--accent)"></i>ממזון</span><span><i style="background:var(--accent-2)"></i>מתוספים</span></div>
       <div class="row between" style="margin-top:8px">${x.ul || x.kind === "limit" ? `<span class="help">גבול ${x.kind === "limit" ? "יומי" : "עליון בטוח (UL)"}: ${fmt(x.kind === "limit" ? x.t : x.ul)} ${x.unit}${NUT_BY[x.key].ulNote ? " · " + esc(NUT_BY[x.key].ulNote) : ""}</span>` : `<span class="help">לרכיב זה אין גבול עליון מוגדר.</span>`}${ulGauge(x)}</div>
       <h3 style="margin-top:14px">מאיפה זה הגיע</h3>
@@ -695,7 +739,7 @@
     const g = gaps(App.date);
     openModal(`<h2>כל הרכיבים — ${esc(fmtDate(App.date))}</h2>
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>רכיב</th><th class="num">הושג</th><th class="num">יעד</th><th class="num">%</th><th></th></tr></thead><tbody>
-      ${g.filter((x) => x.t > 0).map((x) => `<tr data-act="nutrient-detail" data-key="${x.key}" style="cursor:pointer"><td>${x.status === "good" ? CHECK : ""}${x.he}</td><td class="num">${fmt(x.v)}</td><td class="num">${fmt(x.t)} ${x.unit}</td><td>${donut(x.pct, x.status, 34)}</td><td>${statusPill(x.status)}</td></tr>`).join("")}
+      ${g.filter((x) => x.t > 0).map((x) => `<tr data-act="nutrient-detail" data-key="${x.key}" style="cursor:pointer"><td>${x.status === "good" ? CHECK : ""}${x.he}</td><td class="num">${fmt(x.v)}</td><td class="num">${fmt(x.t)} ${x.unit}</td><td>${donut(x.pct, urgencyOf(x, App.date).level, 34)}</td><td>${urgencyPill(urgencyOf(x, App.date))}</td></tr>`).join("")}
       </tbody></table></div>
       <p class="help" style="margin-top:8px">נתרן הוא מגבלה (לא יעד): ירוק = מתחת למגבלה.</p>
       <div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
