@@ -174,19 +174,22 @@
     return list;
   }
   function normalizeHe(s) { return String(s || "").replace(/[֑-ׇ]/g, "").replace(/['"״׳]/g, "").trim().toLowerCase(); }
-  function searchFoods(q, limit = 8) {
+  function scoreFood(f, nq) {
+    const names = [f.name].concat(f.aliases || []).map(normalizeHe);
+    let best = 0;
+    names.forEach((n) => { if (n === nq) best = Math.max(best, 100); else if (n.startsWith(nq)) best = Math.max(best, 80); else if (n.includes(nq)) best = Math.max(best, 50); else if (nq.includes(n) && n.length > 1) best = Math.max(best, 30 + n.length); });
+    return best;
+  }
+  function rankFoods(q) {
     const nq = normalizeHe(q);
     if (!nq) return [];
-    const score = (f) => {
-      const names = [f.name].concat(f.aliases || []).map(normalizeHe);
-      let best = 0;
-      names.forEach((n) => { if (n === nq) best = Math.max(best, 100); else if (n.startsWith(nq)) best = Math.max(best, 80); else if (n.includes(nq)) best = Math.max(best, 50); else if (nq.includes(n) && n.length > 1) best = Math.max(best, 30 + n.length); });
-      return best;
-    };
-    const personal = App.state.foods.map(normFood).map((f) => ({ f, s: score(f) + (f.favorite ? 5 : 0) + 8 })).filter((x) => x.s > 8);
-    const generic = GENERIC.map((f) => ({ f, s: score(f) })).filter((x) => x.s > 0);
-    return personal.concat(generic).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.f);
+    const personal = App.state.foods.map(normFood).map((f) => ({ f, raw: scoreFood(f, nq) })).filter((x) => x.raw > 0).map((x) => ({ f: x.f, raw: x.raw, s: x.raw + (x.f.favorite ? 5 : 0) + 8 }));
+    const generic = GENERIC.map((f) => ({ f, raw: scoreFood(f, nq) })).filter((x) => x.raw > 0).map((x) => ({ f: x.f, raw: x.raw, s: x.raw }));
+    return personal.concat(generic).sort((a, b) => b.s - a.s);
   }
+  function searchFoods(q, limit = 8) { return rankFoods(q).slice(0, limit).map((x) => x.f); }
+  // Confident only when the name (or an alias) matches exactly or as a prefix — never a loose "contains".
+  function bestMatch(q) { const r = rankFoods(q)[0]; return r ? { food: r.f, confident: r.raw >= 80 } : { food: null, confident: false }; }
   // "שקשוקה 1", "לחם 2 פרוסות", "2 פרוסות לחם מלא", "יוגורט 150 גרם"
   function parseQuick(text) {
     const tokens = text.trim().split(/\s+/).filter(Boolean);
@@ -626,12 +629,13 @@
     try {
       const items = await window.NutriChat.parseMeal(App, text, photo);
       const rows = items.map((it, i) => {
-        const m = searchFoods(String(it.name || ""), 1)[0];
+        const m = bestMatch(String(it.name || ""));
         const unit = UNIT_WORDS[it.unit] || it.unit || "";
-        return { i, name: it.name, qty: Number(it.qty) || 1, unit, food: m };
+        const food = m.confident && it.known !== false ? m.food : null;
+        return { i, name: it.name, qty: Number(it.qty) || 1, unit, food, near: !food && m.food ? m.food : null };
       });
       window._aiRows = rows;
-      out.innerHTML = rows.length ? `<div class="list">${rows.map((r) => `<div class="item"><input type="checkbox" id="ai-ok-${r.i}" ${r.food ? "checked" : ""}><div class="grow"><div class="title">${esc(r.name)} → ${r.food ? esc(r.food.name) : "<span class='td-bad'>לא זוהה</span>"}</div><div class="meta">${r.qty} ${esc(r.unit)}${r.food ? " · " + Math.round(gramsFor(r.food, r.qty, r.unit)) + " גרם" : " · הוסיפי ידנית"}</div></div></div>`).join("")}</div><div class="actions"><button class="btn primary" data-act="ai-confirm">הוסיפי את המסומנים ליומן</button></div>` : `<p class="td-bad">לא זוהו פריטים.</p>`;
+      out.innerHTML = rows.length ? `<div class="list">${rows.map((r) => `<div class="item"><input type="checkbox" id="ai-ok-${r.i}" ${r.food ? "checked" : "disabled"}><div class="grow"><div class="title">${esc(r.name)}${r.food ? " → " + esc(r.food.name) : " <span class='td-bad'>· לא זוהה</span>"}</div><div class="meta">${r.qty} ${esc(r.unit)}${r.food ? " · " + Math.round(gramsFor(r.food, r.qty, r.unit)) + " גרם" : r.near ? " · הקרוב ביותר במאגר: " + esc(r.near.name) + " (לא נבחר אוטומטית)" : ""}</div></div>${r.food ? "" : `<button class="btn sm" data-act="ai-new-food" data-name="${esc(r.name)}" data-unit="${esc(r.unit)}">צרי מאכל</button>`}</div>`).join("")}</div><div class="actions"><button class="btn primary" data-act="ai-confirm">הוסיפי את המסומנים ליומן</button></div>` : `<p class="td-bad">לא זוהו פריטים.</p>`;
     } catch (e) { out.innerHTML = `<p class="td-bad">${esc(window.NutriChat.errorText(e))}</p>`; }
   }
 
@@ -654,8 +658,8 @@
     </div>`;
   }
   const MAIN_FIELDS = ["kcal", "protein", "carbs", "fiber", "fat", "iron", "calcium", "sodium"];
-  function foodModal(f, kind) {
-    const isNew = !f;
+  function foodModal(f, kind, forceNew) {
+    const isNew = !f || !!forceNew;
     f = f ? normFood(f) : { id: uid("f"), name: "", aliases: [], kind: kind || "product", per100: {}, portions: [{ label: kind === "recipe" ? "מנה" : "מנה", g: 100 }], favorite: true, ingredients: [], servings: 1 };
     window._editFood = f;
     if (f.kind === "recipe") return recipeModal(f, isNew);
@@ -1055,6 +1059,7 @@
     "ai-confirm": () => { (window._aiRows || []).forEach((r) => { const cb = $("ai-ok-" + r.i); if (cb && cb.checked && r.food) addMealEntry(App.date, r.food, r.qty, unitOptions(r.food).includes(r.unit) ? r.unit : null); }); closeModal(); render(); toast("נוסף ליומן"); },
     // foods
     "food-new": (el) => foodModal(null, el.dataset.kind),
+    "ai-new-food": (el) => { const u = el.dataset.unit; const g = u === "כוס" ? 200 : u === "כף" ? 15 : u === "כפית" ? 5 : u === "פרוסה" ? 30 : 100; foodModal({ id: uid("f"), name: el.dataset.name, aliases: [], kind: "product", per100: {}, portions: [{ label: u && u !== "גרם" ? u : "מנה", g }], favorite: true }, "product", true); },
     "food-edit": (el) => foodModal(App.state.foods.find((f) => f.id === el.dataset.id)),
     "food-fav": (el) => { const f = App.state.foods.find((x) => x.id === el.dataset.id); f.favorite = !f.favorite; saveFood(f); render(); },
     "food-save": () => { const f = collectFoodForm(); if (!f.name) { toast("צריך שם"); return; } upsertFood(f); closeModal(); render(); },
