@@ -313,6 +313,16 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .chip.done { background: var(--good-soft); border-color: transparent; color: var(--ink); display: inline-flex; align-items: center; }
 .tbl .donut { display: inline-block; vertical-align: middle; }
 
+/* ---------- upper-limit gauge ---------- */
+.ulg { display: flex; flex-direction: column; align-items: center; gap: 0; flex-shrink: 0; min-width: 100px; }
+.ulg svg { display: block; }
+.ulg-text { font-size: 0.7rem; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ulg.near .ulg-text, .ulg.over .ulg-text { color: var(--bad); font-weight: 700; }
+.ulg.none { justify-content: center; }
+.nut-row.row-near, .nut-row.row-over { background: var(--bad-soft); margin-inline: -8px; padding-inline: 8px; border-radius: var(--radius-sm); }
+@media (max-width: 480px) { .ulg { min-width: 84px; } }
+.ulg.soft .ulg-text { color: var(--warn); font-weight: 600; }
+
 </style>
 
 <div id="lock" class="lock" hidden>
@@ -552,19 +562,19 @@ window.NUTRIENTS = [
   { key: "carbs",     he: "פחמימות",        unit: "גרם",   group: "macro",   ul: null, kind: "target" },
   { key: "fiber",     he: "סיבים",          unit: "גרם",   group: "macro",   ul: null, kind: "target" },
   { key: "fat",       he: "שומן",           unit: "גרם",   group: "macro",   ul: null, kind: "guide" },
-  { key: "iron",      he: "ברזל",           unit: "מ\"ג",  group: "mineral", ul: 45,   ulSoft: true, kind: "target", hero: true },
+  { key: "iron",      he: "ברזל",           unit: "מ\"ג",  group: "mineral", ul: 45,   ulSoft: true, ulNote: "הגבול נקבע לאדם בריא; בטיפול בחסר ברזל לפי הנחיית רופא/ה מינון גבוה יותר מקובל.", kind: "target", hero: true },
   { key: "calcium",   he: "סידן",           unit: "מ\"ג",  group: "mineral", ul: 2500, kind: "target" },
   { key: "iodine",    he: "יוד",            unit: "מק\"ג", group: "mineral", ul: 1100, kind: "target" },
   { key: "zinc",      he: "אבץ",            unit: "מ\"ג",  group: "mineral", ul: 40,   kind: "target" },
   { key: "magnesium", he: "מגנזיום",        unit: "מ\"ג",  group: "mineral", ul: null, kind: "target" },
   { key: "potassium", he: "אשלגן",          unit: "מ\"ג",  group: "mineral", ul: null, kind: "target" },
   { key: "sodium",    he: "נתרן",           unit: "מ\"ג",  group: "mineral", ul: 2300, kind: "limit" },
-  { key: "folate",    he: "חומצה פולית",    unit: "מק\"ג", group: "vitamin", ul: 1000, kind: "target" },
+  { key: "folate",    he: "חומצה פולית",    unit: "מק\"ג", group: "vitamin", ul: 1000, ulSoft: true, ulNote: "הגבול חל רק על חומצה פולית סינתטית (תוספים/מזון מועשר); פולאט טבעי מקטניות וירקות בטוח בכל כמות.", kind: "target" },
   { key: "vitD",      he: "ויטמין D",       unit: "מק\"ג", group: "vitamin", ul: 100,  kind: "target" },
   { key: "b12",       he: "ויטמין B12",     unit: "מק\"ג", group: "vitamin", ul: null, kind: "target" },
   { key: "b6",        he: "ויטמין B6",      unit: "מ\"ג",  group: "vitamin", ul: 100,  kind: "target" },
   { key: "vitC",      he: "ויטמין C",       unit: "מ\"ג",  group: "vitamin", ul: 2000, kind: "target" },
-  { key: "vitA",      he: "ויטמין A",       unit: "מק\"ג", group: "vitamin", ul: 3000, kind: "target" },
+  { key: "vitA",      he: "ויטמין A",       unit: "מק\"ג", group: "vitamin", ul: 3000, ulSoft: true, ulNote: "הגבול חל על רטינול (מהחי/תוספים). בטא-קרוטן מגזר, בטטה וירקות כתומים בטוח ואינו נספר לגבול.", kind: "target" },
   { key: "choline",   he: "כולין",          unit: "מ\"ג",  group: "vitamin", ul: 3500, kind: "target" },
   { key: "omega3",    he: "אומגה-3 (DHA+EPA)", unit: "מ\"ג", group: "vitamin", ul: null, kind: "target" },
 ];
@@ -1341,6 +1351,26 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const label = Math.round((pct || 0) * 100);
     return `<svg class="donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" direction="ltr" aria-label="${label}%"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="5"></circle><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(c * p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"></circle><text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-size="${size >= 44 ? 11 : 9}" font-weight="700" fill="var(--ink)">${label}%</text></svg>`;
   }
+  // Small line gauge: where today's intake sits between 0 and the safe upper limit (UL).
+  function ulGauge(x) {
+    const lim = x.kind === "limit" ? x.t : x.ul;
+    if (!lim) return `<div class="ulg none"><span class="help">ללא גבול עליון</span></div>`;
+    const r = x.v / lim, W = 100, L = 6, R = 94, y = 9;
+    const px = (f) => L + clamp(f, 0, 1) * (R - L);
+    const tp = x.kind === "limit" ? px(0.6) : px(x.t / lim), cp = px(0.85);
+    const soft = !!NUT_BY[x.key].ulSoft;
+    let lvl = r >= 1 ? "over" : r >= 0.85 ? "near" : r >= (x.kind === "limit" ? 0.6 : x.t / lim) ? "mid" : "ok";
+    if (soft && (lvl === "over" || lvl === "near")) lvl = "soft";
+    const label = r >= 1 ? (soft ? "מעל הגבול (ראי הערה)" : "מעל הגבול!") : `${Math.round(r * 100)}% מהגבול`;
+    return `<div class="ulg ${lvl}" data-tip="${esc(`${x.he}: ${fmt(x.v)} מתוך גבול ${fmt(lim)} ${x.unit} ליום (${Math.round(r * 100)}%)`)}">
+      <svg width="${W}" height="18" viewBox="0 0 ${W} 18" direction="ltr" aria-hidden="true">
+        <line x1="${L}" x2="${tp}" y1="${y}" y2="${y}" stroke="var(--good)" stroke-width="4" stroke-linecap="round" opacity=".45"></line>
+        <line x1="${tp}" x2="${cp}" y1="${y}" y2="${y}" stroke="var(--warn)" stroke-width="4" opacity=".5"></line>
+        <line x1="${cp}" x2="${R}" y1="${y}" y2="${y}" stroke="var(--bad)" stroke-width="4" stroke-linecap="round" opacity=".6"></line>
+        <line x1="${R}" x2="${R}" y1="3" y2="15" stroke="var(--bad)" stroke-width="2"></line>
+        <circle cx="${px(r)}" cy="${y}" r="5" fill="${lvl === "over" || lvl === "near" ? "var(--bad)" : lvl === "mid" || lvl === "soft" ? "var(--warn)" : "var(--good)"}" stroke="var(--surface)" stroke-width="2"></circle>
+      </svg><span class="ulg-text">${lvl === "over" || lvl === "near" ? "⚠ " : ""}${label}</span></div>`;
+  }
   function dayTotals(k, opts = {}) {
     const day = App.state.days[k] || { meals: [], supplements_taken: [] };
     const tot = {}; const fromSupp = {};
@@ -1512,14 +1542,18 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     }).join("");
     const noteRows = notes.filter((n) => n.level !== "info" || n.changed).map((n) => `<div class="note ${n.level === "alert" ? "alert" : n.level === "warn" ? "warn" : "info"}">${esc(n.text)}</div>`);
     const overs = g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)}).</div>`)
-      .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)} (הגבול לאדם בריא). בטיפול בחסר ברזל לפי הנחיית רופא/ה זה מקובל; אם לא — כדאי לוודא.</div>`));
+      .concat(g.filter((x) => x.ul && !NUT_BY[x.key].ulSoft && x.v >= x.ul * 0.85 && x.v < x.ul).map((x) => `<div class="note warn"><b>⚠ ${x.he} מתקרב לגבול העליון הבטוח:</b> ${fmt(x.v)} מתוך ${fmt(x.ul)} ${x.unit} (${Math.round((x.v / x.ul) * 100)}%). כדאי לא להוסיף עוד היום.</div>`))
+      .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)}. ${esc(NUT_BY[x.key].ulNote || "")}</div>`));
     const rest = g.filter((x) => x.t > 0 && !HERO.includes(x.key));
     const isDone = (x) => (x.kind === "limit" ? x.status === "good" : x.status === "good");
     const missing = rest.filter((x) => !isDone(x)).sort((a, b) => (a.status === "over" ? -1 : 0) - (b.status === "over" ? -1 : 0) || a.pct - b.pct);
     const doneList = rest.filter(isDone).sort((a, b) => b.pct - a.pct);
-    const nutRow = (x) => `<div class="nut-row" data-act="nutrient-detail" data-key="${x.key}">
+    const nearUL = (x) => x.ul && !NUT_BY[x.key].ulSoft && x.v >= x.ul * 0.85 && x.v < x.ul;
+    const softOver = (x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul;
+    const nutRow = (x) => `<div class="nut-row ${x.status === "over" ? "row-over" : nearUL(x) ? "row-near" : ""}" data-act="nutrient-detail" data-key="${x.key}">
         ${donut(x.pct, x.status, 40)}
-        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
+        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
+        ${isDone(x) || x.status === "over" || nearUL(x) || softOver(x) ? ulGauge(x) : ""}
       </div>`;
     const floatRows = missing.map(nutRow);
     const doneRows = doneList.length ? `<h3 style="margin-top:16px;margin-bottom:4px">${CHECK}הושלם ${isToday ? "היום" : ""} <span class="small ink2">(${doneList.length})</span></h3>${doneList.map(nutRow).join("")}` : "";
@@ -1550,7 +1584,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
             </div>
             <div class="card">
               <div class="card-head"><h2>נאכל ${isToday ? "היום" : ""}</h2><button class="btn sm ghost" data-act="go-tab" data-tab="log">ליומן</button></div>
-              ${day.meals.length ? `<div class="list">${day.meals.map((m) => `<div class="item"><div class="grow"><span class="title">${esc(m.name)}</span> <span class="meta">${m.qty} ${esc(m.unit)} · ${m.time}</span></div><span class="small num ink2">${fmt(m.nutrients.kcal, 0)} קק"ל</span></div>`).join("")}</div>` : `<p class="help">רשמי מה אכלת בטאב היומן, או בשורת ההזנה המהירה.</p>`}
+              ${day.meals.length ? `<div class="list">${day.meals.map((m) => `<div class="item clickable" data-act="meal-detail" data-id="${m.id}"><div class="grow"><span class="title">${esc(m.name)}</span> <span class="meta">${m.qty} ${esc(m.unit)} · ${m.time}</span></div><span class="small num ink2">${fmt(m.nutrients.kcal, 0)} קק"ל · ~${digestion(m).hours} ש'</span></div>`).join("")}</div><p class="help" style="margin-top:6px">לחיצה על ארוחה: זמן עיכול משוער ומתי כדאי לאכול שוב.</p>` : `<p class="help">רשמי מה אכלת בטאב היומן, או בשורת ההזנה המהירה.</p>`}
             </div>
           </div>
         </div>
@@ -1563,11 +1597,52 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     openModal(`<h2>${x.status === "good" ? CHECK : ""}${x.he}</h2>
       <div class="tile-main"><div class="big num" style="font-size:1.6rem;font-weight:700">${fmt(x.v)} <small class="ink2" style="font-size:.9rem;font-weight:500">/ ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, x.status, 64)}</div>
       ${barHtml(x, true)}<div class="legend"><span><i style="background:var(--accent)"></i>ממזון</span><span><i style="background:var(--accent-2)"></i>מתוספים</span></div>
-      ${x.ul ? `<p class="help">גבול עליון בטוח: ${fmt(x.ul)} ${x.unit}</p>` : ""}
+      <div class="row between" style="margin-top:8px">${x.ul || x.kind === "limit" ? `<span class="help">גבול ${x.kind === "limit" ? "יומי" : "עליון בטוח (UL)"}: ${fmt(x.kind === "limit" ? x.t : x.ul)} ${x.unit}${NUT_BY[x.key].ulNote ? " · " + esc(NUT_BY[x.key].ulNote) : ""}</span>` : `<span class="help">לרכיב זה אין גבול עליון מוגדר.</span>`}${ulGauge(x)}</div>
       <h3 style="margin-top:14px">מאיפה זה הגיע</h3>
       ${contributions.length || suppC.length ? `<div class="list">${contributions.map((c) => `<div class="item"><div class="grow"><span class="title">${esc(c.name)}</span> <span class="meta">${esc(c.qty)}</span></div><span class="num">${fmt(c.v)}</span></div>`).join("")}${suppC.map((c) => `<div class="item"><div class="grow"><span class="title">${esc(c.name)}</span> <span class="meta">תוסף</span></div><span class="num">${fmt(c.v)}</span></div>`).join("")}</div>` : `<p class="help">עדיין כלום.</p>`}
       ${x.remaining > 0 && x.kind !== "limit" ? `<h3 style="margin-top:14px">מה ישלים את הפער (${fmt(x.remaining)} ${x.unit})</h3><p class="help">כמה צריך מכל מאכל כדי לסגור את הפער. המאכלים שלך ראשונים; הצעות מותאמות לסוג התזונה בפרופיל.</p>
       <div class="list">${closers(key, x.remaining).map((c) => `<div class="item"><div class="grow"><div class="title">${c.personal ? "★ " : ""}${esc(c.food.name)}</div><div class="meta">${esc(c.text)}</div></div><button class="btn sm" data-act="quick-add" data-food="${c.food.id}" title="הוספת מנה רגילה ליומן">אכלתי</button></div>`).join("") || `<p class="help">אין במאגר מאכל מתאים.</p>`}</div>` : ""}
+      <div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
+  }
+  // Rough gastric-emptying estimate: size, fat, fiber and liquidity of the meal.
+  function digestion(m) {
+    const n = m.nutrients || {}, kcal = n.kcal || 0, fat = n.fat || 0, fiber = n.fiber || 0, protein = n.protein || 0;
+    const liquid = (n.water || 0) > (m.grams || 1) * 0.6;
+    let h = kcal < 120 ? 1 : kcal < 300 ? 1.5 : kcal < 500 ? 2.5 : kcal < 750 ? 3 : 4;
+    if (fat >= 20) h += 0.5; if (fat >= 35) h += 0.5;
+    if (fiber >= 10) h += 0.5;
+    if (protein >= 25) h += 0.5;
+    if (liquid) h = Math.max(0.5, h - 1);
+    h = Math.min(5, Math.round(h * 2) / 2);
+    const net = Math.max(0, (n.carbs || 0) - (n.fiber || 0));
+    const gl = net < 20 ? "נמוך" : net < 45 ? "בינוני" : "גבוה";
+    return { hours: h, netCarbs: net, glLabel: gl, liquid };
+  }
+  function addHours(t, h) { const [hh, mm] = (t || "12:00").split(":").map(Number); const tot = hh * 60 + mm + Math.round(h * 60); return `${pad(Math.floor(tot / 60) % 24)}:${pad(tot % 60)}`; }
+  function mealDetail(id) {
+    const m = getDay(App.date).meals.find((x) => x.id === id); if (!m) return;
+    const d = digestion(m), n = m.nutrients || {}, t = targetsFor();
+    const cap = t.carbsPerMeal;
+    const glNote = d.glLabel === "גבוה" ? "עומס פחמימות גבוה — בארוחה הבאה כדאי חלבון/ירקות בלי הרבה פחמימה, והליכה קצרה אחרי האוכל מרככת את העלייה בסוכר." : d.glLabel === "בינוני" ? "עומס פחמימות בינוני — רווח של 2–3 שעות לפני ארוחה פחמימתית נוספת." : "עומס פחמימות נמוך — לא צפוי פיק משמעותי; אפשר לאכול שוב כשרעבה.";
+    openModal(`<h2>${esc(m.name)}</h2>
+      <p class="ink2 small">${m.time} · ${m.qty} ${esc(m.unit)} · ${m.grams} גרם</p>
+      <div class="mini-list" style="margin-top:10px"><div><span>קלוריות</span><b class="num">${fmt(n.kcal, 0)}</b></div><div><span>חלבון</span><b class="num">${fmt(n.protein)} גרם</b></div><div><span>פחמימות (נטו)</span><b class="num">${fmt(n.carbs)} (${fmt(d.netCarbs)}) גרם</b></div><div><span>סיבים</span><b class="num">${fmt(n.fiber)} גרם</b></div><div><span>שומן</span><b class="num">${fmt(n.fat)} גרם</b></div><div><span>ברזל</span><b class="num">${fmt(n.iron)} מ"ג</b></div></div>
+      <div class="card soft" style="margin-top:12px">
+        <div class="row between"><b>זמן עיכול משוער</b><span class="score num">~${d.hours} שעות</span></div>
+        <p class="small" style="margin-top:4px">${d.liquid ? "משקה/מאכל נוזלי — מתפנה מהקיבה מהר." : "הערכה לפי גודל הארוחה, שומן, חלבון וסיבים (שומן וסיבים מאטים את ריקון הקיבה)."}</p>
+        <p style="margin-top:8px"><b>ארוחה מעמיסה הבאה: מ-${addHours(m.time, d.hours)} בערך.</b> חטיף קל (פרי, ירקות, אגוזים) אפשר גם קודם.</p>
+      </div>
+      <div class="note ${d.glLabel === "גבוה" ? "warn" : "info"}" style="margin-top:10px"><div><b>סוכר בדם:</b> ${esc(glNote)}${cap ? ` תקרה לארוחה לפי ההמלצות שלך: ${cap} גרם פחמימה${d.netCarbs > cap ? " — הארוחה הזו מעל התקרה." : "."}` : ""}</div></div>
+      <details style="margin-top:10px"><summary class="help" style="cursor:pointer">עוד שיקולים לרווח בין ארוחות (מעבר לסוכר)</summary>
+        <ul class="small" style="padding-inline-start:18px;margin:8px 0;line-height:1.6">
+          <li><b>ברזל:</b> ${(n.iron || 0) >= 2 ? "הארוחה עשירה בברזל — " : ""}להרחיק קפה/תה וסידן (חלב צמחי מועשר, טחינה בכמות גדולה) בערך שעתיים ממקור ברזל או מכדור הברזל; ויטמין C באותה ארוחה משפר ספיגה.</li>
+          <li><b>צרבת ורפלוקס (נפוץ בהריון):</b> ארוחות קטנות יותר ותכופות, לא לשכב 2–3 שעות אחרי ארוחה גדולה, פחות שומן ומטוגן בערב.</li>
+          <li><b>ירידות סוכר ובחילה:</b> לא לעבור יותר מ-4–5 שעות בלי לאכול בשעות הערות; חטיף קטן עם חלבון לפני השינה מייצב את הבוקר.</li>
+          <li><b>שובע ואנרגיה:</b> חלבון וסיבים בכל ארוחה מאריכים שובע ומרככים את עקומת הסוכר; פחמימה לבד (פרי, לחם) מתעכלת מהר.</li>
+          <li><b>נפיחות ועצירות:</b> קטניות ורוטב עגבניות עלולים לגרום גזים — מרווח ומים עוזרים; אם יש עצירות, סיבים + נוזלים + תנועה.</li>
+        </ul>
+        <p class="help">ההערכות כלליות ומבוססות על ספרות; הגוף שלך יכול להגיב אחרת. אם יש סוכרת הריון — ההנחיות של הצוות המטפל גוברות.</p>
+      </details>
       <div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
   }
   function allNutrientsModal() {
@@ -2069,6 +2144,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     "modal-bg": (el, e) => { if (e.target === el) closeModal(); },
     "nutrient-detail": (el) => nutrientDetail(el.dataset.key),
     "show-all-nutrients": () => allNutrientsModal(),
+    "meal-detail": (el) => mealDetail(el.dataset.id),
     "supp-dose": (el) => { const day = getDay(App.date); const s = App.state.supplements.find((x) => x.id === el.dataset.id); if (!s) return; const i = Number(el.dataset.i), c = suppTaken(day, s); setSuppTaken(day, s, i < c ? i : i + 1); saveDay(App.date); render(); },
     "take-all-supps": () => { const day = getDay(App.date); App.state.supplements.filter((s) => s.active !== false).forEach((s) => setSuppTaken(day, s, suppDoses(s))); saveDay(App.date); render(); },
     "quick-add": (el) => { const f = foodById(el.dataset.food); if (!f) return; closeModal(); if (App.tab !== "log") { addMealEntry(App.date, f, 1, f.portions[0] ? f.portions[0].label : "גרם"); toast(`נוסף: ${f.name} (${f.portions[0] ? f.portions[0].label : "100 גרם"})`); render(); } else pickFood(f, 1); },

@@ -309,3 +309,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .nut-row:hover { background: var(--surface-2); margin-inline: -8px; padding-inline: 8px; border-radius: var(--radius-sm); }
 .chip.done { background: var(--good-soft); border-color: transparent; color: var(--ink); display: inline-flex; align-items: center; }
 .tbl .donut { display: inline-block; vertical-align: middle; }
+
+/* ---------- upper-limit gauge ---------- */
+.ulg { display: flex; flex-direction: column; align-items: center; gap: 0; flex-shrink: 0; min-width: 100px; }
+.ulg svg { display: block; }
+.ulg-text { font-size: 0.7rem; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ulg.near .ulg-text, .ulg.over .ulg-text { color: var(--bad); font-weight: 700; }
+.ulg.none { justify-content: center; }
+.nut-row.row-near, .nut-row.row-over { background: var(--bad-soft); margin-inline: -8px; padding-inline: 8px; border-radius: var(--radius-sm); }
+@media (max-width: 480px) { .ulg { min-width: 84px; } }
+.ulg.soft .ulg-text { color: var(--warn); font-weight: 600; }
