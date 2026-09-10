@@ -501,6 +501,14 @@
     $("sync-text").textContent = App.mode === "cloud" ? "מסונכרן בענן" : "מצב מקומי — רק במכשיר הזה";
   }
   function statusPill(st) { const m = { good: ["st-good", "הושג"], warn: ["st-warn", "בדרך"], bad: ["st-bad", "חסר"], over: ["st-over", "מעל הגבול"] }[st]; return `<span class="status-pill ${m[0]}">${m[1]}</span>`; }
+  function combinedPill(x, k) {
+    const u = urgencyOf(x, k), plan = planOf(x, k);
+    if (u.level === "good" || u.level === "over" || x.kind === "limit") return urgencyPill(u);
+    const urg = u.level === "red" ? "דחוף" : u.level === "orange" ? "להשלים" : "סביר";
+    const pl = !plan ? "" : plan.cls === "supp" ? "יושלם מתוספים" : plan.cls === "food" ? "דרוש תזונה" : `עם תוספים ${Math.round(plan.projected * 100)}% והשאר תזונה`;
+    const cls = { yellow: "st-yellow", orange: "st-warn", red: "st-bad" }[u.level] || "st-info";
+    return `<span class="status-pill ${cls}">${esc(urg + (pl ? ", " + pl : ""))}</span>`;
+  }
   function urgencyPill(u) { const cls = { good: "st-good", yellow: "st-yellow", orange: "st-warn", red: "st-bad", over: "st-over" }[u.level] || "st-info"; return `<span class="status-pill ${cls}">${esc(u.label)}</span>`; }
   function barHtml(x, thin) {
     const foodPct = clamp(((x.v - x.supp) / (x.t || 1)) * 100, 0, 100), suppPct = clamp((x.supp / (x.t || 1)) * 100, 0, 100 - foodPct);
@@ -608,11 +616,10 @@
       const extra = k === "carbs" && t.carbsPerMeal ? `<span>עד ${t.carbsPerMeal} גרם לארוחה</span>` : k === "iron" && ctx.labs.ferritin ? `<span>פריטין ${ctx.labs.ferritin.value}</span>` : "";
       const u = urgencyOf(x, App.date), plan = planOf(x, App.date);
       return `<div class="tile" data-act="nutrient-detail" data-key="${k}">
-        <div class="name"><span>${x.status === "good" ? CHECK : ""}${x.he}</span>${urgencyPill(u)}</div>
+        <div class="name"><span>${x.status === "good" ? CHECK : ""}${x.he}</span>${combinedPill(x, App.date)}</div>
         <div class="tile-main"><div class="big num">${fmt(x.v)}<small> / ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, u.level, 56)}</div>
         ${barHtml(x, true)}
         <div class="sub"><span>${x.remaining > 0 ? `נשאר ${fmt(x.remaining)}` : `+${fmt(x.v - x.t)} מעל היעד`}</span>${x.supp ? `<span>מתוספים ${fmt(x.supp)}</span>` : ""}${extra}</div>
-        ${plan ? `<div class="plan plan-${plan.cls}">${esc(plan.text)}</div>` : ""}
       </div>`;
     }).join("");
     const noteRows = notes.filter((n) => n.level !== "info" || n.changed).map((n) => `<div class="note ${n.level === "alert" ? "alert" : n.level === "warn" ? "warn" : "info"}">${esc(n.text)}</div>`);
@@ -627,7 +634,8 @@
     const softOver = (x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul;
     const nutRow = (x) => { const u = urgencyOf(x, App.date), plan = planOf(x, App.date); return `<div class="nut-row ${x.status === "over" ? "row-over" : nearUL(x) ? "row-near" : ""}" data-act="nutrient-detail" data-key="${x.key}">
         ${donut(x.pct, u.level, 40)}
-        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : !isDone(x) ? ` ${urgencyPill(u)}` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div>${plan ? `<div class="plan plan-${plan.cls}">${esc(plan.text)}</div>` : ""}</div>
+        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
+        ${!isDone(x) && x.status !== "over" && !nearUL(x) && !softOver(x) ? `<div class="row-status">${combinedPill(x, App.date)}</div>` : ""}
         ${isDone(x) || x.status === "over" || nearUL(x) || softOver(x) ? ulGauge(x) : ""}
       </div>`; };
     const floatRows = missing.map(nutRow);
