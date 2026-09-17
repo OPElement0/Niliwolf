@@ -168,8 +168,16 @@ in the session scratchpad during work; recreate as needed (see git history of th
 
 A **new bake with changed ingredients** (e.g. the roll with ground lentils + vital gluten) gets a **new
 food card**, never an overwrite, so past days stay correct. Overwrite only to fix a card that was
-computed wrongly for the same recipe. Either way, logged meals keep their snapshot and do not change
-retroactively — say so when reporting a card fix.
+computed wrongly for the same recipe. Logged meals keep their snapshot, so a card fix does not change
+past days by itself — say so when reporting one.
+
+**Rewriting past records after a card fix** (done 2026-09-17 for `f_decaf_oat` and
+`f_choc_chip_cookies`): only for cards corrected because they were *wrong*, never for a card whose
+portion legitimately changed over time — the 10.9 rolls were smaller (70 g) by her explicit decision and
+must not be recomputed against the 160 g card. For each affected meal recompute exactly as the page
+does: `grams = qty × portion` (the count she reported is the truth, not the stored grams), then
+`nutrients = per100 × grams / 100`. Write the whole day doc back with `if_version`, and report the
+per-day delta for every nutrient that moved.
 
 ## 8. Open items (as of 2026-09-17)
 
