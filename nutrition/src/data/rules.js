@@ -5,11 +5,19 @@
 // level: "info" | "warn" | "alert"
 window.RULES = [
   {
+    // Protein in pregnancy is computed from the PRE-pregnancy weight (the gestational gain is not
+    // lean mass that needs feeding), at 1.2 g/kg, plus a fixed 25 g for the fetus, placenta and the
+    // extra maternal tissue from the second trimester on. Using the current weight at 1.1 g/kg, as
+    // this rule did until 2026-09-17, under-stated the target by roughly 25 g.
     id: "protein_by_weight",
-    when: (c) => c.weightKg > 0,
-    adjust: (t, c) => { t.protein = Math.max(t.protein, Math.round(c.weightKg * 1.1)); },
-    note: () => "",
-    level: "info",
+    when: (c) => (c.prepregWeightKg || c.weightKg) > 0,
+    adjust: (t, c) => {
+      const kg = c.prepregWeightKg || c.weightKg;
+      const extra = (c.trimester || 2) >= 2 ? 25 : 0;
+      t.protein = Math.max(t.protein, Math.round(kg * 1.2 + extra));
+    },
+    note: (c) => (c.prepregWeightKg ? "" : "אין משקל לפני ההריון בפרופיל — יעד החלבון מחושב מהמשקל הנוכחי, וזו הערכה גבוהה מדי."),
+    level: "warn",
   },
   {
     id: "iron_low",
@@ -66,9 +74,18 @@ window.RULES = [
   {
     id: "vegetarian",
     when: (c) => c.dietType === "vegetarian" || c.dietType === "vegan",
-    adjust: (t) => { t.iron = Math.min(45, Math.round(t.iron * 1.8)); t.zinc = Math.round(t.zinc * 1.5); },
+    // Plant protein is digested and used 10-20% less efficiently than animal protein, so the target
+    // carries a 1.15 factor. B12 from a once-a-day bolus saturates intrinsic factor around 1.5-2 mcg,
+    // so the vegan target is the 25 mcg supplement dose, not the 2.6 mcg RDA that assumes food spread
+    // through the day — a 25 mcg tablet is not "10x the target", it is one target.
+    adjust: (t) => {
+      t.iron = Math.min(45, Math.round(t.iron * 1.8));
+      t.zinc = Math.round(t.zinc * 1.5);
+      t.protein = Math.round(t.protein * 1.15);
+      t.b12 = Math.max(t.b12, 25);
+    },
     note: (c) => c.dietType === "vegan"
-      ? "טבעונות: יעד ברזל ואבץ מוגדל (ספיגה נמוכה מהצומח); B12, ויטמין D, DHA מאצות וסידן — בעיקר מתוספים/מזון מועשר."
+      ? "טבעונות: יעד ברזל, אבץ וחלבון מוגדל (ספיגה ועיכוליות נמוכות יותר מהצומח); יעד B12 הוא מינון תוסף (25 מק\"ג) ולא ה-RDA ממזון; ויטמין D, DHA מאצות וסידן — בעיקר מתוספים/מזון מועשר."
       : "צמחונות: יעד ברזל ואבץ מוגדל (ספיגה נמוכה מהצומח); לשים לב ל-B12 ו-DHA.",
     level: "info",
   },

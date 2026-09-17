@@ -385,5 +385,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .chart .gl-walk { fill: var(--accent-2); opacity: 0.85; }
 .chart .gl-gluc { fill: var(--accent-2); stroke: var(--surface); stroke-width: 1.5; cursor: help; }
 .gl-carbs .mini-list > div { align-items: flex-start; }
+.thin-flag { font-size: 0.72rem; font-weight: 600; color: var(--ink-2); background: var(--surface-2); border-radius: 999px; padding: 1px 7px; margin-inline-start: 5px; cursor: help; white-space: nowrap; }
 .ulg.gl-total { min-width: 250px; }
 @media (max-width: 480px) { .ulg.gl-total { min-width: 250px; } }

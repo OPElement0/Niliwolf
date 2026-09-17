@@ -179,6 +179,26 @@ does: `grams = qty × portion` (the count she reported is the truth, not the sto
 `nutrients = per100 × grams / 100`. Write the whole day doc back with `if_version`, and report the
 per-day delta for every nutrient that moved.
 
+## 7c. Nutrient model v2 (2026-09-17, page version 29)
+
+Built from her `dashboard_code_updates.md`. Do not undo any of it without her:
+
+- **Targets.** Protein is `pre-pregnancy kg × 1.2 + 25 g` from trimester 2, then ×1.15 for veganism
+  (57.2 kg → **108 g**, was 71). B12 target for vegans is the supplement dose **25 mcg**, not the 2.6 mcg
+  food RDA. Choline **550** with a 450 floor and a 930 soft ceiling.
+- **Upper limits are form-aware.** `NUTRIENTS[].ulKey` names the form the UL applies to — vitamin A →
+  `retinol`, folate → `folicAcid` — and `statusOf` compares that amount, not the total. Beta-carotene
+  from sweet potato and methylfolate from the prenatal no longer raise "over the limit".
+- **`floor` on a limit nutrient.** Sodium 1500 (pregnancy needs it for plasma volume); below it the
+  status is `low`, which is a real state in the UI, not "good".
+- **11 new nutrients**: dha (target 250), epa, dpa, ala (1.4 g), retinol, betaCarotene, folicAcid,
+  folateNatural, selenium (60), b2 (1.4), vitE (15). `sub` marks a breakdown of a parent nutrient.
+- **Forms are derived, not typed in** (`splitForms`): animal foods carry retinol, plants beta-carotene;
+  folate is natural except fortified cereal. A card that states the split itself wins.
+- **Supplement cards** carry `chem_forms` (per nutrient), `serving` (the label serving, distinct from
+  `doses`) and `active_since`. `partialDose` says what is missing when fewer units than the serving
+  were ticked ("1 of 2 — missing 275 mg choline").
+
 ## 8. Open items (as of 2026-09-17)
 
 - Halva label and choline label still to be sent (values are estimates, `label_notes` say so).
@@ -197,14 +217,13 @@ per-day delta for every nutrient that moved.
   meal-kind heuristic (first before 11:30 = breakfast, largest in 12–16:30 / 17:30–22:30 = main) are not yet
   validated against real glucose readings — once she has a glucometer, compare ◆ points with the curve.
 - Personal GI values changed 2026-09-17: `f_rolls` 62→70, `f_choc_chip_cookies` 55→60 (retroactive, GI is looked up at render time).
-- Nutrient coverage holes (measured over 4.9–17.9, 35 distinct foods): iodine and omega-3 have a value
-  on 1 food out of 35 (1.5% of the period's kcal), B12 on 4, vitamin D on 6, vitamin A on 15, choline on
-  15. Those "deficits" in the Today list are mostly gaps in the food table, not intake. Macros, iron,
-  calcium, sodium, potassium and magnesium have 97–100% coverage.
-- Not tracked at all (asked for in her export spec): saturated fat, ALA/EPA/DHA separately, selenium,
-  phosphorus, copper, vitamins E/K/B1/B2/B3, retinol vs beta-carotene, natural folate vs folic acid.
-  Some are on the prenatal label and live only as free text in `label_notes`.
-- Supplement cards have no `chem_form`, no `active_since` and no `form` field; the export reports them
-  as unknown rather than inferring from the brand. Supplement TIMES do exist (`day.supplement_times`).
-- `settings/targets` stores overrides with no timestamp, so "when was the iron override set" is unknowable.
+- Nutrient coverage is now measured in the page itself (`coverageOf`): the share of the day's food kcal
+  that came from items carrying a value for that nutrient. Below 70% the row gets a quiet ◍ marker and
+  the nutrient modal says the number is a floor. Measured over 4.9–17.9: iodine and omega-3 1.5%, B12
+  and vitamin D 59%, vitamin A 65%, choline 75%; macros, iron, calcium, sodium, potassium, magnesium
+  97–100%.
+- Still not tracked (low priority in her spec): saturated fat, vitamin K, B1, B3, copper, phosphorus.
+  They are on the prenatal label and live as free text in `label_notes`.
+- `settings/targets` now stores `overrides_set_at` next to `overrides`; the iron override predates it,
+  so its date stays unknown.
 - The private context doc `settings/handoff` in the db has the fuller list — read it first.

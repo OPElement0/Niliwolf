@@ -36,9 +36,24 @@
   const FRACTIONS = { "חצי": 0.5, "רבע": 0.25, "שליש": 0.33, "שלושת": 0.75 };
 
   // ------------------------------------------------------------ generic foods
+  // ג.2 / ג.3 — the tables store vitamin A and folate as one total each, but the upper limits apply to
+  // one chemical form only. The form follows from the food: animal foods carry retinol and plants carry
+  // beta-carotene; folate is natural except in fortified cereal, which carries synthetic folic acid.
+  // A card that states the split itself always wins over this derivation.
+  const FORTIFIED_FOLIC = ["g_cornflakes"];
+  function splitForms(id, cat, per100) {
+    const p = Object.assign({}, per100);
+    if (p.vitA != null && p.retinol == null && p.betaCarotene == null) {
+      if (cat === "meat" || cat === "dairy") p.retinol = p.vitA; else p.betaCarotene = p.vitA;
+    }
+    if (p.folate != null && p.folicAcid == null && p.folateNatural == null) {
+      if (FORTIFIED_FOLIC.includes(id)) p.folicAcid = p.folate; else p.folateNatural = p.folate;
+    }
+    return p;
+  }
   const GENERIC = window.FOODS_GENERIC.map((f) => ({
     id: "g_" + f[0], name: f[1], aliases: f[2] || [], cat: f[3],
-    portions: f[4].map((p) => ({ label: p[0], g: p[1] })), per100: f[5], generic: true,
+    portions: f[4].map((p) => ({ label: p[0], g: p[1] })), per100: splitForms("g_" + f[0], f[3], f[5]), generic: true,
   }));
   const GENERIC_BY = Object.fromEntries(GENERIC.map((f) => [f.id, f]));
 
@@ -147,7 +162,9 @@
   // ------------------------------------------------------------ foods & nutrients
   function allFoods() { return App.state.foods.map(normFood).concat(GENERIC); }
   function normFood(f) {
-    return Object.assign({ aliases: [], portions: [{ label: "מנה", g: 100 }], per100: {} }, f, { generic: false });
+    const o = Object.assign({ aliases: [], portions: [{ label: "מנה", g: 100 }], per100: {} }, f, { generic: false });
+    o.per100 = splitForms(o.id, o.cat || "dishes", o.per100);
+    return o;
   }
   function foodById(id) {
     if (!id) return null;
@@ -306,6 +323,17 @@
     if (n >= suppDoses(s)) day.supplements_taken.push(s.id);
   }
   function suppFraction(day, s) { return suppTaken(day, s) / suppDoses(s); }
+  // ג.7 + ב.5 — the manufacturer's serving (`serving`) is not the same as how many units are planned
+  // per day (`doses`). When fewer units than the serving were ticked, say what is missing in numbers.
+  function suppServing(s) { return Math.max(1, Math.round(Number(s.serving) || suppDoses(s))); }
+  function partialDose(day, s) {
+    const taken = suppTaken(day, s), serving = suppServing(s);
+    if (!taken || taken >= serving) return "";
+    const per = suppNutrients(s), d = suppDoses(s);
+    const missing = Object.keys(per).filter((k) => NUT_BY[k] && per[k] > 0)
+      .map((k) => `${NUT_BY[k].he} ${fmt((per[k] / d) * (serving - taken))} ${NUT_BY[k].unit}`);
+    return `נלקחו ${taken} מתוך ${serving} — ${Math.round((taken / serving) * 100)}% ממנת התווית${missing.length ? ". חסרים: " + missing.slice(0, 4).join(", ") : ""}.`;
+  }
   const CHECK = `<span class="check-ico" title="הושלם"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 8.5l3 3 7-7"/></svg></span>`;
   function doseBoxes(day, s) {
     const n = suppDoses(s), c = suppTaken(day, s);
@@ -340,7 +368,7 @@
   // Urgency of a deficit: red = must fix today, orange = fix, harm only if prolonged, yellow = fine for a few days, good = done.
   function urgencyOf(x, k) {
     if (x.status === "over") return { level: "over", label: "מעל הגבול" };
-    if (x.kind === "limit") return x.status === "good" ? { level: "good", label: "בסדר" } : { level: "red", label: "מעל המגבלה" };
+    if (x.kind === "limit") return x.status === "good" ? { level: "good", label: "בסדר" } : x.status === "low" ? { level: "orange", label: "מתחת לרף התחתון" } : { level: "red", label: "מעל המגבלה" };
     if (x.status === "good") return { level: "good", label: "הושג" };
     const plan = planOf(x, k);
     const level = plan && plan.cls === "supp" ? "yellow" : urgencyLevelFor(x.pct, x.key, k);
@@ -361,14 +389,16 @@
   function ulGauge(x) {
     const lim = x.kind === "limit" ? x.t : x.ul;
     if (!lim) return `<div class="ulg none"><span class="help">ללא גבול עליון</span></div>`;
-    const r = x.v / lim, W = 100, L = 6, R = 94, y = 9;
+    const lv = x.kind === "limit" ? x.v : (x.ulV != null ? x.ulV : x.v);
+    const r = lv / lim, W = 100, L = 6, R = 94, y = 9;
     const px = (f) => R - clamp(f, 0, 1) * (R - L); // 0 on the right, the limit on the left
     const tp = x.kind === "limit" ? px(0.6) : px(x.t / lim), cp = px(0.85);
     const soft = !!NUT_BY[x.key].ulSoft;
     let lvl = r >= 1 ? "over" : r >= 0.85 ? "near" : r >= (x.kind === "limit" ? 0.6 : x.t / lim) ? "mid" : "ok";
     if (soft && (lvl === "over" || lvl === "near")) lvl = "soft";
     const label = r >= 1 ? (soft ? "מעל הגבול (ראי הערה)" : "מעל הגבול!") : `${Math.round(r * 100)}% מהגבול`;
-    return `<div class="ulg ${lvl}" data-tip="${esc(`${x.he}: ${fmt(x.v)} מתוך גבול ${fmt(lim)} ${x.unit} ליום (${Math.round(r * 100)}%)`)}">
+    const form = NUT_BY[x.key].ulKey ? ` (נמדד על ${NUT_BY[NUT_BY[x.key].ulKey].he} בלבד: ${fmt(lv)} מתוך ${fmt(x.v)})` : "";
+    return `<div class="ulg ${lvl}" data-tip="${esc(`${x.he}: ${fmt(lv)} מתוך גבול ${fmt(lim)} ${x.unit} ליום (${Math.round(r * 100)}%)${form}`)}">
       <svg width="${W}" height="18" viewBox="0 0 ${W} 18" direction="ltr" aria-hidden="true">
         <line x1="${tp}" x2="${R}" y1="${y}" y2="${y}" stroke="var(--good)" stroke-width="4" stroke-linecap="round" opacity=".45"></line>
         <line x1="${cp}" x2="${tp}" y1="${y}" y2="${y}" stroke="var(--warn)" stroke-width="4" opacity=".5"></line>
@@ -386,10 +416,11 @@
       Object.keys(sn).forEach((key) => {
         const meta = NUT_BY[key]; if (!meta || !meta.ul) return;
         const full = sn[key], fv = food[key] || 0, ul = meta.ul, tv = t[key] || 0;
-        if (key === "vitA") return; // prenatal vitamin A is beta-carotene — not counted toward the retinol limit
-        if (meta.ulSoft && key !== "folate") return; // iron under treatment: no reduction hints
-        const counted = key === "folate" ? full : fv + full; // folate UL applies to the synthetic form only
-        if (counted >= ul * 0.85) out.push({ supp: s, key, level: counted >= ul ? "alert" : "warn", text: `${s.name}: עם כל היחידות ${key === "folate" ? "התוסף לבדו מגיע" : "התזונה + התוסף מגיעים"} ל-${fmt(counted)} ${meta.unit} ${meta.he} — ${Math.round((counted / ul) * 100)}% מהגבול העליון (${fmt(ul)}). שווה לדבר על המינון עם הרופא/ה; לא להפסיק לבד.` });
+        if (meta.ulSoft) return; // iron under treatment: no reduction hints
+        // When the limit applies to one chemical form, count only what is declared in that form.
+        const counted = meta.ulKey ? (food[meta.ulKey] || 0) + (sn[meta.ulKey] || 0) : fv + full;
+        if (meta.ulKey && counted <= 0) return;
+        if (counted >= ul * 0.85) out.push({ supp: s, key, level: counted >= ul ? "alert" : "warn", text: `${s.name}: עם כל היחידות ${meta.ulKey ? `${NUT_BY[meta.ulKey].he} מגיע` : "התזונה + התוסף מגיעים"} ל-${fmt(counted)} ${meta.unit} ${meta.he} — ${Math.round((counted / ul) * 100)}% מהגבול העליון (${fmt(ul)}). שווה לדבר על המינון עם הרופא/ה; לא להפסיק לבד.` });
         else if (tv && fv >= tv && fv + full >= ul * 0.6) out.push({ supp: s, key, level: "info", text: `${meta.he}: התזונה לבדה כבר כיסתה את היעד היום (${fmt(fv)} / ${fmt(tv)}); התוסף מוסיף עד ${fmt(fv + full)} — עדיין מתחת לגבול הבטוח (${fmt(ul)}).` });
       });
     });
@@ -410,18 +441,40 @@
     return tot;
   }
   App.dayTotals = dayTotals; App.suppTaken = suppTaken; App.suppDoses = suppDoses;
-  function statusOf(key, v, t) {
+  // `ulV` is the amount that the upper limit actually applies to: for vitamin A that is retinol only
+  // and for folate the synthetic form only, so beta-carotene from sweet potato and methylfolate from
+  // the prenatal never raise a false "over the limit" flag.
+  function ulValue(key, tot) { const meta = NUT_BY[key]; return meta.ulKey ? (tot[meta.ulKey] || 0) : (tot[key] || 0); }
+  function statusOf(key, v, t, ulV) {
     const meta = NUT_BY[key];
-    if (meta.ul && v > meta.ul && !meta.ulSoft) return "over";
-    if (meta.kind === "limit") return v > t ? "bad" : v > t * 0.8 ? "warn" : "good";
+    const lv = ulV == null ? v : ulV;
+    if (meta.ul && lv > meta.ul && !meta.ulSoft) return "over";
+    if (meta.kind === "limit") {
+      if (meta.floor && v < meta.floor) return "low";
+      return v > t ? "bad" : v > t * 0.8 ? "warn" : "good";
+    }
     const p = t ? v / t : 0;
     return p >= 0.95 ? "good" : p >= 0.6 ? "warn" : "bad";
   }
+  // ב.6 — how much of the day's food energy came from items that carry a value for this nutrient.
+  // Below 70% the number on screen is mostly a hole in the food table, not an intake.
+  function coverageOf(k) {
+    const day = App.state.days[k] || { meals: [] };
+    const meals = day.meals || [];
+    const total = meals.reduce((a, m) => a + ((m.nutrients || {}).kcal || 0), 0);
+    const out = {};
+    NUT_KEYS.forEach((key) => {
+      if (!total) { out[key] = null; return; }
+      out[key] = meals.reduce((a, m) => a + (m.nutrients && key in m.nutrients ? (m.nutrients.kcal || 0) : 0), 0) / total;
+    });
+    return out;
+  }
   function gaps(k) {
     const t = targetsFor(), { tot, fromSupp } = dayTotals(k, { split: true });
+    const cov = coverageOf(k);
     return NUT.map((n) => {
-      const v = tot[n.key] || 0, tv = t[n.key] || 0;
-      return { key: n.key, he: n.he, unit: n.unit, v, t: tv, supp: fromSupp[n.key] || 0, pct: tv ? v / tv : 0, remaining: Math.max(0, tv - v), status: statusOf(n.key, v, tv), kind: n.kind, ul: n.ul };
+      const v = tot[n.key] || 0, tv = t[n.key] || 0, ulV = ulValue(n.key, tot);
+      return { key: n.key, he: n.he, unit: n.unit, v, t: tv, supp: fromSupp[n.key] || 0, pct: tv ? v / tv : 0, remaining: Math.max(0, tv - v), status: statusOf(n.key, v, tv, ulV), kind: n.kind, ul: n.ul, ulV, floor: n.floor, softMax: n.softMax, cov: cov[n.key], thin: cov[n.key] != null && cov[n.key] < 0.7 && (fromSupp[n.key] || 0) < v * 0.8 };
     });
   }
   App.gaps = gaps;
@@ -1371,36 +1424,40 @@ ${h}
     }).join("");
     const noteRows = []; // static rule notes (labs, diet) live in the pregnancy tab
     const focus = focusSentence(g, day, isToday);
-    const overs = g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)}).</div>`)
-      .concat(g.filter((x) => x.ul && !NUT_BY[x.key].ulSoft && x.v >= x.ul * 0.85 && x.v < x.ul).map((x) => `<div class="note warn"><b>⚠ ${x.he} מתקרב לגבול העליון הבטוח:</b> ${fmt(x.v)} מתוך ${fmt(x.ul)} ${x.unit} (${Math.round((x.v / x.ul) * 100)}%). כדאי לא להוסיף עוד היום.</div>`))
+    const overs = g.filter((x) => x.status === "low").map((x) => `<div class="note warn"><b>${x.he} מתחת לרף התחתון:</b> ${fmt(x.v)} מתוך ${fmt(x.floor)} ${x.unit}. ${esc(NUT_BY[x.key].floorNote || "")}</div>`)
+      .concat(g.filter((x) => x.status === "over").map((x) => `<div class="note alert">${x.he}: ${fmt(x.ulV != null ? x.ulV : x.v)} ${x.unit} — מעל הגבול העליון הבטוח (${fmt(x.ul)})${NUT_BY[x.key].ulKey ? ` ב${NUT_BY[NUT_BY[x.key].ulKey].he}` : ""}.</div>`))
+      .concat(g.filter((x) => x.ul && !NUT_BY[x.key].ulSoft && (x.ulV != null ? x.ulV : x.v) >= x.ul * 0.85 && (x.ulV != null ? x.ulV : x.v) < x.ul).map((x) => `<div class="note warn"><b>⚠ ${x.he} מתקרב לגבול העליון הבטוח:</b> ${fmt(x.v)} מתוך ${fmt(x.ul)} ${x.unit} (${Math.round((x.v / x.ul) * 100)}%). כדאי לא להוסיף עוד היום.</div>`))
       .concat(g.filter((x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul).map((x) => `<div class="note info">${x.he}: ${fmt(x.v)} ${x.unit} — מעל ${fmt(x.ul)}. ${esc(NUT_BY[x.key].ulNote || "")}</div>`));
     const rest = g.filter((x) => x.t > 0 && !HERO.includes(x.key));
-    const isDone = (x) => (x.kind === "limit" ? x.status === "good" : x.status === "good");
+    const isDone = (x) => x.status === "good";
     // Order: over-limit first; then items that need food (by urgency red→orange→yellow, then lowest %);
     // then items that supplements will complete, by % achieved (lowest first).
     const URG_RANK = { red: 0, orange: 1, yellow: 2, good: 3 };
     const sortKey = (x) => {
       if (x.status === "over") return [0, 0, x.pct];
-      if (x.kind === "limit") return [1, 0, -x.pct];
+      if (x.kind === "limit") return [1, x.status === "low" ? 0 : 1, -x.pct];
       const plan = planOf(x, App.date), u = urgencyOf(x, App.date);
       if (plan && plan.cls === "supp") return [3, 0, x.pct];
       return [2, URG_RANK[u.level] != null ? URG_RANK[u.level] : 2, x.pct];
     };
     const missing = rest.filter((x) => !isDone(x)).map((x) => ({ x, k: sortKey(x) })).sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2]).map((o) => o.x);
     const doneList = rest.filter(isDone).sort((a, b) => b.pct - a.pct);
-    const nearUL = (x) => x.ul && !NUT_BY[x.key].ulSoft && x.v >= x.ul * 0.85 && x.v < x.ul;
+    const nearUL = (x) => x.ul && !NUT_BY[x.key].ulSoft && (x.ulV != null ? x.ulV : x.v) >= x.ul * 0.85 && (x.ulV != null ? x.ulV : x.v) < x.ul;
     const softOver = (x) => x.ul && NUT_BY[x.key].ulSoft && x.v > x.ul;
+    // ב.6 — "the food table has almost nothing for this nutrient", shown as a quiet marker, not an alarm.
+    const THIN = (x) => (x.thin ? ` <span class="thin-flag" data-tip="${esc(`רק ${Math.round(x.cov * 100)}% מהקלוריות היום הגיעו ממאכלים שיש להם ערך ל${x.he} במאגר. המספר הוא רצפה, לא הצריכה בפועל.`)}">◍ כיסוי מאגר ${Math.round(x.cov * 100)}%</span>` : "");
     const nutRow = (x) => { const u = urgencyOf(x, App.date), plan = planOf(x, App.date); return `<div class="nut-row ${x.status === "over" ? "row-over" : nearUL(x) ? "row-near" : ""}" data-act="nutrient-detail" data-key="${x.key}">
         ${donut(x.pct, u.level, 40)}
-        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${x.kind === "limit" ? ` <span class="small ink2">· מגבלה</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : !isDone(x) ? ` ${planPill(plan, x, App.date)}` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
+        <div class="grow"><div><b>${isDone(x) ? CHECK : ""}${x.he}</b>${THIN(x)}${x.kind === "limit" ? ` <span class="small ink2">· ${x.status === "low" ? `מתחת לרף ${fmt(x.floor)}` : "מגבלה"}</span>` : x.status === "over" ? ` <span class="small td-bad">· מעל הגבול העליון</span>` : nearUL(x) ? ` <span class="small td-bad">· מתקרב לגבול העליון</span>` : softOver(x) ? ` <span class="small td-warn">· מעל הגבול (ראי הערה)</span>` : !isDone(x) ? ` ${planPill(plan, x, App.date)}` : ""}</div><div class="num small ink2">${fmt(x.v)} / ${fmt(x.t)} ${x.unit}${!isDone(x) && x.remaining > 0 && x.kind !== "limit" ? ` · נשאר ${fmt(x.remaining)}` : ""}</div></div>
 
         ${isDone(x) || x.status === "over" || nearUL(x) || softOver(x) ? ulGauge(x) : ""}
       </div>`; };
     const floatRows = missing.map(nutRow);
     const doneRows = doneList.length ? `<h3 style="margin-top:16px;margin-bottom:4px">${CHECK}הושלם ${isToday ? "היום" : ""} <span class="small ink2">(${doneList.length})</span></h3>${doneList.map(nutRow).join("")}` : "";
-    const suppRows = supps.map((s) => { const full = suppTaken(day, s) >= suppDoses(s); return `<div class="supp ${full ? "on" : ""}">
+    const suppRows = supps.map((s) => { const full = suppTaken(day, s) >= suppDoses(s); const part = partialDose(day, s); return `<div class="supp ${full ? "on" : ""}">
         ${doseBoxes(day, s)}
         <div class="grow"><div class="title">${full ? CHECK : ""}${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${suppTaken(day, s) ? ` · <button class="btn sm ghost" data-act="supp-times" data-id="${s.id}" style="padding:0 6px;min-height:22px;font-size:.8rem" title="תיקון שעת הנטילה">נלקח ${esc(((day.supplement_times || {})[s.id] || []).slice(0, suppTaken(day, s)).join(", ") || "שעה?")} ✎</button>` : ""}</div></div>
+        ${part ? `<div class="note warn" style="margin-top:6px;font-size:.82rem"><div>${esc(part)}</div></div>` : ""}
       </div>`; });
     const glCard = glCardHtml(day, isToday), walkCard = walkCardHtml(day, isToday), sunCard = sunCardHtml(day, isToday);
     const glucoseCard = App.state.profile.track_glucose || (day.glucose || []).length ? `<div class="card"><div class="card-head"><h3>מדידות סוכר</h3><button class="btn sm" data-act="add-glucose">+ מדידה</button></div>
@@ -1470,6 +1527,10 @@ ${h}
       <div class="tile-main"><div class="big num" style="font-size:1.6rem;font-weight:700">${fmt(x.v)} <small class="ink2" style="font-size:.9rem;font-weight:500">/ ${fmt(x.t)} ${x.unit}</small></div>${donut(x.pct, u.level, 64)}</div>
       ${plan ? `<div class="plan plan-${plan.cls}" style="margin-top:6px">${esc(plan.text)}${plan.parts.length ? ` — עוד ${fmt(plan.parts.reduce((a, p) => a + p.v, 0))} ${x.unit} מהיחידות שנותרו` : ""}</div>` : ""}
       ${meta.info ? `<div class="note info" style="margin-top:10px"><div><b>למה זה חשוב ומאיפה:</b> ${esc(meta.info)}</div></div>` : ""}
+      ${x.thin ? `<div class="note warn" style="margin-top:8px"><div><b>כיסוי מאגר נמוך (${Math.round(x.cov * 100)}%):</b> רק ${Math.round(x.cov * 100)}% מהקלוריות של היום הגיעו ממאכלים שיש להם ערך ל${x.he}. המספר למעלה הוא רצפה — ייתכן שאכלת יותר ופשוט אין ערך במאגר.</div></div>` : ""}
+      ${x.floor ? `<div class="note ${x.v < x.floor ? "warn" : "info"}" style="margin-top:8px"><div><b>רף תחתון ${fmt(x.floor)} ${x.unit}:</b> ${esc(meta.floorNote || "מתחת לזה מעט מדי.")}${x.v < x.floor ? ` כרגע ${fmt(x.v)}.` : ""}</div></div>` : ""}
+      ${x.softMax && x.v > x.softMax ? `<div class="note info" style="margin-top:8px"><div>מעל ${fmt(x.softMax)} ${x.unit} — התקרה הרכה. לא מסוכן, אבל אין עדות שמעבר לזה מוסיף.</div></div>` : ""}
+      ${meta.sub ? `<div class="note info" style="margin-top:8px"><div>זהו פירוט של ${NUT_BY[meta.sub].he} — הוא נספר גם שם.</div></div>` : ""}
       ${barHtml(x, true)}<div class="legend"><span><i style="background:var(--accent)"></i>ממזון</span><span><i style="background:var(--accent-2)"></i>מתוספים</span></div>
       <div class="row between" style="margin-top:8px">${x.ul || x.kind === "limit" ? `<span class="help">גבול ${x.kind === "limit" ? "יומי" : "עליון בטוח (UL)"}: ${fmt(x.kind === "limit" ? x.t : x.ul)} ${x.unit}${NUT_BY[x.key].ulNote ? " · " + esc(NUT_BY[x.key].ulNote) : ""}</span>` : `<span class="help">לרכיב זה אין גבול עליון מוגדר.</span>`}${ulGauge(x)}</div>
       <h3 style="margin-top:14px">מאיפה זה הגיע</h3>
@@ -1739,7 +1800,7 @@ ${h}
       <div class="card">
         ${supps.length ? supps.map((s) => `<div class="supp ${suppTaken(day, s) >= suppDoses(s) ? "on" : ""} ${s.active === false ? "muted" : ""}">
           ${s.active === false ? "" : doseBoxes(day, s)}
-          <div class="grow" data-act="supp-edit" data-id="${s.id}" style="cursor:pointer"><div class="title">${suppTaken(day, s) >= suppDoses(s) && s.active !== false ? CHECK : ""}${esc(s.name)}${s.active === false ? " (לא פעיל)" : ""}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${Object.keys(suppNutrients(s)).length ? " · " + Object.entries(suppNutrients(s)).map(([k, v]) => `${NUT_BY[k].he} ${fmt(v)}`).join(", ") : ""}</div>${suppTaken(day, s) ? `<div class="meta"><button class="btn sm ghost" data-act="supp-times" data-id="${s.id}" style="padding:0 6px;min-height:22px;font-size:.8rem">נלקח ${esc(((day.supplement_times || {})[s.id] || []).slice(0, suppTaken(day, s)).join(", ") || "שעה?")} ✎ תיקון שעה</button></div>` : ""}</div>
+          <div class="grow" data-act="supp-edit" data-id="${s.id}" style="cursor:pointer"><div class="title">${suppTaken(day, s) >= suppDoses(s) && s.active !== false ? CHECK : ""}${esc(s.name)}${s.active === false ? " (לא פעיל)" : ""}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${Object.keys(suppNutrients(s)).length ? " · " + Object.entries(suppNutrients(s)).map(([k, v]) => `${NUT_BY[k].he} ${fmt(v)}${(s.chem_forms || {})[k] ? ` (${esc(s.chem_forms[k])})` : ""}`).join(", ") : ""}${suppServing(s) !== suppDoses(s) ? ` · מנת תווית ${suppServing(s)} יח'` : ""}${s.active_since ? ` · מ-${esc(fmtDate(s.active_since))}` : ""}</div>${suppTaken(day, s) ? `<div class="meta"><button class="btn sm ghost" data-act="supp-times" data-id="${s.id}" style="padding:0 6px;min-height:22px;font-size:.8rem">נלקח ${esc(((day.supplement_times || {})[s.id] || []).slice(0, suppTaken(day, s)).join(", ") || "שעה?")} ✎ תיקון שעה</button></div>` : ""}</div>
         </div>`).join("") : `<div class="empty">עדיין לא הוגדרו תוספים.<br><span class="small">לכל תוסף אפשר להזין מה הוא תורם (ברזל, חומצה פולית…) כדי שהסימון היומי ייכנס לחישוב.</span></div>`}
       </div>
       <div class="card soft"><b>רצף:</b> <span class="num">${streak}</span> ימים רצופים שכל היחידות סומנו. <span class="help">קובייה לכל יחידה (כדור/כמוסה) — הסימון הוא לתאריך ${esc(fmtDate(App.date))}. לחיצה על השם עורכת את התוסף.</span></div>
@@ -1757,15 +1818,19 @@ ${h}
     const isNew = !s;
     s = s || { id: uid("s"), name: "", dose_label: "", times: ["בוקר"], nutrients: {}, active: true };
     window._editSupp = s;
-    const common = ["folate", "iron", "vitD", "b12", "calcium", "iodine", "omega3", "magnesium", "zinc", "choline", "vitC", "b6", "vitA"];
+    const common = ["folate", "folicAcid", "iron", "vitD", "b12", "calcium", "iodine", "omega3", "dha", "epa", "dpa", "magnesium", "zinc", "choline", "vitC", "b6", "vitA", "retinol", "betaCarotene", "selenium", "b2", "vitE"];
+    const forms = s.chem_forms || {};
     openModal(`<h2>${isNew ? "תוסף חדש" : "עריכת " + esc(s.name)}</h2>
       <div class="form-grid">
         <div class="field wide"><label for="sf-name">שם</label><input id="sf-name" value="${esc(s.name)}" placeholder="למשל: פרנטל, ברזל, אומגה-3"></div>
         <div class="field"><label for="sf-doses">כמה יחידות ביום (קוביות לסימון)</label><input id="sf-doses" type="number" min="1" max="12" step="1" value="${suppDoses(s)}"></div>
+        <div class="field"><label for="sf-serving">מנת הגשה לפי התווית (יחידות)</label><input id="sf-serving" type="number" min="1" max="12" step="1" value="${suppServing(s)}"></div>
+        <div class="field"><label for="sf-since">נלקח מתאריך</label><input id="sf-since" type="date" value="${esc(s.active_since || "")}"></div>
         <div class="field"><label for="sf-dose">מינון (טקסט חופשי)</label><input id="sf-dose" value="${esc(s.dose_label || "")}" placeholder="כדור אחד עם האוכל"></div>
         <div class="field"><label for="sf-times">מתי (מופרד בפסיק)</label><input id="sf-times" value="${esc((s.times || []).join(", "))}" placeholder="בוקר, ערב"></div>
         <div class="field wide"><label>מה התוסף תורם <b>ביום שלם</b> (כל היחידות יחד, מהתווית) — נכנס לחישוב לפי כמה יחידות סומנו</label></div>
-        ${common.map((k) => `<div class="field"><label for="sf-${k}">${NUT_BY[k].he} (${NUT_BY[k].unit})</label><input id="sf-${k}" type="number" step="any" value="${s.nutrients && s.nutrients[k] != null ? s.nutrients[k] : ""}"></div>`).join("")}
+        ${common.map((k) => `<div class="field"><label for="sf-${k}">${NUT_BY[k].he} (${NUT_BY[k].unit})</label><input id="sf-${k}" type="number" step="any" value="${s.nutrients && s.nutrients[k] != null ? s.nutrients[k] : ""}"><input id="sfm-${k}" value="${esc(forms[k] || "")}" placeholder="צורה כימית" style="min-height:30px;padding:3px 8px;font-size:.82rem;margin-top:3px"></div>`).join("")}
+        <div class="field wide"><p class="help">הצורה הכימית משנה ספיגה פי 2–3 ומכריעה אם הגבול העליון בכלל חל: ברזל ביסגליצינט/פומראט/סולפט, פולאט חומצה פולית מול 5-MTHF, B12 ציאנו/מתיל/הידרוקסו, D2 מול D3, מגנזיום ציטרט/אוקסיד/גליצינט. אם לא כתוב על התווית — להשאיר ריק ולא לנחש.</p></div>
         <div class="field wide"><label><input type="checkbox" id="sf-active" ${s.active !== false ? "checked" : ""} style="vertical-align:middle;margin-inline-end:6px">פעיל (מופיע בצ'קליסט היומי)</label></div>
       </div>
       <div class="actions">${isNew ? "" : `<button class="btn danger" data-act="supp-del" data-id="${s.id}">מחיקה</button>`}<button class="btn" data-act="modal-close">ביטול</button><button class="btn primary" data-act="supp-save">שמירה</button></div>`);
@@ -2130,7 +2195,7 @@ ${h}
     "supp-times-save": (el) => { const day = getDay(App.date), n = Number(el.dataset.n) || 0; const arr = []; for (let i = 0; i < n; i++) { const v = ($("st-" + i) || {}).value; arr.push(v || nowTime()); } arr.sort(); day.supplement_times = day.supplement_times || {}; day.supplement_times[el.dataset.id] = arr; saveDay(App.date); closeModal(); render(); toast("שעות הנטילה עודכנו"); },
     "supp-new": () => suppModal(null),
     "supp-edit": (el) => suppModal(App.state.supplements.find((s) => s.id === el.dataset.id)),
-    "supp-save": () => { const s = window._editSupp; s.name = $("sf-name").value.trim(); if (!s.name) { toast("צריך שם"); return; } s.dose_label = $("sf-dose").value.trim(); s.doses = Math.max(1, Math.round(Number($("sf-doses").value) || 1)); s.times = $("sf-times").value.split(",").map((x) => x.trim()).filter(Boolean); s.active = $("sf-active").checked; s.nutrients = {}; NUT_KEYS.forEach((k) => { const el = $("sf-" + k); if (el && el.value !== "") s.nutrients[k] = Number(el.value); }); const i = App.state.supplements.findIndex((x) => x.id === s.id); if (i >= 0) App.state.supplements[i] = s; else App.state.supplements.push(s); saveSupp(s); closeModal(); render(); },
+    "supp-save": () => { const s = window._editSupp; s.name = $("sf-name").value.trim(); if (!s.name) { toast("צריך שם"); return; } s.dose_label = $("sf-dose").value.trim(); s.doses = Math.max(1, Math.round(Number($("sf-doses").value) || 1)); s.serving = Math.max(1, Math.round(Number(($("sf-serving") || {}).value) || s.doses)); const since = ($("sf-since") || {}).value; if (since) s.active_since = since; else delete s.active_since; s.times = $("sf-times").value.split(",").map((x) => x.trim()).filter(Boolean); s.active = $("sf-active").checked; s.nutrients = {}; s.chem_forms = {}; NUT_KEYS.forEach((k) => { const el = $("sf-" + k); if (el && el.value !== "") s.nutrients[k] = Number(el.value); const fe = $("sfm-" + k); if (fe && fe.value.trim()) s.chem_forms[k] = fe.value.trim(); }); const i = App.state.supplements.findIndex((x) => x.id === s.id); if (i >= 0) App.state.supplements[i] = s; else App.state.supplements.push(s); saveSupp(s); closeModal(); render(); },
     "supp-del": (el) => { if (!confirm("למחוק את התוסף?")) return; App.state.supplements = App.state.supplements.filter((s) => s.id !== el.dataset.id); Store.del("supplements", el.dataset.id); closeModal(); render(); },
     // what next
     "opt-clear": (el) => { options[Number(el.dataset.i)] = null; renderWhatNext(); },
@@ -2199,7 +2264,7 @@ ${h}
     if (act === "day-notes") { getDay(App.date).notes = el.value; saveDay(App.date); }
     if (act === "profile-field") { App.state.profile[el.dataset.k] = el.type === "number" ? (el.value === "" ? null : Number(el.value)) : el.value; saveProfile(); render(); }
     if (act === "profile-check") { App.state.profile[el.dataset.k] = el.checked; saveProfile(); render(); }
-    if (act === "override") { App.state.targets = App.state.targets || { overrides: {} }; App.state.targets.overrides = App.state.targets.overrides || {}; if (el.value === "") delete App.state.targets.overrides[el.dataset.k]; else App.state.targets.overrides[el.dataset.k] = Number(el.value); saveTargets(); renderHeader(); }
+    if (act === "override") { App.state.targets = App.state.targets || { overrides: {} }; App.state.targets.overrides = App.state.targets.overrides || {}; App.state.targets.overrides_set_at = App.state.targets.overrides_set_at || {}; if (el.value === "") { delete App.state.targets.overrides[el.dataset.k]; delete App.state.targets.overrides_set_at[el.dataset.k]; } else { App.state.targets.overrides[el.dataset.k] = Number(el.value); App.state.targets.overrides_set_at[el.dataset.k] = dateKeyOf(new Date()); } saveTargets(); renderHeader(); }
     if (act === "rep-field") { repState().fields[el.dataset.k] = el.checked ? 1 : 0; }
     if (act === "rep-date") { const r = repState(); r[el.dataset.k] = el.value; if (r.from > r.to) { if (el.dataset.k === "from") r.to = r.from; else r.from = r.to; } reportModal(); }
     if (act === "rep-nutmode") { repState().nutMode = el.value; }
