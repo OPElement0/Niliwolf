@@ -363,6 +363,29 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .card.focus { background: var(--accent-soft); border-color: transparent; }
 .focus-line { font-size: 1.1rem; font-weight: 700; line-height: 1.4; text-wrap: balance; }
 
+/* ---------- glycemic load timeline ---------- */
+.chart .gl-area { fill: var(--accent-soft); }
+.chart .gl-over { fill: var(--bad); opacity: 0.32; }
+.chart .gl-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.chart .gl-thr { stroke: var(--bad); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.chart .gl-mid { stroke: var(--warn); stroke-dasharray: 2 4; }
+.chart .gl-band-hi { fill: var(--bad-soft); opacity: 0.45; }
+.chart .gl-band-mid { fill: var(--warn-soft); opacity: 0.45; }
+.chart .gl-now { stroke: var(--ink); stroke-width: 1.5; }
+.chart .gl-meal { fill: var(--accent); stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+.chart .gl-meal.mid { fill: var(--warn); }
+.chart .gl-meal.hi { fill: var(--bad); }
+.chart text.gl-thr-label { fill: var(--bad); font-weight: 600; }
+.chart text.gl-now-label { fill: var(--ink); font-weight: 600; }
+.gl-sum { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; color: var(--ink-2); margin-top: 6px; }
+.gl-sum b { color: var(--ink); }
+.walk-timer { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.walk-timer .clock { min-width: 110px; color: var(--accent-2); }
+.chart .gl-line.raw { stroke: var(--ink-2); stroke-width: 1.2; stroke-dasharray: 3 4; opacity: 0.7; }
+.chart .gl-walk { fill: var(--accent-2); opacity: 0.85; }
+.ulg.gl-total { min-width: 250px; }
+@media (max-width: 480px) { .ulg.gl-total { min-width: 250px; } }
+
 </style>
 
 <div id="lock" class="lock" hidden>
@@ -1006,6 +1029,8 @@ window.NutriChat = (function () {
     const meals = (day.meals || []);
     if (meals.length) lines.push("מה נאכל היום: " + meals.map((m) => `${m.time || ""} ${m.name} ${m.qty} ${m.unit}`).join("; "));
     else lines.push("עדיין לא נרשם אוכל היום.");
+    const walks = (day.walks || []); if (walks.length) lines.push("הליכה היום: " + walks.map((w) => `${w.start} ${w.minutes} דק' (${w.pace === "light" ? "קלה" : "בינונית"}${w.outdoors ? ", בחוץ" : ""})`).join("; ") + ". הנחיות: הליכה מותרת, אסור מאמץ גבוה ועמידה ממושכת (צוואר רחם קצר).");
+    const sunLogs = (day.sun || []); if (sunLogs.length) lines.push("חשיפה לשמש היום: " + sunLogs.map((x) => `${x.start} ${x.minutes} דק' (UV ~${x.uvi})`).join("; ") + ".");
     const supps = (d.supplements || []).filter((s) => s.active !== false);
     if (supps.length) lines.push("תוספים קבועים (נלקח/יחידות ליום): " + supps.map((s) => `${s.name} ${app.suppTaken(day, s)}/${app.suppDoses(s)}`).join(", ") + ".");
     const favs = (d.foods || []).filter((f) => f.favorite).slice(0, 25);
@@ -1657,8 +1682,616 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     return `<div class="now-head"><div class="clock num">${st.now.str}</div><div class="grow"><div class="eyebrow">עכשיו · שעון ישראל</div><p><b>${esc(st.head)}</b></p></div></div>
       ${st.items.length > 1 ? `<div class="stack" style="gap:6px;margin-top:8px">${st.items.slice(1).map((i) => `<div class="note ${i.level}">${esc(i.text)}</div>`).join("")}</div>` : ""}`;
   }
-  setInterval(() => { const el = $("now-card"); if (el && !document.querySelector(".modal-bg")) el.innerHTML = nowCardHtml(); }, 60 * 1000);
+  setInterval(() => {
+    if (document.querySelector(".modal-bg")) return;
+    const el = $("now-card"); if (el) el.innerHTML = nowCardHtml();
+    const gl = $("gl-card"); if (gl && App.date === dateKeyOf(new Date())) gl.innerHTML = glCardInner(getDay(App.date), true);
+    const sp = $("sun-pill"), sr = $("sun-rec"); if (sp && sr && App.date === dateKeyOf(new Date())) { const st = sunStatus(getDay(App.date), true); sp.innerHTML = st.pill; sr.textContent = st.rec; }
+  }, 60 * 1000);
 
+  // ------------------------------------------------------------ glycemic load timeline
+  // Typical glycemic index per generic food (University of Sydney GI database and similar tables; approximate).
+  const GI_GENERIC = {
+    lehem_lavan: 75, lehem_male: 60, lehem_kal: 55, pita: 70, pita_mlea: 60, lahmania: 72, tortilla: 60, orez_lavan: 73, orez_male: 65,
+    pasta: 50, pasta_mlea: 45, couscous: 65, burgul: 48, quinoa: 53, oats: 55, ptitim: 60, potato: 80, batata: 63, granola: 60, cornflakes: 81, pricha: 85,
+    lentils: 32, chickpeas: 28, hummus: 25, white_beans: 31, red_beans: 29, peas: 50, ful: 40, tofu: 15, edamame: 18,
+    egg: 0, milk3: 35, milk1: 35, yogurt: 35, greek_yogurt: 20, white_cheese: 10, cottage: 10, yellow_cheese: 0, bulgarit: 0, labane: 15, butter: 0,
+    chicken_breast: 0, chicken_thigh: 0, beef_ground: 0, beef_steak: 0, chicken_liver: 0, turkey: 0, salmon: 0, tuna_can: 0, sardines: 0, white_fish: 0, schnitzel: 55, meatballs: 40,
+    tomato: 30, cucumber: 15, pepper: 15, carrot: 39, broccoli: 15, cauliflower: 15, spinach_cooked: 15, spinach_raw: 15, lettuce: 15, onion: 15, garlic: 30, zucchini: 15,
+    eggplant: 15, cabbage: 15, beet: 64, pumpkin: 75, corn: 52, avocado: 15, parsley: 15, mushrooms: 15, salad: 20, olives: 15, pickles: 15, nori: 15, iodized_salt: 0,
+    apple: 36, banana: 51, orange: 43, clementine: 47, watermelon: 76, melon: 65, grapes: 53, strawberry: 40, peach: 42, pear: 38, date: 42, pomegranate: 53, kiwi: 50,
+    mango: 51, pineapple: 59, dried_apricot: 31, raisins: 64, prunes: 29,
+    almonds: 15, walnuts: 15, tahini_raw: 35, tahini_prep: 35, peanut_butter: 14, olive_oil: 0, chia: 1, sunflower: 20, pumpkin_seeds: 25, cashew: 22, peanuts: 14, sesame: 35,
+    shakshuka: 30, omelet: 0, tuna_salad: 10, falafel: 40, lentil_soup: 35, veg_soup: 35, chicken_soup: 30, pizza: 60, sandwich_cheese: 60, pasta_tomato: 50, mujadara: 45,
+    chicken_potatoes: 60, porridge: 55, yogurt_granola: 50, pancake: 67, burekas: 65, protein_powder: 30,
+    water: 0, oj: 50, coffee_milk: 35, coffee_black: 0, tea: 0, choco_milk: 40, soy_milk: 34, almond_milk: 25, oat_milk: 69, coffee_decaf: 0, coffee_plant_milk: 50,
+    soda: 63, lemonade: 60, smoothie: 50, pom_juice: 53,
+    bamba: 55, bissli: 70, dark_choc: 25, milk_choc: 43, cookie: 65, cake: 60, icecream: 51, honey: 61, sugar: 65, jam: 55, choc_spread: 33, halva: 35, ketchup: 55, mayo: 0,
+  };
+  const GI_BY_CAT = { grains: 65, legumes: 30, dairy: 35, meat: 0, veg: 30, fruit: 50, nuts: 20, dishes: 55, drinks: 55, snacks: 65 };
+  // GI of a logged item: explicit `gi` on the food → generic table → estimate from composition.
+  function giOf(food, nutrients, grams) {
+    if (food && food.gi != null && food.gi !== "") return clamp(Number(food.gi) || 0, 0, 110);
+    if (food && food.generic) { const k = food.id.replace(/^g_/, ""); if (GI_GENERIC[k] != null) return GI_GENERIC[k]; return GI_BY_CAT[food.cat] != null ? GI_BY_CAT[food.cat] : 55; }
+    const n = nutrients || {}, g = grams || 100;
+    const carbs = ((n.carbs || 0) / g) * 100, fiber = ((n.fiber || 0) / g) * 100, fat = ((n.fat || 0) / g) * 100, prot = ((n.protein || 0) / g) * 100;
+    const net = Math.max(0, carbs - fiber);
+    if (net < 5) return 20;
+    let gi = 62;
+    const fr = carbs > 0 ? fiber / carbs : 0;
+    if (fr > 0.3) gi -= 20; else if (fr > 0.15) gi -= 10;
+    const fpE = (fat * 9 + prot * 4) / Math.max(1, fat * 9 + prot * 4 + net * 4);
+    if (fpE > 0.5) gi -= 15; else if (fpE > 0.3) gi -= 8;
+    return clamp(gi, 15, 85);
+  }
+  // Glycemic load per logged item. Items eaten within the same half hour form one meal; the meal's
+  // protein + fat damp the load of every item in it (up to 30%).
+  function glEntries(day) {
+    const meals = (day.meals || []).filter((m) => m.time && m.nutrients && (m.nutrients.carbs || 0) > 0).slice().sort((a, b) => toMin(a.time) - toMin(b.time));
+    const clusters = []; let cur = null;
+    meals.forEach((m) => { const t = toMin(m.time); if (cur && t - cur.end <= 30) { cur.items.push(m); cur.end = t; } else { cur = { start: t, end: t, items: [m] }; clusters.push(cur); } });
+    const out = [];
+    clusters.forEach((c) => {
+      const net = c.items.reduce((a, m) => a + Math.max(0, (m.nutrients.carbs || 0) - (m.nutrients.fiber || 0)), 0);
+      const fp = c.items.reduce((a, m) => a + (m.nutrients.fat || 0) + (m.nutrients.protein || 0), 0);
+      const damp = 1 - 0.3 * Math.min(1, fp / Math.max(net, 1));
+      c.items.forEach((m) => {
+        const food = foodById(m.food_id);
+        const gi = giOf(food, m.nutrients, m.grams);
+        const netC = Math.max(0, (m.nutrients.carbs || 0) - (m.nutrients.fiber || 0));
+        const raw = (gi * netC) / 100;
+        out.push({ id: m.id, name: m.name, t: toMin(m.time), time: m.time, gi, netC, raw, damp, gl: raw * damp, mealGl: 0, cluster: c });
+      });
+    });
+    clusters.forEach((c) => { const sum = out.filter((e) => e.cluster === c).reduce((a, e) => a + e.gl, 0); out.filter((e) => e.cluster === c).forEach((e) => { e.mealGl = sum; }); });
+    return out;
+  }
+  // Blood-glucose response shape for one item: 0 at the meal, 1 at the peak (about 45–70 min, later
+  // for low-GI food), then a tail of 2–3 hours. Gamma-like curve, normalised to peak = 1.
+  function glKernel(dtMin, gi) {
+    if (dtMin <= 0) return 0;
+    const g = clamp(gi, 0, 100);
+    const p = 40 + (100 - g) * 0.35, a = 1.6 + (g / 100) * 1.4, x = dtMin / p;
+    const v = Math.pow(x, a) * Math.exp(a * (1 - x));
+    return v < 0.01 ? 0 : v;
+  }
+  function glCurveAt(entries, t, walks) { return entries.reduce((a, e) => a + e.gl * glKernel(t - e.t, e.gi) * (walks && walks.length ? walkFactor(e, t, walks) : 1), 0); }
+  const GL_HIGH = 20, GL_MID = 10;
+  const glLevel = (v) => (v >= GL_HIGH ? "hi" : v >= GL_MID ? "mid" : "low");
+  const GL_LEVEL_HE = { hi: "גבוה", mid: "בינוני", low: "נמוך" };
+  // Personal daily glycemic-load target: all the carbohydrate she needs for the day, eaten as a
+  // low-GI diet. carbs = 45% of the kcal target (never below the app's carb target), minus the fibre
+  // target, at an average GI of 50 (45 when sugar sensitivity / GDM is flagged, with the capped carb target).
+  function glDailyTarget() {
+    const t = targetsFor(), ctx = pregCtx();
+    const sugar = ctx.diagnoses.has("gdm") || !!t.carbsPerMeal;
+    const kcal = t.kcal || 2200, fiber = t.fiber || 28;
+    const carbs = sugar ? (t.carbs || 175) : Math.max(t.carbs || 175, (0.45 * kcal) / 4);
+    const giTarget = sugar ? 45 : 50;
+    const target = Math.max(40, Math.round(Math.max(0, carbs - fiber) * giTarget / 100));
+    return { target, carbs: Math.round(carbs), fiber, kcal, giTarget, sugar, trimester: ctx.trimester || 2 };
+  }
+  // Gauge on the personal scale (0 on the right, like the UL gauges): green up to the target,
+  // orange up to 125% of it, red beyond. A hollow marker shows where the day "should" be by this hour.
+  function glTotalGauge(total, isToday) {
+    const g = glDailyTarget(), T = g.target, HI = Math.round(T * 1.25), MAX = T * 1.6;
+    const W = 250, L = 8, R = 242, y = 9;
+    const px = (v) => R - clamp(v / MAX, 0, 1) * (R - L);
+    const lvl = total > HI ? "over" : total > T ? "soft" : "ok";
+    const color = lvl === "over" ? "var(--bad)" : lvl === "soft" ? "var(--warn)" : "var(--good)";
+    const pct = Math.round((total / T) * 100);
+    let expected = null;
+    if (isToday) { const now = israelNow(); expected = T * clamp((now.min - 6 * 60) / (16 * 60), 0, 1); }
+    const pace = expected != null && expected > 0 ? (total > expected * 1.3 ? "מהר מהקצב" : total < expected * 0.7 ? "מתחת לקצב" : "בקצב") : null;
+    const label = lvl === "over" ? `גבוה — מעל 125% מהיעד` : lvl === "soft" ? `מעל היעד (${pct}%)` : `${pct}% מהיעד${pace ? " · " + pace : ""}`;
+    const tip = `יעד אישי ${T}: ~${g.carbs} גרם פחמימות (${g.sugar ? "לפי תקרת הפחמימות ברגישות לסוכר" : "45% מ-" + fmt(g.kcal, 0) + " קק\"ל, טרימסטר " + g.trimester} ) פחות ${g.fiber} סיבים, באינדקס ממוצע ${g.giTarget} (תזונה בעלת אינדקס נמוך). מצטבר ${isToday ? "עד עכשיו" : "בתאריך זה"}: ${fmt(total, 0)}${expected != null ? " · צפוי לפי השעה: ~" + fmt(expected, 0) : ""}. תלוי רק במה שנאכל, לא במרווחים.`;
+    return `<div class="ulg ${lvl} gl-total" data-tip="${esc(tip)}">
+      <svg width="${W}" height="32" viewBox="0 0 ${W} 32" direction="ltr" aria-hidden="true">
+        <line x1="${px(T)}" x2="${R}" y1="${y}" y2="${y}" stroke="var(--good)" stroke-width="5" stroke-linecap="round" opacity=".45"></line>
+        <line x1="${px(HI)}" x2="${px(T)}" y1="${y}" y2="${y}" stroke="var(--warn)" stroke-width="5" opacity=".5"></line>
+        <line x1="${L}" x2="${px(HI)}" y1="${y}" y2="${y}" stroke="var(--bad)" stroke-width="5" stroke-linecap="round" opacity=".6"></line>
+        <line x1="${px(T)}" x2="${px(T)}" y1="1" y2="17" stroke="var(--ink)" stroke-width="2"></line>
+        <line x1="${px(HI)}" x2="${px(HI)}" y1="3" y2="15" stroke="var(--bad)" stroke-width="1.5"></line>
+        ${expected != null ? `<path d="M${px(expected)} 17 l-4 7 h8 z" fill="none" stroke="var(--ink-2)" stroke-width="1.3"></path>` : ""}
+        <text x="${R}" y="30" text-anchor="middle" font-size="9" fill="var(--muted)">0</text>
+        <text x="${px(T)}" y="30" text-anchor="middle" font-size="9" fill="var(--ink)" font-weight="700">יעד ${T}</text>
+        <text x="${px(HI)}" y="30" text-anchor="middle" font-size="9" fill="var(--bad)">${HI}</text>
+        <circle cx="${px(total)}" cy="${y}" r="6" fill="${color}" stroke="var(--surface)" stroke-width="2"></circle>
+      </svg><span class="ulg-text">${lvl === "over" ? "⚠ " : ""}מצטבר ${fmt(total, 0)} מתוך ${T} · ${label}</span></div>`;
+  }
+  function glCardHtml(day, isToday) { return `<div class="card" id="gl-card">${glCardInner(day, isToday)}</div>`; }
+  function glCardInner(day, isToday) {
+    const entries = glEntries(day), walks = dayWalks(day);
+    const head = `<div class="card-head"><h2>עומס גליקמי לפי שעות</h2>`;
+    if (!entries.length) return `${head}</div><p class="help">כשיירשמו ארוחות עם פחמימות יופיע כאן מד משוער של עומס הסוכר לאורך היום, עם רף שמסמן פיק גבוה מדי.</p>`;
+    const now = israelNow();
+    const first = Math.min(...entries.map((e) => e.t)), last = Math.max(...entries.map((e) => e.t));
+    let x0 = Math.max(0, Math.min(6 * 60, Math.floor((first - 30) / 60) * 60));
+    let x1 = Math.min(30 * 60, Math.max(24 * 60, Math.ceil((last + 240) / 60) * 60));
+    if (isToday && now.min > x1 - 60) x1 = Math.min(30 * 60, Math.ceil((now.min + 60) / 60) * 60);
+    const step = 5, pts = [];
+    for (let t = x0; t <= x1; t += step) pts.push({ t, v: glCurveAt(entries, t, walks) });
+    const peak = pts.reduce((b, p) => (p.v > b.v ? p : b), { t: x0, v: 0 });
+    const ptsRaw = walks.length ? pts.map((p) => ({ t: p.t, v: glCurveAt(entries, p.t) })) : null;
+    const peakRaw = ptsRaw ? ptsRaw.reduce((b, p) => (p.v > b.v ? p : b), { t: x0, v: 0 }) : null;
+    let highs = 0, inHigh = false;
+    pts.forEach((p) => { if (p.v >= GL_HIGH && !inHigh) { highs++; inHigh = true; } if (p.v < GL_HIGH) inHigh = false; });
+    const total = entries.reduce((a, e) => a + e.gl, 0);
+    const nowV = isToday ? glCurveAt(entries, now.min, walks) : null;
+    let calmAt = null;
+    if (nowV != null && nowV >= GL_MID) { for (let t = now.min; t <= x1 + 240; t += step) { if (glCurveAt(entries, t, walks) < GL_MID) { calmAt = t; break; } } }
+    // ---- svg (RTL: morning on the right, like the other charts)
+    const w = 640, h = 220, left = 34, right = 12, top = 22, bottom = 30, iw = w - left - right, ih = h - top - bottom;
+    const maxV = Math.max(30, (peakRaw ? Math.max(peak.v, peakRaw.v) : peak.v) * 1.15);
+    const X = (t) => left + iw - ((t - x0) / (x1 - x0)) * iw;
+    const Y = (v) => top + ih - (clamp(v, 0, maxV) / maxV) * ih;
+    let s = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" direction="ltr" style="direction:ltr" role="img" aria-label="עומס גליקמי משוער לפי שעות">`;
+    s += `<defs><clipPath id="gl-clip-hi"><rect x="0" y="0" width="${w}" height="${Y(GL_HIGH)}"></rect></clipPath></defs>`;
+    s += `<rect class="gl-band-hi" x="${left}" y="${top}" width="${iw}" height="${Math.max(0, Y(GL_HIGH) - top)}"></rect>`;
+    s += `<rect class="gl-band-mid" x="${left}" y="${Y(GL_HIGH)}" width="${iw}" height="${Math.max(0, Y(GL_MID) - Y(GL_HIGH))}"></rect>`;
+    const tickStep = maxV > 60 ? 20 : 10;
+    for (let v = 0; v <= maxV; v += tickStep) { s += `<line class="grid" x1="${left}" x2="${w - right}" y1="${Y(v)}" y2="${Y(v)}"></line><text x="${left - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; }
+    const area = [`${X(x0)},${Y(0)}`].concat(pts.map((p) => `${X(p.t)},${Y(p.v)}`)).concat([`${X(x1)},${Y(0)}`]).join(" ");
+    s += `<polygon class="gl-area" points="${area}"></polygon>`;
+    if (peak.v > GL_HIGH) s += `<polygon class="gl-over" points="${area}" clip-path="url(#gl-clip-hi)"></polygon>`;
+    s += `<line class="gl-mid" x1="${left}" x2="${w - right}" y1="${Y(GL_MID)}" y2="${Y(GL_MID)}"></line>`;
+    s += `<line class="gl-thr" x1="${left}" x2="${w - right}" y1="${Y(GL_HIGH)}" y2="${Y(GL_HIGH)}"></line>`;
+    s += `<text class="gl-thr-label" x="${w - right}" y="${Y(GL_HIGH) - 5}" text-anchor="end">רף פיק גבוה (${GL_HIGH})</text>`;
+    if (ptsRaw) s += `<polyline class="gl-line raw" points="${ptsRaw.map((p) => `${X(p.t)},${Y(p.v)}`).join(" ")}"></polyline>`;
+    walks.forEach((w) => { s += `<rect class="gl-walk" x="${X(w.t + w.minutes)}" y="${Y(0) + 7}" width="${Math.max(3, X(w.t) - X(w.t + w.minutes))}" height="5" rx="2" data-tip="${esc(`הליכה ${WALK_HE[w.pace] || ""} ${w.minutes} דק' · ${w.start}–${minStr(w.t + w.minutes)}`)}"></rect>`; });
+    s += `<polyline class="gl-line" points="${pts.map((p) => `${X(p.t)},${Y(p.v)}`).join(" ")}"></polyline>`;
+    if (peak.v >= GL_MID) s += `<text class="strong" x="${clamp(X(peak.t), left + 30, w - right - 30)}" y="${Math.max(top + 10, Y(peak.v) - 8)}" text-anchor="middle">שיא ${fmt(peak.v, 0)} · ${minStr(peak.t)}</text>`;
+    // x labels
+    const lblStep = (x1 - x0) > 18 * 60 ? 180 : 120;
+    for (let t = Math.ceil(x0 / lblStep) * lblStep; t <= x1; t += lblStep) s += `<text x="${X(t)}" y="${h - 10}" text-anchor="middle">${minStr(t)}</text>`;
+    s += `<line class="axis" x1="${left}" x2="${w - right}" y1="${Y(0)}" y2="${Y(0)}"></line>`;
+    // meal markers on the baseline (clickable → meal detail)
+    entries.forEach((e) => {
+      const lvl = glLevel(e.mealGl);
+      const tip = `${e.name} · ${e.time} · עומס ${fmt(e.gl, 0)} (GI ~${e.gi}, פחמ' נטו ${fmt(e.netC, 0)} גרם)${e.damp < 0.98 ? ` · מרוכך ${Math.round((1 - e.damp) * 100)}% ע"י חלבון/שומן בארוחה` : ""}${e.cluster.items.length > 1 ? ` · הארוחה כולה: ${fmt(e.mealGl, 0)}` : ""}`;
+      s += `<circle class="gl-meal ${lvl}" cx="${X(e.t)}" cy="${Y(0)}" r="5.5" data-tip="${esc(tip)}" data-act="meal-detail" data-id="${e.id}"></circle>`;
+    });
+    if (isToday && now.min >= x0 && now.min <= x1) { s += `<line class="gl-now" x1="${X(now.min)}" x2="${X(now.min)}" y1="${top - 4}" y2="${Y(0)}"></line><text class="gl-now-label" x="${X(now.min)}" y="${top - 8}" text-anchor="middle">עכשיו</text>`; }
+    s += "</svg>";
+    // ---- text
+    const pill = nowV == null ? "" : `<span class="status-pill ${nowV >= GL_HIGH ? "st-bad" : nowV >= GL_MID ? "st-warn" : "st-good"}">עכשיו ${fmt(nowV, 0)} · ${GL_LEVEL_HE[glLevel(nowV)]}</span>`;
+    const top3 = entries.slice().sort((a, b) => b.gl - a.gl).slice(0, 3);
+    let advice = "";
+    if (nowV != null) {
+      if (nowV >= GL_HIGH) advice = `העומס עכשיו מעל הרף — הליכה קלה של 10–15 דקות מרככת את הפיק; פחמימה נוספת עדיף${calmAt ? ` אחרי ~${minStr(calmAt)}` : " בעוד כשעתיים"}.`;
+      else if (nowV >= GL_MID) advice = `עומס בינוני עכשיו${calmAt ? ` — יורד מתחת ל-${GL_MID} בערך ב-${minStr(calmAt)}; זה זמן טוב לפחמימה הבאה` : ""}. חטיף עם חלבון (טחינה, גרעינים, טופו) לא יגביה את הגל.`;
+      else advice = highs ? `עכשיו רגוע. היו היום ${highs} ${highs === 1 ? "פיק" : "פיקים"} מעל הרף — בפעם הבאה לפצל את המנה או לצרף חלבון וירק.` : "עכשיו רגוע, וכל הגלים היום נשארו מתחת לרף.";
+    } else advice = highs ? `${highs} ${highs === 1 ? "פיק" : "פיקים"} מעל הרף בתאריך הזה.` : "כל הגלים בתאריך הזה נשארו מתחת לרף.";
+    let walkTip = "";
+    if (isToday && !readTimer() && now.h >= 6 && now.h < 21 && nowV != null && nowV >= GL_MID * 0.8 && glCurveAt(entries, now.min + 15, walks) >= nowV * 0.9 && !walks.some((w) => now.min - w.t >= 0 && now.min - w.t < 45)) {
+      walkTip = `<div class="note good" style="margin-top:8px"><div>הליכה בינונית של 10–15 דק' עכשיו תוריד את הפיק הזה בכ-15–20%. <button class="btn sm" data-act="walk-start" style="margin-inline-start:6px">▶ התחלתי ללכת</button></div></div>`;
+    }
+    return `${head}${pill}</div>
+      <div class="chart">${s}</div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>עומס משוער</span><span><i style="background:var(--bad)"></i>מעל הרף (${GL_HIGH})</span><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>בינוני (${GL_MID}–${GL_HIGH})</span><span>● ארוחה (לחיצה לפרטים)</span><span><i style="background:var(--accent-2)"></i>הליכה</span>${walks.length ? "<span>- - איך זה היה בלי ההליכה</span>" : ""}</div>
+      <div class="gl-sum"><span>שיא היום: <b class="num">${fmt(peak.v, 0)}</b> ב-${minStr(peak.t)}</span><span>פיקים מעל הרף: <b class="num">${highs}</b></span>${peakRaw && peakRaw.v > 0 && peakRaw.v > peak.v ? `<span>ההליכה הורידה את השיא ב-<b class="num">${Math.round((1 - peak.v / peakRaw.v) * 100)}%</b></span>` : ""}</div>
+      <div class="row between" style="margin-top:8px;gap:8px"><span class="small"><b>עומס גליקמי מצטבר ${isToday ? "היום" : ""}</b><br><span class="help">סכום כל הארוחות מול יעד אישי (קלוריות, סיבים, טרימסטר, רגישות לסוכר) · המשולש = צפוי לפי השעה</span></span>${glTotalGauge(total, isToday)}</div>
+      <p class="small" style="margin-top:6px">${esc(advice)}</p>
+      ${walkTip}
+      ${top3.length ? `<div class="chips" style="margin-top:8px">${top3.map((e) => `<button class="chip" data-act="meal-detail" data-id="${e.id}" title="לפרטי הארוחה">${esc(e.name)} · ${fmt(e.gl, 0)}</button>`).join("")}</div>` : ""}
+      <details style="margin-top:8px"><summary class="help" style="cursor:pointer">איך זה מחושב</summary><p class="help" style="margin-top:6px">עומס גליקמי לארוחה = אינדקס גליקמי × פחמימות נטו (פחמימות פחות סיבים) ÷ 100. כל פריט יוצר גל: שיא אחרי 45–70 דקות (מאוחר יותר במזון עם אינדקס נמוך) ודעיכה לאורך 2–3 שעות; גלים חופפים מצטברים. חלבון ושומן שנאכלו באותה חצי שעה מרככים את הגל עד 30%. הליכה שמתחילה עד שעתיים וחצי אחרי ארוחה מרככת את הגל שלה (1.5% לדקה בקצב קל, 2% בבינוני, עד 30–40%), והקו המנוקד מראה איך זה היה נראה בלעדיה. הרף 20 הוא הסיווג המקובל ל"ארוחה בעומס גבוה"; 10–20 בינוני; המד המצטבר מסכם את כל הארוחות מול יעד אישי: כל הפחמימות שמגיעות לך ביום (45% מיעד הקלוריות לטרימסטר, פחות יעד הסיבים) באינדקס ממוצע 50 — הסף לתזונה בעלת אינדקס נמוך שנבדקה בהריון. ברגישות לסוכר היעד יורד (תקרת פחמימות, אינדקס 45). עד היעד ירוק, עד 125% כתום, מעבר אדום. לשם השוואה, הסיווג הכללי למבוגר: עד 80 נמוך, מעל 120 גבוה. האינדקס מגיע מטבלאות כלליות, או משדה "אינדקס גליקמי" במאכלים שלך. זו הערכה — לא מדידת סוכר, ותגובת הגוף משתנה בין אנשים ובהריון.</p></details>`;
+  }
+
+  // ------------------------------------------------------------ walking (activity)
+  const WALK_MET = { light: 2.8, moderate: 3.5 };
+  const WALK_HE = { light: "קלה", moderate: "בינונית" };
+  const WALK_TIMER_KEY = "walk_timer_v1";
+  function dayWalks(day) { return ((day && day.walks) || []).filter((w) => w.start && Number(w.minutes) > 0).map((w) => Object.assign({}, w, { t: toMin(w.start), minutes: Number(w.minutes) || 0 })).sort((a, b) => a.t - b.t); }
+  // Post-meal walking flattens the glucose curve: ~1.5%/min light, 2%/min moderate (capped at 30% / 40%).
+  // Applies to meals eaten up to 2.5 h before the walk started; the effect builds up during the walk and stays for the tail.
+  function walkFactor(e, t, walks) {
+    let f = 1;
+    (walks || []).forEach((w) => {
+      if (w.t < e.t || w.t - e.t > 150 || t <= w.t) return;
+      const eff = Math.min(w.pace === "moderate" ? 0.4 : 0.3, (w.pace === "moderate" ? 0.02 : 0.015) * w.minutes);
+      f *= 1 - eff * clamp((t - w.t) / Math.max(5, w.minutes), 0, 1);
+    });
+    return f;
+  }
+  function walkKcal(w) { const kg = pregCtx().weightKg || 64; return (WALK_MET[w.pace] || 3) * kg * (w.minutes / 60); }
+  function readTimer() { try { const s = localStorage.getItem(WALK_TIMER_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+  function writeTimer(v) { try { if (v) localStorage.setItem(WALK_TIMER_KEY, JSON.stringify(v)); else localStorage.removeItem(WALK_TIMER_KEY); } catch (e) {} }
+  function israelTimeOf(ms) {
+    try { const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(ms)); return `${pad(Number(p.find((x) => x.type === "hour").value) % 24)}:${p.find((x) => x.type === "minute").value}`; }
+    catch (e) { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+  }
+  function addWalk(dateKey, start, minutes, pace, outdoors, cover) {
+    const day = getDay(dateKey); day.walks = day.walks || [];
+    const w = { id: uid("w"), start, minutes: Math.max(1, Math.round(minutes)), pace: pace || "moderate", outdoors: !!outdoors };
+    day.walks.push(w); day.walks.sort((a, b) => toMin(a.start) - toMin(b.start));
+    if (outdoors) addSun(dateKey, start, w.minutes, cover || "arms_face", w.id, false);
+    saveDay(dateKey); return w;
+  }
+  function timerText(t) { const secs = Math.max(0, Math.floor((Date.now() - t.startedAt) / 1000)); return `${pad(Math.floor(secs / 60))}:${pad(secs % 60)}`; }
+  function walkCardHtml(day, isToday) { return `<div class="card" id="walk-card">${walkCardInner(day, isToday)}</div>`; }
+  function walkCardInner(day, isToday) {
+    const walks = dayWalks(day), timer = isToday ? readTimer() : null, now = israelNow();
+    const total = walks.reduce((a, w) => a + w.minutes, 0), longest = walks.reduce((a, w) => Math.max(a, w.minutes), 0);
+    const kcal = walks.reduce((a, w) => a + walkKcal(w), 0);
+    const pill = total ? `<span class="status-pill ${total >= 20 ? "st-good" : "st-info"}">${total} דק' · ${walks.length} ${walks.length === 1 ? "מקטע" : "מקטעים"}</span>` : "";
+    const form = (startVal) => `<div class="inline-form" style="margin-top:10px">
+        <div class="field short"><label for="wk-min">דקות</label><input id="wk-min" type="number" min="1" max="240" value="15" style="min-height:36px;padding:4px 8px"></div>
+        <div class="field short"><label for="wk-start">התחלה</label><input id="wk-start" type="time" value="${startVal}" style="min-height:36px;padding:4px 8px"></div>
+        <div class="field short"><label for="wk-pace">קצב</label><select id="wk-pace" style="min-height:36px;padding:4px 8px"><option value="light">קלה</option><option value="moderate" selected>בינונית</option></select></div>
+        <div class="field short" style="flex-basis:110px"><label>&nbsp;</label><label style="margin:0;line-height:36px"><input type="checkbox" id="wk-out" checked style="vertical-align:middle;margin-inline-end:6px">בחוץ</label></div>
+        <button class="btn sm" data-act="walk-add">הוסיפי</button>
+      </div>`;
+    let entry = "";
+    if (timer) {
+      entry = `<div class="walk-timer">
+        <div class="clock num" id="walk-timer">${timerText(timer)}</div>
+        <div class="grow"><div class="eyebrow">הולכת מ-${israelTimeOf(timer.startedAt)}</div>
+          <div class="seg" style="margin-top:6px">${["light", "moderate"].map((p) => `<button class="${timer.pace === p ? "on" : ""}" data-act="timer-pace" data-p="${p}">${WALK_HE[p]}</button>`).join("")}</div>
+          <label style="margin-top:8px"><input type="checkbox" data-act="timer-outdoors" ${timer.outdoors ? "checked" : ""} style="vertical-align:middle;margin-inline-end:6px">בחוץ, בשמש (יירשם גם כחשיפה לשמש)</label></div>
+        <div class="stack" style="gap:6px"><button class="btn primary" data-act="walk-stop">סיימתי</button><button class="btn sm ghost" data-act="walk-cancel">ביטול</button></div>
+      </div>`;
+    } else if (isToday) {
+      entry = `<div class="row" style="gap:10px"><button class="btn primary" data-act="walk-start">▶ התחלתי ללכת</button><span class="help">טיימר חי — ממשיך גם אם הדף נסגר</span></div>${form(minStr(now.min - 15))}`;
+    } else entry = form("12:00");
+    const notes = [];
+    if (longest > 45) notes.push(`<div class="note warn" style="margin-top:8px">מקטע של ${longest} דק' — הליכה מותרת, אבל עם צוואר רחם קצר עדיף מקטעים קצרים יותר וישיבה ביניהם. אם היה נוח — בסדר.</div>`);
+    else if (total > 90) notes.push(`<div class="note info" style="margin-top:8px">יותר מ-90 דק' הליכה היום — מצוין אם הרגשת טוב. אחרי כל מקטע לשבת, לא לעמוד.</div>`);
+    const list = walks.length ? `<div class="list" style="margin-top:8px">${walks.map((w) => `<div class="item"><div class="grow"><div class="title">${w.minutes} דק' · ${WALK_HE[w.pace] || ""}${w.outdoors ? " · בחוץ ☀" : ""}</div><div class="meta">${w.start}–${minStr(w.t + w.minutes)} · ~${fmt(walkKcal(w), 0)} קק"ל</div></div><button class="iconbtn" data-act="walk-del" data-id="${w.id}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help" style="margin-top:8px">עדיין לא נרשמה הליכה ${isToday ? "היום" : "בתאריך זה"}.</p>`;
+    return `<div class="card-head"><h2>תנועה — הליכה</h2>${pill}</div>
+      ${entry}
+      ${notes.join("")}
+      ${list}
+      ${total ? `<p class="small ink2" style="margin-top:6px">סה"כ ${total} דק' · ~${fmt(kcal, 0)} קק"ל (מידע בלבד — לא משנה את יעד הקלוריות). הליכה אחרי ארוחה מרככת את הפיק בגרף שלמעלה.</p>` : ""}
+      <details style="margin-top:8px"><summary class="help" style="cursor:pointer">מה מותר ומה לא (לפי ההנחיות שלך)</summary><p class="help" style="margin-top:6px">הליכה מותרת. אסור: מאמץ גבוה ועמידה ממושכת. מבחן הדיבור: אם אפשר לדבר משפט שלם בלי להתנשף — הקצב בסדר; אם קשה לדבר — להאט. אחרי הליכה לשבת, לא לעמוד. הליכה של 10–20 דק' שמתחילה 15–45 דק' אחרי ארוחה נותנת את רוב התועלת לסוכר. לעצור אם יש התכווצויות, לחץ באגן או דימום, ולפנות לרופא/ה. חישוב הקלוריות: 2.8 MET לקצב קל, 3.5 לבינוני, לפי המשקל האחרון.</p></details>`;
+  }
+  setInterval(() => { const el = $("walk-timer"), t = readTimer(); if (el && t) el.textContent = timerText(t); }, 1000);
+
+  // ------------------------------------------------------------ sun (vitamin D)
+  const SUN_DEFAULT = { lat: 32.08, lon: 34.78 };
+  const SKIN_MED = { 1: 200, 2: 250, 3: 350, 4: 450, 5: 600, 6: 1000 }; // erythemal J/m² per skin type (Fitzpatrick)
+  const SKIN_HE = { 1: "I — בהיר מאוד, נשרף תמיד", 2: "II — בהיר, נשרף בקלות", 3: "III — בינוני (הנפוץ בישראל)", 4: "IV — זית", 5: "V — כהה", 6: "VI — כהה מאוד" };
+  const COVER = { arms_face: { he: "ידיים ופנים", frac: 0.12, dose: 0.4 }, arms_legs: { he: "ידיים ורגליים", frac: 0.3, dose: 0.25 } };
+  const CLOUD_F = { clear: 1, partly: 0.7, cloudy: 0.4 }, CLOUD_HE = { clear: "בהיר", partly: "מעונן חלקית", cloudy: "מעונן" };
+  function sunCfg() { const p = (App.state.profile && App.state.profile.sun) || {}; return { lat: Number(p.lat) || SUN_DEFAULT.lat, lon: Number(p.lon) || SUN_DEFAULT.lon, skin: clamp(Number(p.skin) || 3, 1, 6) }; }
+  function dayCloud(day) { return (day && day.sun_cloud) || "clear"; }
+  function israelTzOffset(date) {
+    try { const s = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jerusalem", timeZoneName: "shortOffset" }).formatToParts(date).find((x) => x.type === "timeZoneName").value; const m = /GMT([+-]\d+)/.exec(s); if (m) return Number(m[1]); } catch (e) {}
+    const mo = date.getMonth(); return mo >= 3 && mo <= 9 ? 3 : 2;
+  }
+  // Solar elevation (degrees) at Israel clock time `min` on date `key` — NOAA low-precision algorithm.
+  function solarElevation(key, min) {
+    const d = parseKey(key), doy = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+    const { lat, lon } = sunCfg(), tz = israelTzOffset(d);
+    const g = (2 * Math.PI / 365) * (doy - 1 + (min / 60 - 12) / 24);
+    const eot = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+    const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+    const tst = min + eot + 4 * lon - 60 * tz;
+    const ha = (tst / 4 - 180) * Math.PI / 180, latR = lat * Math.PI / 180;
+    const cosZ = Math.sin(latR) * Math.sin(decl) + Math.cos(latR) * Math.cos(decl) * Math.cos(ha);
+    return Math.asin(clamp(cosZ, -1, 1)) * 180 / Math.PI;
+  }
+  // Clear-sky UV index from solar elevation (empirical fit for mid-latitudes), times a manual cloud factor.
+  function uviAt(key, min, cloud) { const el = solarElevation(key, min); if (el <= 0) return 0; return 11.8 * Math.pow(Math.sin(el * Math.PI / 180), 2.3) * (CLOUD_F[cloud || "clear"] || 1); }
+  function minutesTo(uvi, medFrac) { const med = SKIN_MED[sunCfg().skin] || 350; return uvi > 0.2 ? (med * medFrac) / (1.5 * uvi) : null; }
+  function sunIU(e) { const c = COVER[e.cover] || COVER.arms_face, med = SKIN_MED[sunCfg().skin] || 350; const dose = (1.5 * (Number(e.uvi) || 0) * (Number(e.minutes) || 0)) / med; return 20000 * c.frac * Math.min(1, dose); }
+  function addSun(dateKey, start, minutes, cover, walkId, save) {
+    const day = getDay(dateKey); day.sun = day.sun || [];
+    const mid = toMin(start) + minutes / 2;
+    day.sun.push({ id: uid("sun"), start, minutes: Math.max(1, Math.round(minutes)), cover: cover || "arms_face", uvi: Math.round(uviAt(dateKey, mid, dayCloud(day)) * 10) / 10, walk_id: walkId || null });
+    day.sun.sort((a, b) => toMin(a.start) - toMin(b.start));
+    if (save !== false) saveDay(dateKey);
+  }
+  function sunWindow(key, cloud) { let first = null, last = null; for (let m = 5 * 60; m <= 19 * 60; m += 10) { if (uviAt(key, m, cloud) >= 3) { if (first == null) first = m; last = m; } } return first == null ? null : { start: first, end: last + 10 }; }
+  function sunStatus(day, isToday) {
+    const key = App.date, cloud = dayCloud(day), now = israelNow();
+    const uviNow = uviAt(key, now.min, cloud), win = sunWindow(key, cloud);
+    let peak = { v: 0, m: 12 * 60 }; for (let m = 9 * 60; m <= 16 * 60; m += 10) { const u = uviAt(key, m, cloud); if (u > peak.v) peak = { v: u, m }; }
+    const tAL = minutesTo(uviNow, COVER.arms_legs.dose), tAF = minutesTo(uviNow, COVER.arms_face.dose), tMED = minutesTo(uviNow, 1);
+    const lvl = uviNow < 3 ? "low" : uviNow < 6 ? "mid" : uviNow < 8 ? "high" : "vhigh";
+    const pill = `<span class="status-pill ${lvl === "low" ? "st-info" : lvl === "mid" ? "st-good" : lvl === "high" ? "st-warn" : "st-bad"}">UV ${fmt(uviNow, 1)} עכשיו · ${{ low: "חלש", mid: "בינוני", high: "גבוה", vhigh: "גבוה מאוד" }[lvl]}</span>`;
+    let rec;
+    if (!isToday) rec = win ? `חלון שמש בתאריך זה: ${minStr(win.start)}–${minStr(win.end)} (UV 3 ומעלה), שיא ~${fmt(peak.v, 1)} ב-${minStr(peak.m)}.` : "בתאריך זה השמש לא מגיעה ל-UV 3 — ייצור ויטמין D זניח.";
+    else if (uviNow < 3) rec = win ? (now.min < win.start ? `השמש עדיין חלשה לוויטמין D. החלון היום: ${minStr(win.start)}–${minStr(win.end)}, שיא ~${fmt(peak.v, 1)} ב-${minStr(peak.m)}.` : `חלון השמש של היום (${minStr(win.start)}–${minStr(win.end)}) נגמר. מחר שוב.`) : "היום השמש לא מגיעה ל-UV 3 (עונה או עננות) — ייצור ויטמין D זניח; התוסף הוא המקור.";
+    else rec = `זמן טוב לוויטמין D: ~${fmt(tAL, 0)} דק' עם ידיים ורגליים חשופות, או ~${fmt(tAF, 0)} דק' עם ידיים ופנים. סף אדמומיות בקצב הזה: ~${fmt(tMED, 0)} דק' — לא לעבור.${uviNow >= 8 ? " UV גבוה מאוד: עדיף בקצוות החלון, כובע ומים, והפנים בצל (כתמי הריון)." : " פנים בצל או כובע — עור הפנים נוטה לכתמים בהריון."}`;
+    return { pill, rec, uviNow, win, peak };
+  }
+  function sunCardHtml(day, isToday) { return `<div class="card" id="sun-card">${sunCardInner(day, isToday)}</div>`; }
+  function sunCardInner(day, isToday) {
+    const cfg = sunCfg(), cloud = dayCloud(day), now = israelNow(), st = sunStatus(day, isToday);
+    const logs = ((day && day.sun) || []).slice().sort((a, b) => toMin(a.start) - toMin(b.start));
+    const iu = logs.reduce((a, e) => a + sunIU(e), 0), mins = logs.reduce((a, e) => a + (Number(e.minutes) || 0), 0);
+    return `<div class="card-head"><h2>שמש — ויטמין D</h2><span id="sun-pill">${st.pill}</span></div>
+      <p class="small" id="sun-rec">${esc(st.rec)}</p>
+      <div class="row" style="margin-top:8px;gap:8px"><span class="help">עננות עכשיו:</span><div class="seg">${Object.keys(CLOUD_HE).map((c) => `<button class="${cloud === c ? "on" : ""}" data-act="sun-cloud" data-c="${c}">${CLOUD_HE[c]}</button>`).join("")}</div></div>
+      <div class="inline-form" style="margin-top:10px">
+        <div class="field short"><label for="sn-start">התחלה</label><input id="sn-start" type="time" value="${minStr(now.min - 10)}" style="min-height:36px;padding:4px 8px"></div>
+        <div class="field" style="flex:0 1 160px"><label for="sn-cover">מה חשוף</label><select id="sn-cover" style="min-height:36px;padding:4px 8px">${Object.keys(COVER).map((k) => `<option value="${k}">${COVER[k].he}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1 1 170px"><label>רשמי חשיפה</label><div class="row" style="gap:6px">${["5", "10", "15"].map((m) => `<button class="btn sm" data-act="sun-add" data-min="${m}">+${m} דק'</button>`).join("")}</div></div>
+      </div>
+      ${logs.length ? `<div class="list" style="margin-top:8px">${logs.map((e) => `<div class="item"><div class="grow"><div class="title">${e.minutes} דק' · ${(COVER[e.cover] || COVER.arms_face).he}${e.walk_id ? " · מהליכה" : ""}</div><div class="meta">${e.start} · UV ~${fmt(e.uvi, 1)} · ≈ ${fmt(sunIU(e), 0)} יח' (${fmt(sunIU(e) / 40, 0)} מק"ג) ויטמין D</div></div><button class="iconbtn" data-act="sun-del" data-id="${e.id}" aria-label="מחיקה">✕</button></div>`).join("")}</div>
+      <p class="small ink2" style="margin-top:6px">${isToday ? "היום" : "בתאריך זה"}: ${mins} דק' בשמש · ≈ ${fmt(iu, 0)} יח' (${fmt(iu / 40, 0)} מק"ג) ויטמין D מהעור — הערכה גסה, לא נכנסת לחישוב הרכיבים.</p>` : `<p class="help" style="margin-top:8px">הליכה שסומנה "בחוץ" נרשמת כאן אוטומטית.</p>`}
+      <details style="margin-top:8px"><summary class="help" style="cursor:pointer">הגדרות ואיך זה מחושב</summary>
+        <div class="inline-form" style="margin-top:8px">
+          <div class="field" style="flex:1 1 220px"><label for="sn-skin">סוג עור (פיצפטריק)</label><select id="sn-skin" data-act="sun-skin" style="min-height:36px;padding:4px 8px">${Object.keys(SKIN_HE).map((k) => `<option value="${k}" ${Number(k) === cfg.skin ? "selected" : ""}>${SKIN_HE[k]}</option>`).join("")}</select></div>
+          <div class="field short"><label for="sn-lat">קו רוחב</label><input id="sn-lat" type="number" step="0.01" value="${cfg.lat}" data-act="sun-loc" data-k="lat" style="min-height:36px;padding:4px 8px"></div>
+          <div class="field short"><label for="sn-lon">קו אורך</label><input id="sn-lon" type="number" step="0.01" value="${cfg.lon}" data-act="sun-loc" data-k="lon" style="min-height:36px;padding:4px 8px"></div>
+        </div>
+        <p class="help" style="margin-top:6px">מדד ה-UV מחושב מגובה השמש לפי תאריך, שעה ומיקום (ברירת מחדל: מרכז הארץ), בשמיים בהירים, כפול מקדם עננות ידני (0.7 מעונן חלקית, 0.4 מעונן). דקות היעד: כרבע מסף האדמומיות של סוג העור עם ידיים ורגליים חשופות, או כ-40% ממנו עם ידיים ופנים בלבד. הערכת ויטמין D: עד ~20,000 יח' לחשיפת גוף מלא בסף האדמומיות, לפי חלק הגוף החשוף והמנה. בלי שירות חיצוני. קרם הגנה, זכוכית וצל מאפסים את הייצור.</p>
+      </details>`;
+  }
+
+  // ------------------------------------------------------------ report export (read-only)
+  const REP_FIELDS = [
+    ["preg", "פרטי הריון (שבוע, משקל, אבחנות)"], ["targets", "היעדים היומיים ומאיפה הם"], ["daily", "סיכום יומי של הרכיבים"],
+    ["meals", "פירוט ארוחות (שעה, מאכל, כמות)"], ["mealNut", "ערכים לכל ארוחה"], ["supps", "תוספים — מה סומן בכל יום"],
+    ["activity", "הליכה ושמש"], ["gl", "עומס גליקמי (מודל משוער)"], ["labs", "בדיקות מעבדה ומדידות סוכר"],
+    ["notes", "הערות יומיות"], ["averages", "ממוצעים לתקופה מול היעדים"], ["sources", "מקורות עיקריים לכל רכיב מרכזי"], ["accuracy", "הערת דיוק — מקור הערכים"],
+  ];
+  const REP_PRESETS = {
+    claude: { fields: { preg: 1, targets: 1, daily: 1, meals: 1, mealNut: 1, supps: 1, activity: 1, gl: 1, labs: 1, notes: 1, averages: 1, sources: 1, accuracy: 1 }, nutMode: "all", name: "" },
+    nurse: { fields: { preg: 1, targets: 1, daily: 1, meals: 0, mealNut: 0, supps: 1, activity: 1, gl: 0, labs: 1, notes: 0, averages: 1, sources: 1, accuracy: 1 }, nutMode: "main", name: "" },
+  };
+  const REP_MAIN = ["kcal", "protein", "carbs", "fiber", "fat", "iron", "calcium", "sodium"];
+  function repState() {
+    if (!window._rep) {
+      const prefs = (App.state.profile && App.state.profile.report_prefs) || {};
+      const aud = "nurse";
+      window._rep = Object.assign({ audience: aud, from: addDays(dateKeyOf(new Date()), -6), to: dateKeyOf(new Date()) }, JSON.parse(JSON.stringify(REP_PRESETS[aud])), prefs[aud] ? JSON.parse(JSON.stringify(prefs[aud])) : {});
+    }
+    return window._rep;
+  }
+  function repApplyAudience(aud) {
+    const prefs = (App.state.profile && App.state.profile.report_prefs) || {};
+    const r = repState();
+    Object.assign(r, { audience: aud }, JSON.parse(JSON.stringify(REP_PRESETS[aud])), prefs[aud] ? JSON.parse(JSON.stringify(prefs[aud])) : {});
+  }
+  function repSavePrefs() {
+    const r = repState();
+    App.state.profile.report_prefs = Object.assign({}, App.state.profile.report_prefs || {}, { [r.audience]: { fields: r.fields, nutMode: r.nutMode, name: r.name || "" } });
+    saveProfile();
+  }
+  function withDate(k, fn) { const prev = App.date; App.date = k; try { return fn(); } finally { App.date = prev; } }
+  function reportModal(opts) {
+    const r = repState();
+    if (opts && opts.today) { r.from = r.to = dateKeyOf(new Date()); }
+    if (opts && opts.audience) repApplyAudience(opts.audience);
+    const days = []; for (let k = r.from; k <= r.to && days.length < 366; k = addDays(k, 1)) days.push(k);
+    const logged = days.filter((k) => App.state.days[k] && ((App.state.days[k].meals || []).length || (App.state.days[k].walks || []).length || App.state.days[k].weight_kg));
+    const canShare = typeof navigator !== "undefined" && !!navigator.share;
+    openModal(`<h2>דוח תזונה לייצוא</h2>
+      <p class="help">הדוח קורא בלבד ולא משנה כלום. הוא כולל רק את הטווח והשדות שסימנת. היסטוריית הצ'אט והסיסמה לעולם לא מיוצאות.</p>
+      <h3 style="margin-top:12px">1. טווח</h3>
+      <div class="row" style="margin-top:6px;gap:6px">${[["today", "היום"], ["7", "7 ימים"], ["14", "14 ימים"], ["30", "30 ימים"]].map(([v, l]) => `<button class="chip" data-act="rep-range" data-v="${v}">${l}</button>`).join("")}</div>
+      <div class="inline-form" style="margin-top:8px"><div class="field short"><label for="rep-from">מתאריך</label><input id="rep-from" type="date" value="${r.from}" data-act="rep-date" data-k="from" style="min-height:36px;padding:4px 8px"></div><div class="field short"><label for="rep-to">עד תאריך</label><input id="rep-to" type="date" value="${r.to}" data-act="rep-date" data-k="to" style="min-height:36px;padding:4px 8px"></div><div class="field"><label>&nbsp;</label><span class="small ink2">${days.length} ימים · ${logged.length} עם רישום</span></div></div>
+      <h3 style="margin-top:14px">2. למי</h3>
+      <div class="seg" style="margin-top:6px">${[["nurse", "לאחות / רופא/ה"], ["claude", "לשיחה עם Claude"]].map(([v, l]) => `<button class="${r.audience === v ? "on" : ""}" data-act="rep-audience" data-v="${v}">${l}</button>`).join("")}</div>
+      <p class="help" style="margin-top:4px">${r.audience === "nurse" ? "קליני וקצר: סיכומים, ממוצעים מול יעדים, תוספים, משקל ובדיקות. בלי הערות ובלי מודל משוער." : "מלא: כל מה שעוזר לי לייעץ, כולל הערכות ומקורות. בלי הצ'אט."}</p>
+      <h3 style="margin-top:14px">3. שדות</h3>
+      <div class="form-grid" style="margin-top:6px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">${REP_FIELDS.map(([k, l]) => `<label style="margin:0;display:flex;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-act="rep-field" data-k="${k}" ${r.fields[k] ? "checked" : ""}>${l}</label>`).join("")}</div>
+      <div class="inline-form" style="margin-top:10px">
+        <div class="field" style="flex:0 1 200px"><label for="rep-nut">אילו רכיבים בסיכום היומי</label><select id="rep-nut" data-act="rep-nutmode" style="min-height:36px;padding:4px 8px"><option value="main" ${r.nutMode === "main" ? "selected" : ""}>עיקריים (8)</option><option value="all" ${r.nutMode === "all" ? "selected" : ""}>כל הרכיבים (${NUT.length})</option></select></div>
+        <div class="field" style="flex:1 1 180px"><label for="rep-name">שם בכותרת (לא חובה)</label><input id="rep-name" value="${esc(r.name || "")}" data-act="rep-name" placeholder="ריק = בלי שם" style="min-height:36px;padding:4px 8px"></div>
+      </div>
+      <h3 style="margin-top:14px">4. הפקה</h3>
+      <div class="row" style="margin-top:6px;gap:8px">
+        <button class="btn primary" data-act="rep-print">📄 דף להדפסה / PDF</button>
+        <button class="btn" data-act="rep-copy">העתק טקסט</button>
+        <button class="btn" data-act="rep-download" data-fmt="md">הורד טקסט</button>
+        <button class="btn" data-act="rep-download" data-fmt="csv">הורד CSV</button>
+        ${canShare ? `<button class="btn" data-act="rep-share">שתף (וואטסאפ וכו')</button>` : ""}
+      </div>
+      <p class="help" style="margin-top:6px">דף להדפסה נפתח בחלון חדש; משם "הדפס → שמור כ-PDF". הטקסט מתאים להדבקה בשיחה רגילה איתי או לשליחה בהודעה.</p>
+      <div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
+  }
+  function foodSource(m) {
+    const id = m.food_id || "";
+    if (id.startsWith("g_")) return "מאגר כללי";
+    const f = App.state.foods.find((x) => x.id === id);
+    if (!f) return "הערכה";
+    const n = f.label_notes || "";
+    if (/תווית/.test(n)) return "תווית";
+    if (f.kind === "recipe" || /מתכון|מהמרכיבים|מהמתכון/.test(n)) return "מתכון";
+    if (/הערכה|מוערך|הונח/.test(n)) return "הערכה";
+    return "מאכל אישי";
+  }
+  // Animal-source vitamin A (retinol) counts toward the upper limit; plant carotenoids do not.
+  function isRetinolSource(m) { const f = foodById(m.food_id); if (!f || !f.generic) return false; return f.cat === "meat" || f.cat === "dairy" || NONVEGAN_DISHES.includes(f.id); }
+  function reportData() {
+    const r = repState();
+    const days = []; for (let k = r.from; k <= r.to && days.length < 366; k = addDays(k, 1)) days.push(k);
+    const nutKeys = r.nutMode === "all" ? NUT_KEYS : REP_MAIN;
+    const supps = App.state.supplements.filter((s) => s.active !== false);
+    const out = { r, days, nutKeys, supps, rows: [], labs: [], averages: null, preg: null, targets: null, sources: {}, topKeys: r.nutMode === "all" ? ["protein", "iron", "calcium", "carbs", "fat", "folate", "zinc", "magnesium"] : ["protein", "iron", "calcium", "carbs", "fat"] };
+    const ctxEnd = withDate(r.to, () => pregCtx());
+    const p = App.state.profile || {};
+    out.preg = { week: ctxEnd.week, trimester: ctxEnd.trimester, height: p.height_cm, prepreg: p.prepreg_weight_kg, weight: ctxEnd.weightKg, gain: ctxEnd.gainKg, gainRange: ctxEnd.gainRange, bmi: ctxEnd.bmi, diet: p.diet_type, diagnoses: App.state.diagnoses.map((d) => (window.DIAGNOSES.find((x) => x.key === d.code) || { he: d.code }).he), due: p.due_date };
+    out.targets = withDate(r.to, () => { const ctx = pregCtx(); const { targets, fired } = applyRules(ctx); const base = baseTargets(ctx); const ov = (App.state.targets && App.state.targets.overrides) || {}; return { base, adj: targets, ov, final: targetsFor(), notes: fired.filter((f) => f.text && f.changed).map((f) => f.text) }; });
+    const sums = {}, fsums = {}, ssums = {}, tsums = {}; let nLogged = 0, nFull = 0;
+    days.forEach((k) => {
+      const day = App.state.days[k];
+      const hasMeals = !!(day && (day.meals || []).length);
+      const row = { k, hasMeals, day, tot: null, food: null, fromSupp: null, targets: null, supp: [], walks: dayWalks(day), sun: (day && day.sun) || [], weight: day && day.weight_kg, notes: day && day.notes, glucose: (day && day.glucose) || [], gl: null, week: null, nMeals: hasMeals ? day.meals.length : 0, full: false, retinol: 0, top: {} };
+      row.week = withDate(k, () => pregCtx().week);
+      if (day) {
+        withDate(k, () => {
+          row.targets = targetsFor();
+          const split = dayTotals(k, { split: true }); row.tot = split.tot; row.fromSupp = split.fromSupp; row.food = dayTotals(k, { includeSupplements: false });
+          row.full = hasMeals && row.nMeals >= 3 && (row.food.kcal || 0) >= 0.6 * (row.targets.kcal || 2000);
+          if (hasMeals) {
+            row.retinol = day.meals.reduce((a, m) => a + (isRetinolSource(m) ? (m.nutrients.vitA || 0) : 0), 0);
+            const agg = {}; day.meals.forEach((m) => { agg[m.name] = agg[m.name] || {}; Object.keys(m.nutrients || {}).forEach((n) => { agg[m.name][n] = (agg[m.name][n] || 0) + m.nutrients[n]; }); });
+            out.topKeys.forEach((n) => { row.top[n] = Object.keys(agg).map((name) => ({ name, v: agg[name][n] || 0 })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v).slice(0, 3); });
+          }
+          row.supp = supps.map((s) => ({ name: s.name, taken: suppTaken(day, s), doses: suppDoses(s) }));
+          if (hasMeals) {
+            const entries = glEntries(day), walks = row.walks;
+            let peak = 0, highs = 0, inHigh = false;
+            for (let t = 5 * 60; t <= 27 * 60; t += 5) { const v = glCurveAt(entries, t, walks); if (v > peak) peak = v; if (v >= GL_HIGH && !inHigh) { highs++; inHigh = true; } if (v < GL_HIGH) inHigh = false; }
+            row.gl = { peak, highs, total: entries.reduce((a, e) => a + e.gl, 0), target: glDailyTarget().target };
+          }
+        });
+        if (hasMeals) nLogged++;
+        if (row.full) { nFull++; NUT_KEYS.forEach((n) => { sums[n] = (sums[n] || 0) + (row.tot[n] || 0); fsums[n] = (fsums[n] || 0) + (row.food[n] || 0); ssums[n] = (ssums[n] || 0) + (row.fromSupp[n] || 0); tsums[n] = (tsums[n] || 0) + (row.targets[n] || 0); }); }
+        (day.meals || []).forEach((m) => { const src = foodSource(m); out.sources[src] = out.sources[src] || new Set(); out.sources[src].add(m.name); });
+      }
+      out.rows.push(row);
+    });
+    out.nLogged = nLogged; out.nFull = nFull;
+    if (nFull) out.averages = { n: nFull, avg: Object.fromEntries(NUT_KEYS.map((n) => [n, sums[n] / nFull])), food: Object.fromEntries(NUT_KEYS.map((n) => [n, fsums[n] / nFull])), supp: Object.fromEntries(NUT_KEYS.map((n) => [n, ssums[n] / nFull])), pct: Object.fromEntries(NUT_KEYS.map((n) => [n, tsums[n] ? sums[n] / tsums[n] : null])) };
+    out.suppKeys = NUT_KEYS.filter((n) => out.rows.some((x) => x.fromSupp && (x.fromSupp[n] || 0) > 0));
+    out.labs = App.state.labs.filter((l) => l.date && l.date >= r.from && l.date <= r.to).sort((a, b) => a.date.localeCompare(b.date));
+    out.latestLabs = Object.values(ctxEnd.labs || {});
+    return out;
+  }
+  const repDate = (k) => { const d = parseKey(k); return `${DAYS_HE[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}`; };
+  const repTitle = (d) => `דוח תזונה ${d.r.from === d.r.to ? repDate(d.r.from) + "." + parseKey(d.r.from).getFullYear() : fmtDate(d.r.from) + " – " + fmtDate(d.r.to) + "." + parseKey(d.r.to).getFullYear()}`;
+  function repSubtitle(d) { const parts = []; if (d.r.name) parts.push(d.r.name); const w0 = d.rows[0] && d.rows[0].week, w1 = d.preg.week; if (w1 != null) parts.push(w0 != null && w0 !== w1 ? `שבועות הריון ${w0}–${w1} (טרימסטר ${d.preg.trimester})` : `שבוע הריון ${w1} (טרימסטר ${d.preg.trimester})`); if (d.preg.diet && d.preg.diet !== "omnivore") parts.push(d.preg.diet === "vegan" ? "תזונה טבעונית" : "תזונה צמחונית"); parts.push(`הופק ${fmtDate(dateKeyOf(new Date()))}.${new Date().getFullYear()}`); return parts.join(" · "); }
+  // ---- Markdown / plain text
+  function reportText(d) {
+    const f = d.r.fields, L = [];
+    const pctTxt = (v, t) => (t ? ` (${Math.round((v / t) * 100)}%)` : "");
+    L.push(`# ${repTitle(d)}`); L.push(repSubtitle(d)); L.push("");
+    if (f.preg) {
+      L.push("## פרטי הריון");
+      if (d.preg.due) L.push(`- תאריך לידה משוער: ${fmtDate(d.preg.due)}.${parseKey(d.preg.due).getFullYear()}`);
+      if (d.preg.height) L.push(`- גובה ${d.preg.height} ס"מ · משקל לפני ההריון ${d.preg.prepreg || "?"} ק"ג${d.preg.bmi ? ` · BMI ${d.preg.bmi.toFixed(1)}` : ""}`);
+      if (d.preg.weight) L.push(`- משקל אחרון ${d.preg.weight} ק"ג${d.preg.gain != null ? ` · עלייה ${d.preg.gain.toFixed(1)} ק"ג` : ""}${d.preg.gainRange ? ` · טווח IOM לשבוע: ${d.preg.gainRange.expectedMin.toFixed(1)}–${d.preg.gainRange.expectedMax.toFixed(1)}` : ""}`);
+      const w = d.rows.filter((x) => x.weight); if (w.length) L.push(`- שקילות בטווח: ${w.map((x) => `${fmtDate(x.k)}: ${x.weight}`).join(", ")}`);
+      if (d.preg.diagnoses.length) L.push(`- אבחנות/מצבים: ${d.preg.diagnoses.join(", ")}`);
+      L.push("");
+    }
+    if (f.targets) {
+      L.push("## יעדים יומיים"); L.push("| רכיב | בסיס | מותאם | ידני |"); L.push("|---|---|---|---|");
+      d.nutKeys.forEach((n) => { const m = NUT_BY[n]; L.push(`| ${m.he} (${m.unit}) | ${fmt(d.targets.base[n])} | ${fmt(d.targets.adj[n])} | ${d.targets.ov[n] != null ? fmt(d.targets.ov[n]) : "–"} |`); });
+      if (d.targets.notes.length) L.push("התאמות: " + d.targets.notes.join(" | "));
+      L.push("");
+    }
+    const dash = (n) => Array.from({ length: n }, () => "—").join(" | ");
+    if (f.daily) {
+      L.push("## סיכום יומי — ממזון בלבד (% מהיעד; תוספים בטבלה נפרדת)");
+      L.push(`| תאריך | שבוע | ארוחות | רישום | ${d.nutKeys.map((n) => NUT_BY[n].he).join(" | ")} |`); L.push(`|---|---|---|---|${d.nutKeys.map(() => "---").join("|")}|`);
+      d.rows.forEach((x) => { if (!x.hasMeals) { L.push(`| ${repDate(x.k)} | ${x.week != null ? x.week : "—"} | 0 | אין רישום | ${dash(d.nutKeys.length)} |`); return; } L.push(`| ${repDate(x.k)} | ${x.week} | ${x.nMeals} | ${x.full ? "מלא" : "חלקי"} | ${d.nutKeys.map((n) => `${fmt(x.food[n] || 0)}${NUT_BY[n].kind === "limit" ? "" : pctTxt(x.food[n] || 0, x.targets[n])}`).join(" | ")} |`); });
+      L.push(`"מלא" = לפחות 3 ארוחות ולפחות 60% מיעד הקלוריות ממזון; "חלקי" = רישום לא שלם (לא נכנס לממוצעים). יום בלי רישום ויום שלא קיים במערכת מופיעים אותו דבר.`);
+      if (d.suppKeys.length) {
+        L.push(""); L.push("### תרומת התוספים שסומנו (בנוסף למזון)");
+        L.push(`| תאריך | ${d.suppKeys.map((n) => NUT_BY[n].he).join(" | ")} |`); L.push(`|---|${d.suppKeys.map(() => "---").join("|")}|`);
+        d.rows.forEach((x) => { if (!x.day || (!x.hasMeals && !x.supp.some((q) => q.taken))) { L.push(`| ${repDate(x.k)} | ${dash(d.suppKeys.length)} |`); return; } L.push(`| ${repDate(x.k)} | ${d.suppKeys.map((n) => fmt(x.fromSupp[n] || 0)).join(" | ")} |`); });
+      }
+      if (d.nutKeys.includes("vitA")) {
+        const totA = d.rows.reduce((a, x) => a + (x.food ? (x.food.vitA || 0) : 0), 0), ret = d.rows.reduce((a, x) => a + x.retinol, 0);
+        L.push(""); L.push(`ויטמין A ממזון: ${ret <= 0 ? "כולו קרוטנואידים צמחיים (בטא-קרוטן מגזר, בטטה, ירקות כתומים/ירוקים) — לא נספר לגבול העליון של 3,000 מק\"ג, שחל על רטינול בלבד." : `מתוכו רטינול (מהחי) ~${fmt(ret, 0)} מק\"ג מתוך ${fmt(totA, 0)} בטווח; רק הרטינול נספר לגבול העליון.`}${d.suppKeys.includes("vitA") ? " ויטמין A מהמולטי: לפי התווית (בטא-קרוטן)." : ""}`);
+      }
+      L.push("");
+    }
+    if (f.averages) {
+      if (d.averages) {
+        L.push(`## ממוצע לתקופה — ${d.averages.n} ימים מלאים${d.nLogged > d.averages.n ? ` (${d.nLogged - d.averages.n} ימים חלקיים לא נכללו)` : ""}`); L.push("| רכיב | ממוצע ממזון | ממוצע מתוספים | סה\"כ | % מהיעד (סה\"כ) |"); L.push("|---|---|---|---|---|");
+        d.nutKeys.forEach((n) => { const p = d.averages.pct[n]; L.push(`| ${NUT_BY[n].he} (${NUT_BY[n].unit}) | ${fmt(d.averages.food[n])} | ${d.averages.supp[n] ? fmt(d.averages.supp[n]) : "–"} | ${fmt(d.averages.avg[n])} | ${p == null ? "–" : Math.round(p * 100) + "%"}${NUT_BY[n].kind === "limit" ? " (מגבלה)" : ""} |`); });
+        const low = d.nutKeys.filter((n) => NUT_BY[n].kind === "target" && d.averages.pct[n] != null && d.averages.pct[n] < 0.7).map((n) => NUT_BY[n].he);
+        if (low.length) L.push(`מתחת ל-70% מהיעד בממוצע (כולל תוספים): ${low.join(", ")}.`);
+        const foodLow = d.nutKeys.filter((n) => NUT_BY[n].kind === "target" && d.averages.pct[n] != null && d.averages.pct[n] >= 0.7 && d.averages.supp[n] > 0 && d.averages.food[n] < 0.5 * (d.averages.avg[n] || 1)).map((n) => NUT_BY[n].he);
+        if (foodLow.length) L.push(`מגיע בעיקר מתוספים (מזון פחות ממחצית): ${foodLow.join(", ")}.`);
+      } else L.push("## ממוצע לתקופה\nאין ימים מלאים בטווח — אין ממוצע.");
+      L.push("");
+    }
+    if (f.sources) {
+      if (d.rows.some((x) => x.hasMeals)) {
+        L.push("## מקורות עיקריים (3 המזונות התורמים ביותר, ליום)");
+        d.rows.forEach((x) => { if (!x.hasMeals) return; L.push(`- ${repDate(x.k)}: ` + d.topKeys.map((n) => `${NUT_BY[n].he}: ${x.top[n] && x.top[n].length ? x.top[n].map((t) => `${t.name} ${fmt(t.v)}`).join(", ") : "–"}`).join(" · ")); });
+        L.push("");
+      }
+    }
+    if (f.meals) {
+      L.push("## ארוחות");
+      d.rows.forEach((x) => { if (!x.hasMeals) return; L.push(`### ${repDate(x.k)}`); x.day.meals.slice().sort((a, b) => (a.time || "").localeCompare(b.time || "")).forEach((m) => { const n = m.nutrients || {}; L.push(`- ${m.time || ""} ${m.name} — ${m.qty} ${m.unit} (${m.grams} ג')${f.mealNut ? `: ${fmt(n.kcal, 0)} קק"ל, חלבון ${fmt(n.protein)}, פחמ' ${fmt(n.carbs)}, סיבים ${fmt(n.fiber)}, שומן ${fmt(n.fat)}, ברזל ${fmt(n.iron)}, סידן ${fmt(n.calcium, 0)}` : ""}`); }); L.push(""); });
+    }
+    if (f.supps && d.supps.length) {
+      L.push("## תוספים (יחידות שסומנו / יחידות ליום)"); L.push(`| תאריך | ${d.supps.map((s) => s.name).join(" | ")} |`); L.push(`|---|${d.supps.map(() => "---").join("|")}|`);
+      d.rows.forEach((x) => { if (!x.day || (!x.hasMeals && !x.supp.some((q) => q.taken))) { L.push(`| ${repDate(x.k)} | ${dash(d.supps.length)} |`); return; } L.push(`| ${repDate(x.k)} | ${x.supp.map((s) => `${s.taken}/${s.doses}`).join(" | ")} |`); });
+      L.push("תכולת התוספים (ליום מלא): " + d.supps.map((s) => `${s.name}: ${Object.entries(suppNutrients(s)).map(([k, v]) => `${NUT_BY[k].he} ${fmt(v)} ${NUT_BY[k].unit}`).join(", ") || "לא הוזן"}`).join(" | "));
+      L.push("");
+    }
+    if (f.activity) {
+      const any = d.rows.some((x) => x.walks.length || x.sun.length);
+      L.push("## הליכה ושמש");
+      if (!any) L.push("לא נרשמה פעילות בטווח.");
+      d.rows.forEach((x) => { if (!x.walks.length && !x.sun.length) return; L.push(`- ${repDate(x.k)}: ${x.walks.length ? `הליכה ${x.walks.reduce((a, w) => a + w.minutes, 0)} דק' ב-${x.walks.length} מקטעים (${x.walks.map((w) => `${w.start} ${w.minutes} דק' ${WALK_HE[w.pace] || ""}`).join(", ")})` : "בלי הליכה"}${x.sun.length ? ` · שמש ${x.sun.reduce((a, s) => a + (Number(s.minutes) || 0), 0)} דק'` : ""}`); });
+      L.push("");
+    }
+    if (f.gl) {
+      L.push("## עומס גליקמי (מודל משוער, לא מדידת סוכר)"); L.push("| תאריך | שיא | פיקים מעל 20 | מצטבר | יעד יומי |"); L.push("|---|---|---|---|---|");
+      d.rows.forEach((x) => { if (!x.gl) return; L.push(`| ${repDate(x.k)} | ${fmt(x.gl.peak, 0)} | ${x.gl.highs} | ${fmt(x.gl.total, 0)} | ${x.gl.target} |`); });
+      L.push("עומס = אינדקס גליקמי × פחמימות נטו ÷ 100; חלבון/שומן באותה ארוחה והליכה אחריה מרככים. רף 20 לארוחה = גבוה.");
+      L.push("");
+    }
+    if (f.labs) {
+      L.push("## בדיקות");
+      if (d.labs.length) d.labs.forEach((l) => { const m = window.LAB_MARKERS.find((x) => x.key === l.marker) || { he: l.marker }; L.push(`- ${fmtDate(l.date)}: ${m.he} ${fmt(l.value, 2)} ${l.unit || m.unit || ""}`); });
+      else if (d.latestLabs.length) L.push("אין בדיקות בטווח. אחרונות: " + d.latestLabs.map((l) => `${l.he} ${l.value} ${l.unit} (${l.date})`).join("; "));
+      else L.push("אין בדיקות רשומות.");
+      const gl = d.rows.filter((x) => x.glucose.length); if (gl.length) { L.push("מדידות סוכר:"); gl.forEach((x) => x.glucose.forEach((g) => L.push(`- ${repDate(x.k)} ${g.time}: ${g.mg_dl} mg/dL (${g.tag})`))); }
+      L.push("");
+    }
+    if (f.notes) { const ns = d.rows.filter((x) => x.notes && x.notes.trim()); if (ns.length) { L.push("## הערות יומיות"); ns.forEach((x) => L.push(`- ${repDate(x.k)}: ${x.notes.trim()}`)); L.push(""); } }
+    if (f.accuracy) {
+      L.push("## הערת דיוק");
+      const order = ["תווית", "מתכון", "מאכל אישי", "מאגר כללי", "הערכה"];
+      order.forEach((k) => { if (d.sources[k]) L.push(`- ${k}: ${Array.from(d.sources[k]).slice(0, 25).join(", ")}${d.sources[k].size > 25 ? "…" : ""}`); });
+      L.push("ערכי המאגר הכללי הם ממוצעים (USDA/משרד הבריאות); כמויות ביתיות הוערכו. כלי מעקב אישי, לא ייעוץ רפואי.");
+    }
+    return L.join("\n");
+  }
+  // ---- Printable HTML (standalone document)
+  function reportHtml(d) {
+    const md = reportText(d);
+    // minimal markdown → html: headings, tables, bullets, paragraphs
+    const lines = md.split("\n"); let h = "", inTable = false, inList = false, tableRows = [];
+    const flushTable = () => { if (!tableRows.length) return; const [head, , ...body] = tableRows; const cells = (row) => row.split("|").slice(1, -1).map((c) => c.trim()); h += `<table><thead><tr>${cells(head).map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${body.map((r) => `<tr>${cells(r).map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`; tableRows = []; };
+    lines.forEach((ln) => {
+      if (ln.startsWith("|")) { if (inList) { h += "</ul>"; inList = false; } tableRows.push(ln); inTable = true; return; }
+      if (inTable) { flushTable(); inTable = false; }
+      if (ln.startsWith("- ")) { if (!inList) { h += "<ul>"; inList = true; } h += `<li>${esc(ln.slice(2))}</li>`; return; }
+      if (inList) { h += "</ul>"; inList = false; }
+      if (ln.startsWith("### ")) h += `<h3>${esc(ln.slice(4))}</h3>`;
+      else if (ln.startsWith("## ")) h += `<h2>${esc(ln.slice(3))}</h2>`;
+      else if (ln.startsWith("# ")) h += `<h1>${esc(ln.slice(2))}</h1>`;
+      else if (ln.trim()) h += `<p>${esc(ln)}</p>`;
+    });
+    if (inTable) flushTable(); if (inList) h += "</ul>";
+    return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>${esc(repTitle(d))}</title>
+<style>body{font-family:"Segoe UI","Heebo","Assistant",Arial,sans-serif;color:#222;margin:0;padding:24px;max-width:900px;margin-inline:auto;line-height:1.45;font-size:13px}h1{font-size:20px;margin:0 0 4px}h1+p{color:#666;margin:0 0 16px}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}h3{font-size:13px;margin:12px 0 4px;color:#444}table{border-collapse:collapse;width:100%;margin:4px 0 8px;font-size:12px}th,td{border:1px solid #ddd;padding:4px 6px;text-align:right;vertical-align:top}th{background:#f3f3f3}tr:nth-child(even) td{background:#fafafa}ul{margin:4px 0 8px;padding-inline-start:18px}li{margin:2px 0}p{margin:4px 0}.foot{margin-top:24px;color:#888;font-size:11px;border-top:1px solid #ddd;padding-top:8px}.bar{display:flex;gap:8px;margin-bottom:12px}button{font:inherit;padding:6px 12px;border:1px solid #bbb;border-radius:6px;background:#fff;cursor:pointer}@media print{.bar{display:none}body{padding:0}@page{size:A4;margin:14mm}h2{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid}}</style></head><body>
+<div class="bar"><button onclick="window.print()">הדפס / שמור כ-PDF</button><span style="color:#888;font-size:12px;align-self:center">הדף הזה נפרד מהדאשבורד ואינו משנה בו כלום.</span></div>
+${h}
+<div class="foot">הופק מכלי מעקב תזונה אישי. ערכי מזון משוערים; יעדים לפי DRI להריון (NIH/IOM) מותאמים אישית. אינו תחליף לייעוץ רפואי.</div>
+</body></html>`;
+  }
+  function reportCsv(d) {
+    const keys = d.nutKeys;
+    const rows = [["תאריך", "שבוע הריון", "ארוחות", "יום מלא", ...keys.map((n) => `${NUT_BY[n].he} ממזון (${NUT_BY[n].unit})`), ...d.suppKeys.map((n) => `${NUT_BY[n].he} מתוספים`), ...keys.map((n) => `יעד ${NUT_BY[n].he}`), "תוספים שסומנו", "הליכה (דק')", "משקל"]];
+    d.rows.forEach((x) => { rows.push([x.k, x.week != null ? x.week : "", x.nMeals, x.hasMeals ? (x.full ? "כן" : "חלקי") : "אין רישום", ...keys.map((n) => x.hasMeals ? Math.round((x.food[n] || 0) * 10) / 10 : ""), ...d.suppKeys.map((n) => x.day ? Math.round((x.fromSupp[n] || 0) * 100) / 100 : ""), ...keys.map((n) => x.targets && x.targets[n] != null ? x.targets[n] : ""), x.day ? x.supp.map((s) => `${s.name} ${s.taken}/${s.doses}`).join("; ") : "", x.walks.reduce((a, w) => a + w.minutes, 0) || "", x.weight || ""]); });
+    return "﻿" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  }
+  async function saveText(name, text, mime) {
+    try { const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null; if (dl) { await dl.save({ filename: name, data: text }); toast("הקובץ נשמר"); return true; } } catch (e) { if (e && e.code === "declined") return true; }
+    try { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: mime || "text/plain;charset=utf-8" })); a.download = name; a.click(); return true; } catch (e) { return false; }
+  }
+  function reportFileBase(d) { return `nutrition-report-${d.r.from}${d.r.to !== d.r.from ? "_" + d.r.to : ""}`; }
+  async function repDeliver(kind, fmt) {
+    repSavePrefs();
+    const d = reportData();
+    if (kind === "print") {
+      const html = reportHtml(d);
+      let w = null; try { w = window.open("", "_blank"); } catch (e) { w = null; }
+      if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); return; }
+      const ok = await saveText(reportFileBase(d) + ".html", html, "text/html;charset=utf-8");
+      if (!ok) openModal(`<h2>הדוח</h2><p class="help">הדפדפן חסם חלון חדש. העתיקי את הטקסט או הורידי קובץ.</p><textarea style="min-height:260px;font-size:.8rem">${esc(reportText(d))}</textarea><div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`);
+      return;
+    }
+    const text = reportText(d);
+    if (kind === "copy") { try { await navigator.clipboard.writeText(text); toast("הדוח הועתק — אפשר להדביק בשיחה"); } catch (e) { openModal(`<h2>העתקה</h2><textarea style="min-height:260px;font-size:.8rem">${esc(text)}</textarea><div class="actions"><button class="btn" data-act="modal-close">סגירה</button></div>`); } return; }
+    if (kind === "share") { try { await navigator.share({ title: repTitle(d), text }); } catch (e) { if (e && e.name !== "AbortError") toast("השיתוף לא זמין כאן — השתמשי בהעתקה"); } return; }
+    if (kind === "download") { if (fmt === "csv") await saveText(reportFileBase(d) + ".csv", reportCsv(d), "text/csv;charset=utf-8"); else await saveText(reportFileBase(d) + ".md", text, "text/markdown;charset=utf-8"); }
+  }
   // ------------------------------------------------------------ rendering
   function render() {
     if (hasPin() && !unlocked) { showLock(); return; }
@@ -1743,8 +2376,9 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     const doneRows = doneList.length ? `<h3 style="margin-top:16px;margin-bottom:4px">${CHECK}הושלם ${isToday ? "היום" : ""} <span class="small ink2">(${doneList.length})</span></h3>${doneList.map(nutRow).join("")}` : "";
     const suppRows = supps.map((s) => { const full = suppTaken(day, s) >= suppDoses(s); return `<div class="supp ${full ? "on" : ""}">
         ${doseBoxes(day, s)}
-        <div class="grow"><div class="title">${full ? CHECK : ""}${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}</div></div>
+        <div class="grow"><div class="title">${full ? CHECK : ""}${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${suppTaken(day, s) ? ` · <button class="btn sm ghost" data-act="supp-times" data-id="${s.id}" style="padding:0 6px;min-height:22px;font-size:.8rem" title="תיקון שעת הנטילה">נלקח ${esc(((day.supplement_times || {})[s.id] || []).slice(0, suppTaken(day, s)).join(", ") || "שעה?")} ✎</button>` : ""}</div></div>
       </div>`; });
+    const glCard = glCardHtml(day, isToday), walkCard = walkCardHtml(day, isToday), sunCard = sunCardHtml(day, isToday);
     const glucoseCard = App.state.profile.track_glucose ? `<div class="card"><div class="card-head"><h3>מדידות סוכר</h3><button class="btn sm" data-act="add-glucose">+ מדידה</button></div>
         ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag)} · ${r.time}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
     $("panel-today").innerHTML = `
@@ -1760,6 +2394,9 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
               ${missing.length ? floatRows.join("") : `<p class="help">הכול הושלם.</p>`}
               ${doneRows}
             </div>
+            ${glCard}
+            ${walkCard}
+            ${sunCard}
             ${glucoseCard}
           </div>
           <div class="stack">
@@ -1770,7 +2407,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
               ${(() => { const adv = suppAdvice(App.date); return adv.length ? `<div class="stack" style="gap:6px;margin-top:10px">${adv.map((a) => `<div class="note ${a.level}">${esc(a.text)}</div>`).join("")}</div>` : `<p class="help" style="margin-top:8px">אין רכיב שבו התזונה + התוספים מתקרבים לגבול עליון — אין סיבה להפחית תוסף היום.</p>`; })()}
             </div>
             <div class="card">
-              <div class="card-head"><h2>נאכל ${isToday ? "היום" : ""}</h2><button class="btn sm ghost" data-act="go-tab" data-tab="log">ליומן</button></div>
+              <div class="card-head"><h2>נאכל ${isToday ? "היום" : ""}</h2><div class="row" style="gap:4px"><button class="btn sm ghost" data-act="report-today" title="סיכום היום לשיתוף">שתפי את היום</button><button class="btn sm ghost" data-act="go-tab" data-tab="log">ליומן</button></div></div>
               ${day.meals.length ? `<div class="list">${day.meals.map((m) => `<div class="item clickable" data-act="meal-detail" data-id="${m.id}"><div class="grow"><span class="title">${esc(m.name)}</span> <span class="meta">${m.qty} ${esc(m.unit)} · ${m.time}</span></div><span class="small num ink2">${fmt(m.nutrients.kcal, 0)} קק"ל · ~${digestion(m).hours} ש'</span></div>`).join("")}</div><p class="help" style="margin-top:6px">לחיצה על ארוחה: זמן עיכול משוער ומתי כדאי לאכול שוב.</p>` : `<p class="help">רשמי מה אכלת בטאב היומן, או בשורת ההזנה המהירה.</p>`}
             </div>
           </div>
@@ -1997,6 +2634,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
         <div class="field wide"><label for="ff-aliases">קיצורי דרך (מופרדים בפסיק)</label><input id="ff-aliases" value="${esc(f.aliases.join(", "))}" placeholder="דייסה, קוואקר"></div>
         <div class="field"><label for="ff-plabel">שם המנה</label><input id="ff-plabel" value="${esc(f.portions[0].label)}"></div>
         <div class="field"><label for="ff-pg">משקל המנה (גרם)</label><input id="ff-pg" type="number" step="any" value="${f.portions[0].g}"></div>
+        <div class="field"><label for="ff-gi">אינדקס גליקמי (0–100, לא חובה)</label><input id="ff-gi" type="number" step="1" min="0" max="110" value="${f.gi != null ? f.gi : ""}" placeholder="אוטומטי"></div>
         <div class="field wide"><label>ערכים ל-<b>100 גרם</b> (מהתווית)</label></div>
         ${nutFields(MAIN_FIELDS)}
         <details class="wide"><summary class="help" style="cursor:pointer">עוד רכיבים (ויטמינים ומינרלים)</summary><div class="form-grid" style="margin-top:8px">${nutFields(NUT_KEYS.filter((k) => !MAIN_FIELDS.includes(k)))}</div></details>
@@ -2039,6 +2677,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       f.per100 = {};
       NUT_KEYS.forEach((k) => { const el = $("ff-" + k); if (el && el.value !== "") f.per100[k] = Number(el.value); });
       f.portions = [{ label: $("ff-plabel").value.trim() || "מנה", g: Number($("ff-pg").value) || 100 }];
+      const giEl = $("ff-gi"); if (giEl) { if (giEl.value === "") delete f.gi; else f.gi = Number(giEl.value); }
     }
     return f;
   }
@@ -2067,11 +2706,19 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       <div class="card">
         ${supps.length ? supps.map((s) => `<div class="supp ${suppTaken(day, s) >= suppDoses(s) ? "on" : ""} ${s.active === false ? "muted" : ""}">
           ${s.active === false ? "" : doseBoxes(day, s)}
-          <div class="grow" data-act="supp-edit" data-id="${s.id}" style="cursor:pointer"><div class="title">${suppTaken(day, s) >= suppDoses(s) && s.active !== false ? CHECK : ""}${esc(s.name)}${s.active === false ? " (לא פעיל)" : ""}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${Object.keys(suppNutrients(s)).length ? " · " + Object.entries(suppNutrients(s)).map(([k, v]) => `${NUT_BY[k].he} ${fmt(v)}`).join(", ") : ""}</div></div>
+          <div class="grow" data-act="supp-edit" data-id="${s.id}" style="cursor:pointer"><div class="title">${suppTaken(day, s) >= suppDoses(s) && s.active !== false ? CHECK : ""}${esc(s.name)}${s.active === false ? " (לא פעיל)" : ""}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${Object.keys(suppNutrients(s)).length ? " · " + Object.entries(suppNutrients(s)).map(([k, v]) => `${NUT_BY[k].he} ${fmt(v)}`).join(", ") : ""}</div>${suppTaken(day, s) ? `<div class="meta"><button class="btn sm ghost" data-act="supp-times" data-id="${s.id}" style="padding:0 6px;min-height:22px;font-size:.8rem">נלקח ${esc(((day.supplement_times || {})[s.id] || []).slice(0, suppTaken(day, s)).join(", ") || "שעה?")} ✎ תיקון שעה</button></div>` : ""}</div>
         </div>`).join("") : `<div class="empty">עדיין לא הוגדרו תוספים.<br><span class="small">לכל תוסף אפשר להזין מה הוא תורם (ברזל, חומצה פולית…) כדי שהסימון היומי ייכנס לחישוב.</span></div>`}
       </div>
       <div class="card soft"><b>רצף:</b> <span class="num">${streak}</span> ימים רצופים שכל היחידות סומנו. <span class="help">קובייה לכל יחידה (כדור/כמוסה) — הסימון הוא לתאריך ${esc(fmtDate(App.date))}. לחיצה על השם עורכת את התוסף.</span></div>
     </div>`;
+  }
+  function suppTimesModal(id) {
+    const s = App.state.supplements.find((x) => x.id === id); if (!s) return;
+    const day = getDay(App.date), n = suppTaken(day, s), times = ((day.supplement_times || {})[s.id] || []).slice(0, n);
+    while (times.length < n) times.push("");
+    openModal(`<h2>שעות נטילה — ${esc(s.name)}</h2><p class="help">השעה נכנסת להתראות של ברזל מול סידן/קפה. אם סימנת באיחור, תקני כאן לשעה שבה באמת לקחת.</p>
+      <div class="form-grid" style="margin-top:10px">${times.map((t, i) => `<div class="field"><label for="st-${i}">יחידה ${i + 1}</label><input id="st-${i}" type="time" value="${esc(t)}"></div>`).join("")}</div>
+      <div class="actions"><button class="btn" data-act="modal-close">ביטול</button><button class="btn primary" data-act="supp-times-save" data-id="${s.id}" data-n="${n}">שמירה</button></div>`);
   }
   function suppModal(s) {
     const isNew = !s;
@@ -2267,11 +2914,14 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       const band = m.low != null && m.high != null ? lp.map(() => ({ lo: m.low, hi: m.high })) : null;
       labSvg = window.Charts.line({ points: lp, target: band ? null : (m.low != null ? m.low : m.high), band, unit: m.unit, yLabel: m.he, height: 180 });
     }
+    // walking minutes per day
+    const walkPts = keys.map((k) => ({ label: fmtDate(k), y: dayWalks(App.state.days[k]).reduce((a, w) => a + w.minutes, 0) }));
+    const walkSvg = walkPts.some((p) => p.y > 0) ? window.Charts.line({ points: walkPts, unit: "דק'", yLabel: "הליכה", height: 170 }) : "";
     // summary tiles
     const avgOf = (key) => { const vals = logged.map((k) => totals[k][key] || 0); return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0; };
     const suppDays = calKeys.filter((k) => { const d = App.state.days[k]; return d && act.length && act.every((s) => suppTaken(d, s) >= suppDoses(s)); }).length;
     $("panel-history").innerHTML = `<div class="stack">
-      <div class="row between"><h2>מעקב לאורך זמן</h2><div class="seg">${[[7, "7 ימים"], [30, "30 ימים"], [90, "90 ימים"], [0, "הכול"]].map(([v, l]) => `<button class="${histRange === v ? "on" : ""}" data-act="hist-range" data-v="${v}">${l}</button>`).join("")}</div></div>
+      <div class="row between"><div class="row"><h2>מעקב לאורך זמן</h2><button class="btn sm" data-act="report-open">📄 דוח לייצוא</button></div><div class="seg">${[[7, "7 ימים"], [30, "30 ימים"], [90, "90 ימים"], [0, "הכול"]].map(([v, l]) => `<button class="${histRange === v ? "on" : ""}" data-act="hist-range" data-v="${v}">${l}</button>`).join("")}</div></div>
       <div class="hero">
         <div class="tile"><div class="name">ימים עם רישום</div><div class="big num">${logged.length}<small> / ${n}</small></div></div>
         <div class="tile"><div class="name">ממוצע יומי</div><div class="big num">${fmt(avgOf("kcal"), 0)}<small> קק"ל</small></div><div class="sub"><span>חלבון ${fmt(avgOf("protein"))} · פחמ' ${fmt(avgOf("carbs"))} · ברזל ${fmt(avgOf("iron"))}</span></div></div>
@@ -2286,6 +2936,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
         <div class="card"><div class="card-head"><h3>היענות לתוספים — 4 שבועות</h3></div><div class="chart">${calSvg}</div><div class="legend"><span><i style="background:var(--good)"></i>הכול</span><span><i style="background:var(--warn)"></i>חלקי</span><span><i style="background:var(--bad-soft)"></i>כלום</span></div></div>
         <div class="card"><div class="card-head"><h3>משקל מול הטווח המומלץ</h3></div>${weightSvg ? `<div class="chart">${weightSvg}</div><div class="legend"><span><i style="background:var(--accent-2-soft)"></i>טווח IOM לשבוע</span><span><i style="background:var(--accent)"></i>שקילות</span></div>` : `<p class="help">אין שקילות עדיין — הזיני בטאב נתוני הריון.</p>`}</div>
       </div>
+      ${walkSvg ? `<div class="card"><div class="card-head"><h3>הליכה — דקות ליום</h3><span class="help">סה"כ ${fmt(walkPts.reduce((a, p) => a + p.y, 0), 0)} דק' בתקופה</span></div><div class="chart">${walkSvg}</div></div>` : ""}
       ${labMarkers.length ? `<div class="card"><div class="card-head"><h3>בדיקות לאורך זמן</h3><select id="hist-lab" data-act="hist-lab" style="width:auto;min-height:34px;padding:4px 8px">${labMarkers.map((k) => `<option value="${k}" ${k === histLab ? "selected" : ""}>${(window.LAB_MARKERS.find((x) => x.key === k) || { he: k }).he}</option>`).join("")}</select></div><div class="chart">${labSvg}</div><div class="legend"><span><i style="background:var(--accent-2-soft)"></i>טווח תקין</span></div></div>` : ""}
     </div>`;
   }
@@ -2381,6 +3032,25 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     "supp-dose": (el) => { const day = getDay(App.date); const s = App.state.supplements.find((x) => x.id === el.dataset.id); if (!s) return; const i = Number(el.dataset.i), c = suppTaken(day, s); setSuppTaken(day, s, i < c ? i : i + 1); saveDay(App.date); render(); },
     "take-all-supps": () => { const day = getDay(App.date); App.state.supplements.filter((s) => s.active !== false).forEach((s) => setSuppTaken(day, s, suppDoses(s))); saveDay(App.date); render(); },
     "quick-add": (el) => { const f = foodById(el.dataset.food); if (!f) return; closeModal(); if (App.tab !== "log") { addMealEntry(App.date, f, 1, f.portions[0] ? f.portions[0].label : "גרם"); toast(`נוסף: ${f.name} (${f.portions[0] ? f.portions[0].label : "100 גרם"})`); render(); } else pickFood(f, 1); },
+    // report
+    "report-open": () => reportModal(),
+    "report-today": () => { const r = repState(); r.from = r.to = App.date; reportModal(); },
+    "rep-range": (el) => { const r = repState(), today = dateKeyOf(new Date()); if (el.dataset.v === "today") { r.from = r.to = today; } else { r.to = today; r.from = addDays(today, -(Number(el.dataset.v) - 1)); } reportModal(); },
+    "rep-audience": (el) => { repApplyAudience(el.dataset.v); reportModal(); },
+    "rep-print": () => repDeliver("print"),
+    "rep-copy": () => repDeliver("copy"),
+    "rep-share": () => repDeliver("share"),
+    "rep-download": (el) => repDeliver("download", el.dataset.fmt),
+    // walking + sun
+    "walk-start": () => { writeTimer({ startedAt: Date.now(), pace: "moderate", outdoors: true }); render(); },
+    "timer-pace": (el) => { const t = readTimer(); if (!t) return; t.pace = el.dataset.p; writeTimer(t); render(); },
+    "walk-cancel": () => { if (!confirm("לבטל את ההליכה בלי לרשום?")) return; writeTimer(null); render(); },
+    "walk-stop": () => { const t = readTimer(); if (!t) return; const mins = Math.max(1, Math.round((Date.now() - t.startedAt) / 60000)); addWalk(dateKeyOf(new Date()), israelTimeOf(t.startedAt), mins, t.pace, t.outdoors); writeTimer(null); toast(`נרשמה הליכה: ${mins} דק'`); render(); },
+    "walk-add": () => { const mins = Number($("wk-min").value) || 0; if (!mins) { toast("כמה דקות?"); return; } addWalk(App.date, $("wk-start").value || nowTime(), mins, $("wk-pace").value, $("wk-out").checked); toast("נרשמה הליכה"); render(); },
+    "walk-del": (el) => { const day = getDay(App.date); day.walks = (day.walks || []).filter((w) => w.id !== el.dataset.id); day.sun = (day.sun || []).filter((x) => x.walk_id !== el.dataset.id); saveDay(App.date); render(); },
+    "sun-add": (el) => { addSun(App.date, $("sn-start").value || nowTime(), Number(el.dataset.min), $("sn-cover").value); toast("נרשמה חשיפה לשמש"); render(); },
+    "sun-del": (el) => { const day = getDay(App.date); day.sun = (day.sun || []).filter((x) => x.id !== el.dataset.id); saveDay(App.date); render(); },
+    "sun-cloud": (el) => { const day = getDay(App.date); day.sun_cloud = el.dataset.c; saveDay(App.date); render(); },
     "add-glucose": () => openModal(`<h2>מדידת סוכר</h2><div class="form-grid"><div class="field"><label for="gl-v">mg/dL</label><input id="gl-v" type="number" inputmode="numeric"></div><div class="field"><label for="gl-tag">מתי</label><select id="gl-tag"><option>בצום</option><option>שעה אחרי ארוחה</option><option>שעתיים אחרי ארוחה</option><option>לפני שינה</option><option>אחר</option></select></div><div class="field"><label for="gl-t">שעה</label><input id="gl-t" type="time" value="${nowTime()}"></div></div><div class="actions"><button class="btn" data-act="modal-close">ביטול</button><button class="btn primary" data-act="glucose-save">שמירה</button></div>`),
     "glucose-save": () => { const v = Number($("gl-v").value); if (!v) return; const day = getDay(App.date); day.glucose = day.glucose || []; day.glucose.push({ mg_dl: v, tag: $("gl-tag").value, time: $("gl-t").value }); saveDay(App.date); closeModal(); render(); },
     "del-glucose": (el) => { const day = getDay(App.date); day.glucose.splice(Number(el.dataset.i), 1); saveDay(App.date); render(); },
@@ -2410,6 +3080,8 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     "ing-pick": (el) => { const f = window._editFood; f.name = $("ff-name").value; f.aliases = $("ff-aliases").value.split(",").map((s) => s.trim()).filter(Boolean); f.servings = Number($("ff-servings").value) || 1; const fd = foodById(el.dataset.food); f.ingredients.push({ food_id: fd.id, grams: fd.portions[0] ? fd.portions[0].g : 100 }); recipeModal(f, false); },
     "ing-del": (el) => { const f = window._editFood; f.name = $("ff-name").value; f.servings = Number($("ff-servings").value) || 1; f.ingredients.splice(Number(el.dataset.i), 1); recipeModal(f, false); },
     // supps
+    "supp-times": (el) => suppTimesModal(el.dataset.id),
+    "supp-times-save": (el) => { const day = getDay(App.date), n = Number(el.dataset.n) || 0; const arr = []; for (let i = 0; i < n; i++) { const v = ($("st-" + i) || {}).value; arr.push(v || nowTime()); } arr.sort(); day.supplement_times = day.supplement_times || {}; day.supplement_times[el.dataset.id] = arr; saveDay(App.date); closeModal(); render(); toast("שעות הנטילה עודכנו"); },
     "supp-new": () => suppModal(null),
     "supp-edit": (el) => suppModal(App.state.supplements.find((s) => s.id === el.dataset.id)),
     "supp-save": () => { const s = window._editSupp; s.name = $("sf-name").value.trim(); if (!s.name) { toast("צריך שם"); return; } s.dose_label = $("sf-dose").value.trim(); s.doses = Math.max(1, Math.round(Number($("sf-doses").value) || 1)); s.times = $("sf-times").value.split(",").map((x) => x.trim()).filter(Boolean); s.active = $("sf-active").checked; s.nutrients = {}; NUT_KEYS.forEach((k) => { const el = $("sf-" + k); if (el && el.value !== "") s.nutrients[k] = Number(el.value); }); const i = App.state.supplements.findIndex((x) => x.id === s.id); if (i >= 0) App.state.supplements[i] = s; else App.state.supplements.push(s); saveSupp(s); closeModal(); render(); },
@@ -2482,6 +3154,13 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     if (act === "profile-field") { App.state.profile[el.dataset.k] = el.type === "number" ? (el.value === "" ? null : Number(el.value)) : el.value; saveProfile(); render(); }
     if (act === "profile-check") { App.state.profile[el.dataset.k] = el.checked; saveProfile(); render(); }
     if (act === "override") { App.state.targets = App.state.targets || { overrides: {} }; App.state.targets.overrides = App.state.targets.overrides || {}; if (el.value === "") delete App.state.targets.overrides[el.dataset.k]; else App.state.targets.overrides[el.dataset.k] = Number(el.value); saveTargets(); renderHeader(); }
+    if (act === "rep-field") { repState().fields[el.dataset.k] = el.checked ? 1 : 0; }
+    if (act === "rep-date") { const r = repState(); r[el.dataset.k] = el.value; if (r.from > r.to) { if (el.dataset.k === "from") r.to = r.from; else r.from = r.to; } reportModal(); }
+    if (act === "rep-nutmode") { repState().nutMode = el.value; }
+    if (act === "rep-name") { repState().name = el.value.trim(); }
+    if (act === "timer-outdoors") { const t = readTimer(); if (t) { t.outdoors = el.checked; writeTimer(t); } }
+    if (act === "sun-skin") { App.state.profile.sun = Object.assign({}, App.state.profile.sun || {}, { skin: Number(el.value) }); saveProfile(); render(); }
+    if (act === "sun-loc") { App.state.profile.sun = Object.assign({}, App.state.profile.sun || {}, { [el.dataset.k]: Number(el.value) }); saveProfile(); render(); }
     if (act === "hist-key") { histKey = el.value; renderHistory(); }
     if (act === "hist-lab") { histLab = el.value; renderHistory(); }
     if (act === "import-file" && el.files[0]) importData(el.files[0]);

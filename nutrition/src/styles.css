@@ -359,3 +359,26 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 /* ---------- focus card ---------- */
 .card.focus { background: var(--accent-soft); border-color: transparent; }
 .focus-line { font-size: 1.1rem; font-weight: 700; line-height: 1.4; text-wrap: balance; }
+
+/* ---------- glycemic load timeline ---------- */
+.chart .gl-area { fill: var(--accent-soft); }
+.chart .gl-over { fill: var(--bad); opacity: 0.32; }
+.chart .gl-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.chart .gl-thr { stroke: var(--bad); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.chart .gl-mid { stroke: var(--warn); stroke-dasharray: 2 4; }
+.chart .gl-band-hi { fill: var(--bad-soft); opacity: 0.45; }
+.chart .gl-band-mid { fill: var(--warn-soft); opacity: 0.45; }
+.chart .gl-now { stroke: var(--ink); stroke-width: 1.5; }
+.chart .gl-meal { fill: var(--accent); stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+.chart .gl-meal.mid { fill: var(--warn); }
+.chart .gl-meal.hi { fill: var(--bad); }
+.chart text.gl-thr-label { fill: var(--bad); font-weight: 600; }
+.chart text.gl-now-label { fill: var(--ink); font-weight: 600; }
+.gl-sum { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; color: var(--ink-2); margin-top: 6px; }
+.gl-sum b { color: var(--ink); }
+.walk-timer { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.walk-timer .clock { min-width: 110px; color: var(--accent-2); }
+.chart .gl-line.raw { stroke: var(--ink-2); stroke-width: 1.2; stroke-dasharray: 3 4; opacity: 0.7; }
+.chart .gl-walk { fill: var(--accent-2); opacity: 0.85; }
+.ulg.gl-total { min-width: 250px; }
+@media (max-width: 480px) { .ulg.gl-total { min-width: 250px; } }

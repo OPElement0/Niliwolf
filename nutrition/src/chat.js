@@ -55,6 +55,8 @@ window.NutriChat = (function () {
     const meals = (day.meals || []);
     if (meals.length) lines.push("מה נאכל היום: " + meals.map((m) => `${m.time || ""} ${m.name} ${m.qty} ${m.unit}`).join("; "));
     else lines.push("עדיין לא נרשם אוכל היום.");
+    const walks = (day.walks || []); if (walks.length) lines.push("הליכה היום: " + walks.map((w) => `${w.start} ${w.minutes} דק' (${w.pace === "light" ? "קלה" : "בינונית"}${w.outdoors ? ", בחוץ" : ""})`).join("; ") + ". הנחיות: הליכה מותרת, אסור מאמץ גבוה ועמידה ממושכת (צוואר רחם קצר).");
+    const sunLogs = (day.sun || []); if (sunLogs.length) lines.push("חשיפה לשמש היום: " + sunLogs.map((x) => `${x.start} ${x.minutes} דק' (UV ~${x.uvi})`).join("; ") + ".");
     const supps = (d.supplements || []).filter((s) => s.active !== false);
     if (supps.length) lines.push("תוספים קבועים (נלקח/יחידות ליום): " + supps.map((s) => `${s.name} ${app.suppTaken(day, s)}/${app.suppDoses(s)}`).join(", ") + ".");
     const favs = (d.foods || []).filter((f) => f.favorite).slice(0, 25);
