@@ -137,7 +137,13 @@ will eat again. Lab PDFs from Clalit are scanned: `pip install pymupdf` then
   the daily cumulative target; 2026-09-17 "GL v2": meals = items within 45 min, protein/fat damping falls
   linearly with distance up to 60 min, first meal of the day ×1.15 amplitude on the curve only, kernel peak
   moves later with meal net carbs and a fatty meal (>20 g) peaks later with a longer tail, composition
-  heuristic treats <5 g net carbs **per portion** as negligible and sugary drinks as GI 65; a
+  heuristic estimates the CARBOHYDRATE's GI only (base 65, lowered by fibre alone — fat is never
+  deducted there because the meal damping already counts it once), treats <5 g net carbs **per portion**
+  as negligible and sugary drinks/sugar as GI 65 (checked before the negligible test); the kernel tail is
+  capped (`glTailCap`) at 25% of peak by 3 h, 5% by 4 h, zero by 5 h, so fat delays and widens the peak
+  (43–100 min) without holding the curve up for half a day; the card and the report show **time above the
+  threshold** (`glTimeAbove`, minutes, plus minutes in the medium band) instead of a peak count, which
+  broke when waves merged; a
   "פחמימות נטו לארוחה" block rates each meal against 45/60/30 g (breakfast/main/snack, by time and size);
   glucose measurements can be entered from the meal modal (`day.glucose[].meal_id/min_after`) and are drawn
   as ◆ on the chart with a right-hand mg/dL scale; daily cumulative gauge vs personal target) → "תנועה — הליכה" card (live walk
@@ -168,6 +174,10 @@ in the session scratchpad during work; recreate as needed (see git history of th
 - Sun card: she has not confirmed skin type (default III) or work hours.
 - Sitting-break timer: default 45 min, not yet confirmed by her.
 - History tab does not chart sitting breaks; report export does not include `day.sit`.
+- GL v3 (2026-09-17, same day) fixed three things her analysis chat found in v2: the fat-lengthened tail
+  was unphysiological (curve still at 56% of peak 4.5 h after dinner), "number of peaks" broke when waves
+  merged (203 GL on a day with "one peak"), and the composition heuristic deducted fat twice so chips came
+  out at GI 47. Do not reintroduce any of the three.
 - GL v2 (2026-09-17) came from her analysis chat; the week factor, morning ×1.15, meal caps 45/60/30 and the
   meal-kind heuristic (first before 11:30 = breakfast, largest in 12–16:30 / 17:30–22:30 = main) are not yet
   validated against real glucose readings — once she has a glucometer, compare ◆ points with the curve.
