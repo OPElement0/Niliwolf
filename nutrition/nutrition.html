@@ -381,6 +381,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .gl-sum b { color: var(--ink); }
 .walk-timer { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .walk-timer .clock { min-width: 110px; color: var(--accent-2); }
+.walk-timer .clock.over { color: var(--bad); }
+.sit-block { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.sit-block h3 { font-size: 0.95rem; margin: 0 0 8px; }
 .chart .gl-line.raw { stroke: var(--ink-2); stroke-width: 1.2; stroke-dasharray: 3 4; opacity: 0.7; }
 .chart .gl-walk { fill: var(--accent-2); opacity: 0.85; }
 .ulg.gl-total { min-width: 250px; }
@@ -1030,6 +1033,7 @@ window.NutriChat = (function () {
     if (meals.length) lines.push("מה נאכל היום: " + meals.map((m) => `${m.time || ""} ${m.name} ${m.qty} ${m.unit}`).join("; "));
     else lines.push("עדיין לא נרשם אוכל היום.");
     const walks = (day.walks || []); if (walks.length) lines.push("הליכה היום: " + walks.map((w) => `${w.start} ${w.minutes} דק' (${w.pace === "light" ? "קלה" : "בינונית"}${w.outdoors ? ", בחוץ" : ""})`).join("; ") + ". הנחיות: הליכה מותרת, אסור מאמץ גבוה ועמידה ממושכת (צוואר רחם קצר).");
+    if (day.sit && (day.sit.breaks || day.sit.longest)) lines.push(`ישיבה בעבודה היום: ${day.sit.breaks || 0} הפסקות קימה, הרצף הארוך ביותר ${day.sit.longest || 0} דק' (תזכורת כל ${day.sit.every || 45} דק').`);
     const sunLogs = (day.sun || []); if (sunLogs.length) lines.push("חשיפה לשמש היום: " + sunLogs.map((x) => `${x.start} ${x.minutes} דק' (UV ~${x.uvi})`).join("; ") + ".");
     const supps = (d.supplements || []).filter((s) => s.active !== false);
     if (supps.length) lines.push("תוספים קבועים (נלקח/יחידות ליום): " + supps.map((s) => `${s.name} ${app.suppTaken(day, s)}/${app.suppDoses(s)}`).join(", ") + ".");
@@ -1675,6 +1679,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     if (now.h >= 21) items.push({ level: "info", text: "ערב: ארוחה גדולה לפני השינה מכבידה (צרבת); חטיף קטן עם חלבון מייצב את הסוכר בלילה." });
     const pendingUnits = App.state.supplements.filter((s) => s.active !== false).reduce((acc, s) => acc + (suppDoses(s) - suppTaken(day, s)), 0);
     if (pendingUnits > 0 && now.h >= 19) items.push({ level: "warn", text: `נותרו ${pendingUnits} יחידות תוספים שלא סומנו היום.` });
+    const sitNote = sitOverdue(); if (sitNote) items.push({ level: "alert", text: sitNote });
     return { now, head, items };
   }
   function nowCardHtml() {
@@ -1942,9 +1947,58 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       ${notes.join("")}
       ${list}
       ${total ? `<p class="small ink2" style="margin-top:6px">סה"כ ${total} דק' · ~${fmt(kcal, 0)} קק"ל (מידע בלבד — לא משנה את יעד הקלוריות). הליכה אחרי ארוחה מרככת את הפיק בגרף שלמעלה.</p>` : ""}
+      ${sitBlockHtml(isToday)}
       <details style="margin-top:8px"><summary class="help" style="cursor:pointer">מה מותר ומה לא (לפי ההנחיות שלך)</summary><p class="help" style="margin-top:6px">הליכה מותרת. אסור: מאמץ גבוה ועמידה ממושכת. מבחן הדיבור: אם אפשר לדבר משפט שלם בלי להתנשף — הקצב בסדר; אם קשה לדבר — להאט. אחרי הליכה לשבת, לא לעמוד. הליכה של 10–20 דק' שמתחילה 15–45 דק' אחרי ארוחה נותנת את רוב התועלת לסוכר. לעצור אם יש התכווצויות, לחץ באגן או דימום, ולפנות לרופא/ה. חישוב הקלוריות: 2.8 MET לקצב קל, 3.5 לבינוני, לפי המשקל האחרון.</p></details>`;
   }
-  setInterval(() => { const el = $("walk-timer"), t = readTimer(); if (el && t) el.textContent = timerText(t); }, 1000);
+  // ------------------------------------------------------------ sitting breaks (desk work; short cervix → move a little, often)
+  // Local only (localStorage), like the walk timer. A compact per-day summary {breaks, longest, every} is kept in day.sit.
+  const SIT_KEY = "sit_timer_v1", SIT_EVERY = [30, 45, 60], SIT_DEFAULT = 45;
+  function readSit() { try { const s = localStorage.getItem(SIT_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+  function writeSit(v) { try { if (v) localStorage.setItem(SIT_KEY, JSON.stringify(v)); else localStorage.removeItem(SIT_KEY); } catch (e) {} }
+  function sitState() { const s = readSit(), key = dateKeyOf(new Date()); if (s && s.day === key) return s; return { day: key, every: (s && s.every) || SIT_DEFAULT, breaks: 0, longest: 0, startedAt: null, paused: false, alerted: false }; }
+  function sitMinutes(s) { return s && s.startedAt ? (Date.now() - s.startedAt) / 60000 : 0; }
+  function sitPersist(s) { const day = getDay(s.day); const cur = day.sit || {}; if (cur.breaks === s.breaks && Math.round(cur.longest || 0) === Math.round(s.longest || 0) && cur.every === s.every) return; day.sit = { breaks: s.breaks || 0, longest: Math.round(s.longest || 0), every: s.every }; saveDay(s.day); }
+  function sitStart() { const s = sitState(); s.startedAt = Date.now(); s.paused = false; s.alerted = false; writeSit(s); }
+  function sitBreak() { const s = sitState(); if (!s.startedAt) return; s.longest = Math.max(s.longest || 0, sitMinutes(s)); s.breaks = (s.breaks || 0) + 1; s.startedAt = Date.now(); s.alerted = false; writeSit(s); sitPersist(s); }
+  function sitStop() { const s = sitState(); if (s.startedAt) s.longest = Math.max(s.longest || 0, sitMinutes(s)); s.startedAt = null; s.paused = false; s.alerted = false; writeSit(s); sitPersist(s); }
+  function sitPauseForWalk() { const s = sitState(); if (!s.startedAt) return; s.longest = Math.max(s.longest || 0, sitMinutes(s)); s.breaks = (s.breaks || 0) + 1; s.startedAt = null; s.paused = true; s.alerted = false; writeSit(s); sitPersist(s); }
+  function sitResumeAfterWalk() { const s = sitState(); if (!s.paused) return; s.startedAt = Date.now(); s.paused = false; s.alerted = false; writeSit(s); }
+  function sitOverdue() { const s = sitState(); const m = sitMinutes(s); if (!s.startedAt || m < s.every) return null; return `כבר ${Math.round(m)} דק' בישיבה רצופה — קמי ל-2–3 דקות של תנועה קלה (כמה צעדים, כוס מים), ואז חזרי לשבת.`; }
+  function sitBlockHtml(isToday) {
+    if (!isToday) return "";
+    const s = sitState(), m = sitMinutes(s);
+    const summary = s.breaks || s.longest ? `<p class="small ink2" style="margin-top:6px">היום: ${s.breaks} ${s.breaks === 1 ? "הפסקת קימה" : "הפסקות קימה"} · הרצף הארוך ביותר ${Math.round(Math.max(s.longest || 0, s.startedAt ? m : 0))} דק'.</p>` : "";
+    const seg = `<div class="seg">${SIT_EVERY.map((e) => `<button class="${s.every === e ? "on" : ""}" data-act="sit-every" data-m="${e}">${e}</button>`).join("")}</div>`;
+    let body;
+    if (s.startedAt) {
+      const over = m >= s.every, soon = !over && m >= s.every - 10;
+      body = `<div class="walk-timer">
+        <div class="clock num ${over ? "over" : ""}" id="sit-timer">${timerText({ startedAt: s.startedAt })}</div>
+        <div class="grow"><div class="eyebrow">יושבת מ-${israelTimeOf(s.startedAt)} · תזכורת כל <span class="num">${s.every}</span> דק'</div>
+          <div class="row" style="gap:8px;margin-top:6px"><span class="help">תזכורת כל:</span>${seg}<span class="help">דק'</span></div></div>
+        <div class="stack" style="gap:6px"><button class="btn primary" data-act="sit-break">קמתי לרגע</button><button class="btn sm ghost" data-act="sit-stop">סיימתי לשבת</button></div>
+      </div>
+      ${over ? `<div class="note alert" id="sit-alert" style="margin-top:8px"><div>${esc(sitOverdue())} <button class="btn sm" data-act="walk-start" style="margin-inline-start:6px">▶ התחלתי ללכת</button></div></div>` : soon ? `<div class="note info" style="margin-top:8px">עוד ~${Math.max(1, Math.round(s.every - m))} דק' תזכורת לקום.</div>` : ""}`;
+    } else if (s.paused) {
+      body = `<div class="note info">הישיבה מושהית בזמן ההליכה — הספירה תתחדש כשתסיימי. <button class="btn sm ghost" data-act="sit-stop" style="margin-inline-start:6px">סיימתי לשבת</button></div>`;
+    } else {
+      body = `<div class="row" style="gap:10px"><button class="btn sm" data-act="sit-start">🪑 התחלתי לשבת (עבודה)</button><span class="help">תזכורת לקום כל</span>${seg}<span class="help">דק' — רצה גם אם הדף נסגר</span></div>`;
+    }
+    return `<div class="sit-block" id="sit-block"><h3>ישיבה ממושכת</h3>${body}${summary}
+      <details style="margin-top:6px"><summary class="help" style="cursor:pointer">למה זה חשוב</summary><p class="help" style="margin-top:6px">ישיבה רצופה מעלה סיכון לקרישי דם ברגליים ומכבידה על האגן. ההמלצה המקובלת בהריון: כל 30–60 דק' לקום ל-2–3 דקות של תנועה קלה — כמה צעדים, סיבוב בבית, כוס מים — ולחזור לשבת (לא עמידה ממושכת). ההפסקה נספרת גם כשמתחילים הליכה מהטיימר למעלה.</p></details></div>`;
+  }
+  let sitTickRender = 0;
+  setInterval(() => {
+    const el = $("walk-timer"), t = readTimer(); if (el && t) el.textContent = timerText(t);
+    const st = $("sit-timer"), s = readSit();
+    if (st && s && s.startedAt) st.textContent = timerText({ startedAt: s.startedAt });
+    if (s && s.startedAt && s.day === dateKeyOf(new Date()) && !s.alerted && sitMinutes(s) >= s.every) {
+      s.alerted = true; writeSit(s);
+      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+      toast(`${s.every} דק' בישיבה — זמן לקום לרגע`);
+      if (!document.querySelector(".modal-bg") && App.tab === "today" && App.date === s.day && Date.now() - sitTickRender > 5000) { sitTickRender = Date.now(); const wc = $("walk-card"); if (wc) wc.innerHTML = walkCardInner(getDay(App.date), true); const nc = $("now-card"); if (nc) nc.innerHTML = nowCardHtml(); }
+    }
+  }, 1000);
 
   // ------------------------------------------------------------ sun (vitamin D)
   const SUN_DEFAULT = { lat: 32.08, lon: 34.78 };
@@ -3042,10 +3096,14 @@ ${h}
     "rep-share": () => repDeliver("share"),
     "rep-download": (el) => repDeliver("download", el.dataset.fmt),
     // walking + sun
-    "walk-start": () => { writeTimer({ startedAt: Date.now(), pace: "moderate", outdoors: true }); render(); },
+    "walk-start": () => { sitPauseForWalk(); writeTimer({ startedAt: Date.now(), pace: "moderate", outdoors: true }); render(); },
+    "sit-start": () => { sitStart(); render(); },
+    "sit-break": () => { sitBreak(); toast("יופי. הספירה התחילה מחדש"); render(); },
+    "sit-stop": () => { sitStop(); render(); },
+    "sit-every": (el) => { const s = sitState(); s.every = Number(el.dataset.m) || SIT_DEFAULT; s.alerted = false; writeSit(s); if (s.startedAt || s.breaks) sitPersist(s); render(); },
     "timer-pace": (el) => { const t = readTimer(); if (!t) return; t.pace = el.dataset.p; writeTimer(t); render(); },
-    "walk-cancel": () => { if (!confirm("לבטל את ההליכה בלי לרשום?")) return; writeTimer(null); render(); },
-    "walk-stop": () => { const t = readTimer(); if (!t) return; const mins = Math.max(1, Math.round((Date.now() - t.startedAt) / 60000)); addWalk(dateKeyOf(new Date()), israelTimeOf(t.startedAt), mins, t.pace, t.outdoors); writeTimer(null); toast(`נרשמה הליכה: ${mins} דק'`); render(); },
+    "walk-cancel": () => { if (!confirm("לבטל את ההליכה בלי לרשום?")) return; writeTimer(null); sitResumeAfterWalk(); render(); },
+    "walk-stop": () => { const t = readTimer(); if (!t) return; const mins = Math.max(1, Math.round((Date.now() - t.startedAt) / 60000)); addWalk(dateKeyOf(new Date()), israelTimeOf(t.startedAt), mins, t.pace, t.outdoors); writeTimer(null); sitResumeAfterWalk(); toast(`נרשמה הליכה: ${mins} דק'`); render(); },
     "walk-add": () => { const mins = Number($("wk-min").value) || 0; if (!mins) { toast("כמה דקות?"); return; } addWalk(App.date, $("wk-start").value || nowTime(), mins, $("wk-pace").value, $("wk-out").checked); toast("נרשמה הליכה"); render(); },
     "walk-del": (el) => { const day = getDay(App.date); day.walks = (day.walks || []).filter((w) => w.id !== el.dataset.id); day.sun = (day.sun || []).filter((x) => x.walk_id !== el.dataset.id); saveDay(App.date); render(); },
     "sun-add": (el) => { addSun(App.date, $("sn-start").value || nowTime(), Number(el.dataset.min), $("sn-cover").value); toast("נרשמה חשיפה לשמש"); render(); },

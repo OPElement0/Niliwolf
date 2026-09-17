@@ -6,9 +6,18 @@ description: Work on Nili's private pregnancy-nutrition dashboard (nutrition/ fo
 # Nutrition dashboard (מעקב תזונה בהריון)
 
 Private personal tool for Nili (Hebrew, RTL, vegan diet, pregnancy). Lives in
-`nutrition/` of the `OPElement0/Niliwolf` repo, on branch
-`claude/pregnancy-nutrition-dashboard-qsr5lg`. It is **unrelated to the wolf
-project** in the rest of the repo.
+`nutrition/` of the `OPElement0/Niliwolf` repo. **Current branch:
+`claude/pregnancy-nutrition-dashboard-access-a7uch1`** (supersedes
+`claude/pregnancy-nutrition-dashboard-qsr5lg`, which stops at the 2026-09-10
+state). It is **unrelated to the wolf project** in the rest of the repo.
+
+**Source of truth = `src/` on that branch.** On 2026-09-17 the published page
+(versions 18–24, edited directly as HTML from conversations without repo
+access) was split back into `src/`; `build_nutrition.py` reproduces the
+published page byte-for-byte. If a future conversation edits the published
+HTML directly, re-sync first: download the page (`Artifact read path=index.html`),
+strip the first line (`<!doctype…<body>`) and the trailing `</body></html>`,
+and split by the `page.html` placeholders.
 
 ## 0. First thing in a new session
 
@@ -42,7 +51,7 @@ Publish with the Artifact tool, **same file path** so the URL stays:
 `Artifact file_path=/home/user/Niliwolf/nutrition/nutrition.html url=<ARTIFACT_URL> label="..."`
 (capabilities `{db:{}, sample:{}, downloads:true}` are stored; omit on redeploy).
 From a fresh conversation you MUST pass `url`, otherwise a second artifact is created.
-Then `git add nutrition/ && git commit && git push -u origin claude/pregnancy-nutrition-dashboard-qsr5lg`.
+Then `git add nutrition/ .claude/skills/nutrition-dashboard && git commit && git push -u origin <current branch>`.
 Tell her to refresh the page after publishing.
 
 ## 3. Files
@@ -51,7 +60,7 @@ Tell her to refresh the page after publishing.
 |---|---|
 | `src/page.html` | shell: title, lock screen, header, 9 tabs, `__STYLES__/__DATA__/__CHARTS__/__CHAT__/__APP__` placeholders |
 | `src/styles.css` | tokens for light/dark (`:root`, `prefers-color-scheme`, `[data-theme]`), all components |
-| `src/app.js` | everything: Store (db↔localStorage), lock, calculations, all tab renderers, actions |
+| `src/app.js` | everything: Store (db↔localStorage), lock, calculations, all tab renderers, actions. Sections added 2026-09-11..17: glycemic-load timeline (`GI_GENERIC`, `glEntries`, `glCurveAt`, `glCardInner`, `glDailyTarget`, `glTotalGauge`), walk timer (`walk_timer_v1`, `walkCardInner`, `walkFactor`), sitting breaks (`sit_timer_v1`, `sitBlockHtml`), sun / vitamin D (`solarElevation`, `uviAt`, `sunCardInner`), report export (`reportData/reportText/reportHtml/reportCsv/repDeliver`) |
 | `src/chat.js` | `NutriChat`: consultation chat (`sample`), free-text/photo meal parser (`sample.json`) |
 | `src/charts.js` | SVG heatmap / line / bars / calendar (`direction="ltr"` on every svg root) |
 | `src/data/foods.js` | ~155 generic Israeli foods per 100 g: `[id, name, aliases, cat, portions[[label,g]], per100]`; ids become `g_<id>` |
@@ -69,7 +78,8 @@ Collections → documents (all plain JSON; arrays replace wholesale on `update`)
 - `settings/handoff` — free-text context for Claude (not read by the page)
 - `supplements/<id>` `{name, dose_label, doses (units/day), times[], nutrients{key: per FULL daily dose}, active, label_notes}`
 - `foods/<id>` `{name, aliases[], kind:"product"|"recipe", per100{}, portions[{label,g}], favorite, ingredients?, servings?, label_notes}`
-- `days/<YYYY-MM-DD>` `{meals[{id,time,food_id,name,qty,unit,grams,nutrients{}}], supplements_taken[ids fully taken], supplement_doses{id:count}, supplement_times{id:[HH:MM]}, weight_kg?, glucose[]?, notes}`
+- `days/<YYYY-MM-DD>` `{meals[{id,time,food_id,name,qty,unit,grams,nutrients{}}], supplements_taken[ids fully taken], supplement_doses{id:count}, supplement_times{id:[HH:MM]}, weight_kg?, glucose[]?, notes, walks[{id,start,minutes,pace:"light"|"moderate",outdoors}], sun[{id,start,minutes,cover,uvi,walk_id}], sun_cloud?, sit?{breaks,longest,every}}`
+- `settings/profile` also holds `sun{lat,lon,skin}` and `report_prefs{audience:{fields,nutMode,name}}`; personal foods may carry `gi` (glycemic index) used by the GL timeline.
 - `labs/<id>` `{marker, value, unit, date, week, note}` — markers per `LAB_MARKERS`; **B12 stored in pg/mL** (pmol/L × 1.355)
 - `diagnoses/<id>` `{code, since}`; `chat/history` `{turns[]}`
 
@@ -122,6 +132,18 @@ will eat again. Lab PDFs from Clalit are scanned: `pip install pymupdf` then
   digestion estimate + next-meal time + net-carb load + spacing considerations.
 - Parser (`parseMeal`): keeps qualifiers (decaf, plant milk), returns `known:false` instead of
   nearest match; page accepts only exact/prefix matches (`bestMatch`), else "צרי מאכל".
+- **Below the deficit/completed lists (Today):** GL timeline card (threshold 20 = high peak,
+  10–20 medium; daily cumulative gauge vs personal target) → "תנועה — הליכה" card (live walk
+  timer, manual entry, walks soften the GL curve; soft warnings >45 min/segment, >90 min/day)
+  with the **sitting-break sub-block** (2026-09-17: local timer `sit_timer_v1`, reminder every
+  30/45/60 min, "קמתי לרגע" resets the stretch, starting a walk counts as a break and pauses
+  the sit timer, overdue → red note in the card + in the "now" card + toast/vibrate; per-day
+  summary saved to `day.sit`) → "שמש — ויטמין D" card (UV from solar elevation × manual cloud,
+  no API; IU estimate is informational only).
+- Her medical constraints (short cervix): walking allowed, no strenuous effort, no prolonged
+  standing, no lifting >5 kg, no bed rest. Keep all activity wording soft and non-judgmental.
+- Report export (מעקב לאורך זמן → "דוח לייצוא"; Today → "שתפי את היום"): audiences nurse/claude,
+  print page / markdown / csv / share. Never exports chat or password.
 
 ## 7. Smoke test (headless)
 
@@ -129,9 +151,14 @@ Playwright is preinstalled (`/opt/pw-browsers/chromium`). Load `file://…/nutri
 seed `window.App.state`, click tabs/actions, assert no `pageerror`. Example script lives
 in the session scratchpad during work; recreate as needed (see git history of this skill).
 
-## 8. Open items (as of 2026-09-10)
+## 8. Open items (as of 2026-09-17)
 
 - Halva label and choline label still to be sent (values are estimates, `label_notes` say so).
-- Weight of one homemade roll (assumed 70 g ≈ 5.5 g protein).
+- Chocolate-chip cookie weight (assumed 44 g) and chocolate type; roll weight now ~160 g
+  (recipe of 11.9: 11 rolls from 1 kg flour; earlier logs used smaller rolls — do not fix).
 - Whether the "📷 צרפי תמונה" button appears in her viewer (needs `sample.limits().images`).
 - Glucose tolerance test not done yet; no GDM rules active.
+- Sun card: she has not confirmed skin type (default III) or work hours.
+- Sitting-break timer: default 45 min, not yet confirmed by her.
+- History tab does not chart sitting breaks; report export does not include `day.sit`.
+- The private context doc `settings/handoff` in the db has the fuller list — read it first.

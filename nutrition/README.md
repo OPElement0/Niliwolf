@@ -14,7 +14,7 @@
 |---|---|
 | `src/page.html` | שלד הדף (RTL, טאבים, מסך נעילה) עם placeholders |
 | `src/styles.css` | עיצוב: tokens לשני ערכות נושא, mobile-first |
-| `src/app.js` | state, סנכרון `db` ↔ localStorage, נעילה, חישובים, כל הטאבים |
+| `src/app.js` | state, סנכרון `db` ↔ localStorage, נעילה, חישובים, כל הטאבים, עומס גליקמי, הליכה/ישיבה, שמש, ייצוא דוח |
 | `src/chat.js` | טאב ההתייעצות ופענוח טקסט חופשי דרך יכולת `sample` |
 | `src/charts.js` | גרפי SVG ידניים (מפת חום, מגמה, דירוג, לוח היענות) |
 | `src/data/foods.js` | ~150 מזונות ישראליים, ערכים ל-100 גרם (USDA / משרד הבריאות, משוער) |
