@@ -132,8 +132,15 @@ will eat again. Lab PDFs from Clalit are scanned: `pip install pymupdf` then
   digestion estimate + next-meal time + net-carb load + spacing considerations.
 - Parser (`parseMeal`): keeps qualifiers (decaf, plant milk), returns `known:false` instead of
   nearest match; page accepts only exact/prefix matches (`bestMatch`), else "צרי מאכל".
-- **Below the deficit/completed lists (Today):** GL timeline card (threshold 20 = high peak,
-  10–20 medium; daily cumulative gauge vs personal target) → "תנועה — הליכה" card (live walk
+- **Below the deficit/completed lists (Today):** GL timeline card (base thresholds 20 = high peak,
+  10–20 medium, **divided by a pregnancy-week factor** ×1.2 from week 20 and ×1.4 from week 28, same for
+  the daily cumulative target; 2026-09-17 "GL v2": meals = items within 45 min, protein/fat damping falls
+  linearly with distance up to 60 min, first meal of the day ×1.15 amplitude on the curve only, kernel peak
+  moves later with meal net carbs and a fatty meal (>20 g) peaks later with a longer tail, composition
+  heuristic treats <5 g net carbs **per portion** as negligible and sugary drinks as GI 65; a
+  "פחמימות נטו לארוחה" block rates each meal against 45/60/30 g (breakfast/main/snack, by time and size);
+  glucose measurements can be entered from the meal modal (`day.glucose[].meal_id/min_after`) and are drawn
+  as ◆ on the chart with a right-hand mg/dL scale; daily cumulative gauge vs personal target) → "תנועה — הליכה" card (live walk
   timer, manual entry, walks soften the GL curve; soft warnings >45 min/segment, >90 min/day)
   with the **sitting-break sub-block** (2026-09-17: local timer `sit_timer_v1`, reminder every
   30/45/60 min, "קמתי לרגע" resets the stretch, starting a walk counts as a break and pauses
@@ -161,4 +168,8 @@ in the session scratchpad during work; recreate as needed (see git history of th
 - Sun card: she has not confirmed skin type (default III) or work hours.
 - Sitting-break timer: default 45 min, not yet confirmed by her.
 - History tab does not chart sitting breaks; report export does not include `day.sit`.
+- GL v2 (2026-09-17) came from her analysis chat; the week factor, morning ×1.15, meal caps 45/60/30 and the
+  meal-kind heuristic (first before 11:30 = breakfast, largest in 12–16:30 / 17:30–22:30 = main) are not yet
+  validated against real glucose readings — once she has a glucometer, compare ◆ points with the curve.
+- Personal GI values changed 2026-09-17: `f_rolls` 62→70, `f_choc_chip_cookies` 55→60 (retroactive, GI is looked up at render time).
 - The private context doc `settings/handoff` in the db has the fuller list — read it first.

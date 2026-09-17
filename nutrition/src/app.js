@@ -605,13 +605,18 @@
   };
   const GI_BY_CAT = { grains: 65, legumes: 30, dairy: 35, meat: 0, veg: 30, fruit: 50, nuts: 20, dishes: 55, drinks: 55, snacks: 65 };
   // GI of a logged item: explicit `gi` on the food → generic table → estimate from composition.
-  function giOf(food, nutrients, grams) {
+  // `nutrients` are for the portion actually eaten; the "negligible" test (< 5 g net carbs) is on the portion, not per 100 ml.
+  function giOf(food, nutrients, grams, name) {
     if (food && food.gi != null && food.gi !== "") return clamp(Number(food.gi) || 0, 0, 110);
     if (food && food.generic) { const k = food.id.replace(/^g_/, ""); if (GI_GENERIC[k] != null) return GI_GENERIC[k]; return GI_BY_CAT[food.cat] != null ? GI_BY_CAT[food.cat] : 55; }
     const n = nutrients || {}, g = grams || 100;
+    const netPortion = Math.max(0, (n.carbs || 0) - (n.fiber || 0));
+    if (netPortion < 5) return 20;
     const carbs = ((n.carbs || 0) / g) * 100, fiber = ((n.fiber || 0) / g) * 100, fat = ((n.fat || 0) / g) * 100, prot = ((n.protein || 0) / g) * 100;
     const net = Math.max(0, carbs - fiber);
-    if (net < 5) return 20;
+    // sweetened drink / plain sugar or honey: named so, or almost no fibre, fat and protein → behaves like sucrose (GI ~65) on the grams actually drunk.
+    const label = String(name || (food && food.name) || "");
+    if (/סוכר|דבש|סירופ|ממותק|מיץ|לימונדה|משקה/.test(label) || (net >= 2 && fiber < 0.3 && fat + prot < 1)) return 65;
     let gi = 62;
     const fr = carbs > 0 ? fiber / carbs : 0;
     if (fr > 0.3) gi -= 20; else if (fr > 0.15) gi -= 10;
@@ -619,40 +624,73 @@
     if (fpE > 0.5) gi -= 15; else if (fpE > 0.3) gi -= 8;
     return clamp(gi, 15, 85);
   }
-  // Glycemic load per logged item. Items eaten within the same half hour form one meal; the meal's
-  // protein + fat damp the load of every item in it (up to 30%).
-  function glEntries(day) {
-    const meals = (day.meals || []).filter((m) => m.time && m.nutrients && (m.nutrients.carbs || 0) > 0).slice().sort((a, b) => toMin(a.time) - toMin(b.time));
+  // Meals: every logged item with a time; items eaten within 45 minutes of the previous one form one meal (cluster).
+  // Each cluster gets a kind (breakfast / main / snack) and a net-carb cap: first cluster before 11:30 = breakfast (45 g);
+  // the largest cluster (kcal) in 12:00–16:30 and in 17:30–22:30 = main (60 g); everything else = snack (30 g).
+  const MEAL_CAP = { breakfast: 45, main: 60, snack: 30 };
+  const MEAL_KIND_HE = { breakfast: "בוקר", main: "עיקרית", snack: "ביניים" };
+  function glClusters(day) {
+    const all = (day.meals || []).filter((m) => m.time && m.nutrients).slice().sort((a, b) => toMin(a.time) - toMin(b.time));
     const clusters = []; let cur = null;
-    meals.forEach((m) => { const t = toMin(m.time); if (cur && t - cur.end <= 30) { cur.items.push(m); cur.end = t; } else { cur = { start: t, end: t, items: [m] }; clusters.push(cur); } });
-    const out = [];
+    all.forEach((m) => { const t = toMin(m.time); if (cur && t - cur.end <= 45) { cur.items.push(m); cur.end = t; } else { cur = { start: t, end: t, items: [m] }; clusters.push(cur); } });
     clusters.forEach((c) => {
-      const net = c.items.reduce((a, m) => a + Math.max(0, (m.nutrients.carbs || 0) - (m.nutrients.fiber || 0)), 0);
-      const fp = c.items.reduce((a, m) => a + (m.nutrients.fat || 0) + (m.nutrients.protein || 0), 0);
-      const damp = 1 - 0.3 * Math.min(1, fp / Math.max(net, 1));
+      c.net = c.items.reduce((a, m) => a + Math.max(0, (m.nutrients.carbs || 0) - (m.nutrients.fiber || 0)), 0);
+      c.fat = c.items.reduce((a, m) => a + (m.nutrients.fat || 0), 0);
+      c.protein = c.items.reduce((a, m) => a + (m.nutrients.protein || 0), 0);
+      c.kcal = c.items.reduce((a, m) => a + (m.nutrients.kcal || 0), 0);
+      c.kind = "snack";
+    });
+    if (clusters.length && clusters[0].start < 11.5 * 60) clusters[0].kind = "breakfast";
+    [[12 * 60, 16.5 * 60], [17.5 * 60, 22.5 * 60]].forEach(([a, b]) => { const win = clusters.filter((c) => c.kind !== "breakfast" && c.start >= a && c.start <= b); if (win.length) win.reduce((m, c) => (c.kcal > m.kcal ? c : m)).kind = "main"; });
+    const capPerMeal = targetsFor().carbsPerMeal;
+    clusters.forEach((c) => { c.cap = capPerMeal ? Math.min(MEAL_CAP[c.kind], capPerMeal) : MEAL_CAP[c.kind]; c.capLevel = c.net > c.cap * 1.25 ? "over" : c.net > c.cap ? "soft" : "ok"; });
+    return { all, clusters };
+  }
+  // Glycemic load per logged item (only items with carbohydrate produce a wave). Protein + fat eaten around the same
+  // time damp the item's load by up to 30%; the damping weight falls linearly with the distance in time (full at
+  // the same minute, zero at 60 minutes) instead of a hard window. The first meal of the day gets a ×1.15 amplitude
+  // on its wave (morning insulin resistance) — the amplitude affects the curve, not the counted load.
+  function glEntries(day) {
+    const { all, clusters } = glClusters(day);
+    const out = [];
+    clusters.forEach((c, ci) => {
       c.items.forEach((m) => {
+        if (!((m.nutrients.carbs || 0) > 0)) return;
+        const tm = toMin(m.time);
+        let fpW = 0, netW = 0;
+        all.forEach((o) => { const w = 1 - Math.abs(toMin(o.time) - tm) / 60; if (w <= 0) return; fpW += w * ((o.nutrients.fat || 0) + (o.nutrients.protein || 0)); netW += w * Math.max(0, (o.nutrients.carbs || 0) - (o.nutrients.fiber || 0)); });
+        const damp = 1 - 0.3 * Math.min(1, fpW / Math.max(netW, 1));
         const food = foodById(m.food_id);
-        const gi = giOf(food, m.nutrients, m.grams);
+        const gi = giOf(food, m.nutrients, m.grams, m.name);
         const netC = Math.max(0, (m.nutrients.carbs || 0) - (m.nutrients.fiber || 0));
         const raw = (gi * netC) / 100;
-        out.push({ id: m.id, name: m.name, t: toMin(m.time), time: m.time, gi, netC, raw, damp, gl: raw * damp, mealGl: 0, cluster: c });
+        out.push({ id: m.id, name: m.name, t: tm, time: m.time, gi, netC, raw, damp, gl: raw * damp, amp: ci === 0 ? 1.15 : 1, netMeal: c.net, fatMeal: c.fat, mealGl: 0, cluster: c });
       });
     });
-    clusters.forEach((c) => { const sum = out.filter((e) => e.cluster === c).reduce((a, e) => a + e.gl, 0); out.filter((e) => e.cluster === c).forEach((e) => { e.mealGl = sum; }); });
+    clusters.forEach((c) => { const sum = out.filter((e) => e.cluster === c).reduce((a, e) => a + e.gl, 0); out.filter((e) => e.cluster === c).forEach((e) => { e.mealGl = sum; }); c.gl = sum; });
     return out;
   }
-  // Blood-glucose response shape for one item: 0 at the meal, 1 at the peak (about 45–70 min, later
-  // for low-GI food), then a tail of 2–3 hours. Gamma-like curve, normalised to peak = 1.
-  function glKernel(dtMin, gi) {
+  // Blood-glucose response shape for one item: 0 at the meal, 1 at the peak, then a tail. Base peak 40–75 min
+  // (later for low-GI food); the peak moves later with the size of the whole meal (×(1 + net carbs of the meal / 100),
+  // capped at 100 g) and a fatty meal (> 20 g fat) peaks ~15% later with a wider, longer tail. Gamma-like curve, peak = 1.
+  function glKernel(dtMin, gi, e) {
     if (dtMin <= 0) return 0;
     const g = clamp(gi, 0, 100);
-    const p = 40 + (100 - g) * 0.35, a = 1.6 + (g / 100) * 1.4, x = dtMin / p;
+    const netMeal = e ? clamp(e.netMeal || 0, 0, 100) : 0, fatty = !!(e && e.fatMeal > 20);
+    let p = (40 + (100 - g) * 0.35) * (1 + netMeal / 100), a = 1.6 + (g / 100) * 1.4;
+    if (fatty) { p *= 1.15; a *= 0.7; }
+    const x = dtMin / p;
     const v = Math.pow(x, a) * Math.exp(a * (1 - x));
     return v < 0.01 ? 0 : v;
   }
-  function glCurveAt(entries, t, walks) { return entries.reduce((a, e) => a + e.gl * glKernel(t - e.t, e.gi) * (walks && walks.length ? walkFactor(e, t, walks) : 1), 0); }
-  const GL_HIGH = 20, GL_MID = 10;
-  const glLevel = (v) => (v >= GL_HIGH ? "hi" : v >= GL_MID ? "mid" : "low");
+  function glCurveAt(entries, t, walks) { return entries.reduce((a, e) => a + e.gl * (e.amp || 1) * glKernel(t - e.t, e.gi, e) * (walks && walks.length ? walkFactor(e, t, walks) : 1), 0); }
+  // Insulin resistance rises through pregnancy, so the same load produces a higher glucose response. Rather than
+  // scaling the curve, the peak thresholds and the daily target are divided by a week factor:
+  // ×1.0 until week 20, ×1.2 in weeks 20–27, ×1.4 from week 28 (base thresholds 20 = high peak, 10 = medium).
+  const GL_HIGH_BASE = 20, GL_MID_BASE = 10;
+  function pregGlFactor() { const w = pregCtx().week; return w == null ? 1 : w >= 28 ? 1.4 : w >= 20 ? 1.2 : 1; }
+  function glThr() { const f = pregGlFactor(); return { f, hi: Math.round(GL_HIGH_BASE / f), mid: Math.round(GL_MID_BASE / f) }; }
+  const glLevel = (v, thr) => (v >= thr.hi ? "hi" : v >= thr.mid ? "mid" : "low");
   const GL_LEVEL_HE = { hi: "גבוה", mid: "בינוני", low: "נמוך" };
   // Personal daily glycemic-load target: all the carbohydrate she needs for the day, eaten as a
   // low-GI diet. carbs = 45% of the kcal target (never below the app's carb target), minus the fibre
@@ -662,9 +700,9 @@
     const sugar = ctx.diagnoses.has("gdm") || !!t.carbsPerMeal;
     const kcal = t.kcal || 2200, fiber = t.fiber || 28;
     const carbs = sugar ? (t.carbs || 175) : Math.max(t.carbs || 175, (0.45 * kcal) / 4);
-    const giTarget = sugar ? 45 : 50;
-    const target = Math.max(40, Math.round(Math.max(0, carbs - fiber) * giTarget / 100));
-    return { target, carbs: Math.round(carbs), fiber, kcal, giTarget, sugar, trimester: ctx.trimester || 2 };
+    const giTarget = sugar ? 45 : 50, f = pregGlFactor();
+    const target = Math.max(40, Math.round(Math.max(0, carbs - fiber) * giTarget / 100 / f));
+    return { target, carbs: Math.round(carbs), fiber, kcal, giTarget, sugar, trimester: ctx.trimester || 2, week: ctx.week, f };
   }
   // Gauge on the personal scale (0 on the right, like the UL gauges): green up to the target,
   // orange up to 125% of it, red beyond. A hollow marker shows where the day "should" be by this hour.
@@ -679,7 +717,7 @@
     if (isToday) { const now = israelNow(); expected = T * clamp((now.min - 6 * 60) / (16 * 60), 0, 1); }
     const pace = expected != null && expected > 0 ? (total > expected * 1.3 ? "מהר מהקצב" : total < expected * 0.7 ? "מתחת לקצב" : "בקצב") : null;
     const label = lvl === "over" ? `גבוה — מעל 125% מהיעד` : lvl === "soft" ? `מעל היעד (${pct}%)` : `${pct}% מהיעד${pace ? " · " + pace : ""}`;
-    const tip = `יעד אישי ${T}: ~${g.carbs} גרם פחמימות (${g.sugar ? "לפי תקרת הפחמימות ברגישות לסוכר" : "45% מ-" + fmt(g.kcal, 0) + " קק\"ל, טרימסטר " + g.trimester} ) פחות ${g.fiber} סיבים, באינדקס ממוצע ${g.giTarget} (תזונה בעלת אינדקס נמוך). מצטבר ${isToday ? "עד עכשיו" : "בתאריך זה"}: ${fmt(total, 0)}${expected != null ? " · צפוי לפי השעה: ~" + fmt(expected, 0) : ""}. תלוי רק במה שנאכל, לא במרווחים.`;
+    const tip = `יעד אישי ${T}: ~${g.carbs} גרם פחמימות (${g.sugar ? "לפי תקרת הפחמימות ברגישות לסוכר" : "45% מ-" + fmt(g.kcal, 0) + " קק\"ל, טרימסטר " + g.trimester} ) פחות ${g.fiber} סיבים, באינדקס ממוצע ${g.giTarget} (תזונה בעלת אינדקס נמוך)${g.f > 1 ? `, מחולק ב-${g.f} בגלל התנגודת לאינסולין של שבוע ${g.week}` : ""}. מצטבר ${isToday ? "עד עכשיו" : "בתאריך זה"}: ${fmt(total, 0)}${expected != null ? " · צפוי לפי השעה: ~" + fmt(expected, 0) : ""}. תלוי רק במה שנאכל, לא במרווחים.`;
     return `<div class="ulg ${lvl} gl-total" data-tip="${esc(tip)}">
       <svg width="${W}" height="32" viewBox="0 0 ${W} 32" direction="ltr" aria-hidden="true">
         <line x1="${px(T)}" x2="${R}" y1="${y}" y2="${y}" stroke="var(--good)" stroke-width="5" stroke-linecap="round" opacity=".45"></line>
@@ -694,9 +732,20 @@
         <circle cx="${px(total)}" cy="${y}" r="6" fill="${color}" stroke="var(--surface)" stroke-width="2"></circle>
       </svg><span class="ulg-text">${lvl === "over" ? "⚠ " : ""}מצטבר ${fmt(total, 0)} מתוך ${T} · ${label}</span></div>`;
   }
+  // Net carbohydrate per meal against a simple clinical cap (breakfast 45 g / main 60 g / snack 30 g; a per-meal
+  // carb ceiling from the GDM rules lowers the cap). Simpler than GL and the number a nurse would ask about.
+  function mealCarbBlock(clusters) {
+    const cs = (clusters || []).filter((c) => c.net > 0);
+    if (!cs.length) return "";
+    const over = cs.filter((c) => c.capLevel !== "ok").length;
+    return `<details class="gl-carbs" style="margin-top:8px" ${over ? "open" : ""}><summary class="small" style="cursor:pointer"><b>פחמימות נטו לארוחה</b> · ${over ? `${over} ${over === 1 ? "ארוחה" : "ארוחות"} מעל הרף` : "כל הארוחות בתוך הרף"} <span class="help">(בוקר ${MEAL_CAP.breakfast} · עיקרית ${MEAL_CAP.main} · ביניים ${MEAL_CAP.snack} גרם)</span></summary>
+      <div class="mini-list" style="margin-top:6px">${cs.map((c) => `<div><span>${minStr(c.start)}${c.end > c.start ? "–" + minStr(c.end) : ""} · ${MEAL_KIND_HE[c.kind]} <span class="help">${esc(c.items.map((m) => m.name).join(", ").slice(0, 60))}${c.items.map((m) => m.name).join(", ").length > 60 ? "…" : ""}</span></span><b class="num" style="color:${c.capLevel === "over" ? "var(--bad)" : c.capLevel === "soft" ? "var(--warn)" : "var(--good)"}">${fmt(c.net, 0)} / ${c.cap} ג'${c.capLevel === "over" ? " ⚠" : ""}</b></div>`).join("")}</div>
+      <p class="help" style="margin-top:4px">ארוחה = כל מה שנאכל בטווח של 45 דק'. סוג הארוחה נקבע לפי השעה והגודל: הראשונה לפני 11:30 = בוקר; הגדולה בצהריים (12–16:30) ובערב (17:30–22:30) = עיקרית; השאר = ביניים.</p>
+    </details>`;
+  }
   function glCardHtml(day, isToday) { return `<div class="card" id="gl-card">${glCardInner(day, isToday)}</div>`; }
   function glCardInner(day, isToday) {
-    const entries = glEntries(day), walks = dayWalks(day);
+    const entries = glEntries(day), walks = dayWalks(day), thr = glThr(), clusters = glClusters(day).clusters;
     const head = `<div class="card-head"><h2>עומס גליקמי לפי שעות</h2>`;
     if (!entries.length) return `${head}</div><p class="help">כשיירשמו ארוחות עם פחמימות יופיע כאן מד משוער של עומס הסוכר לאורך היום, עם רף שמסמן פיק גבוה מדי.</p>`;
     const now = israelNow();
@@ -710,66 +759,73 @@
     const ptsRaw = walks.length ? pts.map((p) => ({ t: p.t, v: glCurveAt(entries, p.t) })) : null;
     const peakRaw = ptsRaw ? ptsRaw.reduce((b, p) => (p.v > b.v ? p : b), { t: x0, v: 0 }) : null;
     let highs = 0, inHigh = false;
-    pts.forEach((p) => { if (p.v >= GL_HIGH && !inHigh) { highs++; inHigh = true; } if (p.v < GL_HIGH) inHigh = false; });
+    pts.forEach((p) => { if (p.v >= thr.hi && !inHigh) { highs++; inHigh = true; } if (p.v < thr.hi) inHigh = false; });
     const total = entries.reduce((a, e) => a + e.gl, 0);
     const nowV = isToday ? glCurveAt(entries, now.min, walks) : null;
     let calmAt = null;
-    if (nowV != null && nowV >= GL_MID) { for (let t = now.min; t <= x1 + 240; t += step) { if (glCurveAt(entries, t, walks) < GL_MID) { calmAt = t; break; } } }
+    if (nowV != null && nowV >= thr.mid) { for (let t = now.min; t <= x1 + 240; t += step) { if (glCurveAt(entries, t, walks) < thr.mid) { calmAt = t; break; } } }
     // ---- svg (RTL: morning on the right, like the other charts)
-    const w = 640, h = 220, left = 34, right = 12, top = 22, bottom = 30, iw = w - left - right, ih = h - top - bottom;
+    const gluc = (day.glucose || []).filter((r) => r.time && Number(r.mg_dl) > 0).map((r) => Object.assign({}, r, { t: toMin(r.time) })).filter((r) => r.t >= x0 && r.t <= x1);
+    const w = 640, h = 220, left = 34, right = gluc.length ? 30 : 12, top = 22, bottom = 30, iw = w - left - right, ih = h - top - bottom;
     const maxV = Math.max(30, (peakRaw ? Math.max(peak.v, peakRaw.v) : peak.v) * 1.15);
     const X = (t) => left + iw - ((t - x0) / (x1 - x0)) * iw;
     const Y = (v) => top + ih - (clamp(v, 0, maxV) / maxV) * ih;
     let s = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" direction="ltr" style="direction:ltr" role="img" aria-label="עומס גליקמי משוער לפי שעות">`;
-    s += `<defs><clipPath id="gl-clip-hi"><rect x="0" y="0" width="${w}" height="${Y(GL_HIGH)}"></rect></clipPath></defs>`;
-    s += `<rect class="gl-band-hi" x="${left}" y="${top}" width="${iw}" height="${Math.max(0, Y(GL_HIGH) - top)}"></rect>`;
-    s += `<rect class="gl-band-mid" x="${left}" y="${Y(GL_HIGH)}" width="${iw}" height="${Math.max(0, Y(GL_MID) - Y(GL_HIGH))}"></rect>`;
+    s += `<defs><clipPath id="gl-clip-hi"><rect x="0" y="0" width="${w}" height="${Y(thr.hi)}"></rect></clipPath></defs>`;
+    s += `<rect class="gl-band-hi" x="${left}" y="${top}" width="${iw}" height="${Math.max(0, Y(thr.hi) - top)}"></rect>`;
+    s += `<rect class="gl-band-mid" x="${left}" y="${Y(thr.hi)}" width="${iw}" height="${Math.max(0, Y(thr.mid) - Y(thr.hi))}"></rect>`;
     const tickStep = maxV > 60 ? 20 : 10;
     for (let v = 0; v <= maxV; v += tickStep) { s += `<line class="grid" x1="${left}" x2="${w - right}" y1="${Y(v)}" y2="${Y(v)}"></line><text x="${left - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; }
     const area = [`${X(x0)},${Y(0)}`].concat(pts.map((p) => `${X(p.t)},${Y(p.v)}`)).concat([`${X(x1)},${Y(0)}`]).join(" ");
     s += `<polygon class="gl-area" points="${area}"></polygon>`;
-    if (peak.v > GL_HIGH) s += `<polygon class="gl-over" points="${area}" clip-path="url(#gl-clip-hi)"></polygon>`;
-    s += `<line class="gl-mid" x1="${left}" x2="${w - right}" y1="${Y(GL_MID)}" y2="${Y(GL_MID)}"></line>`;
-    s += `<line class="gl-thr" x1="${left}" x2="${w - right}" y1="${Y(GL_HIGH)}" y2="${Y(GL_HIGH)}"></line>`;
-    s += `<text class="gl-thr-label" x="${w - right}" y="${Y(GL_HIGH) - 5}" text-anchor="end">רף פיק גבוה (${GL_HIGH})</text>`;
+    if (peak.v > thr.hi) s += `<polygon class="gl-over" points="${area}" clip-path="url(#gl-clip-hi)"></polygon>`;
+    s += `<line class="gl-mid" x1="${left}" x2="${w - right}" y1="${Y(thr.mid)}" y2="${Y(thr.mid)}"></line>`;
+    s += `<line class="gl-thr" x1="${left}" x2="${w - right}" y1="${Y(thr.hi)}" y2="${Y(thr.hi)}"></line>`;
+    s += `<text class="gl-thr-label" x="${w - right}" y="${Y(thr.hi) - 5}" text-anchor="end">רף פיק גבוה (${thr.hi}${thr.f > 1 ? `, שבוע ${pregCtx().week}` : ""})</text>`;
     if (ptsRaw) s += `<polyline class="gl-line raw" points="${ptsRaw.map((p) => `${X(p.t)},${Y(p.v)}`).join(" ")}"></polyline>`;
     walks.forEach((w) => { s += `<rect class="gl-walk" x="${X(w.t + w.minutes)}" y="${Y(0) + 7}" width="${Math.max(3, X(w.t) - X(w.t + w.minutes))}" height="5" rx="2" data-tip="${esc(`הליכה ${WALK_HE[w.pace] || ""} ${w.minutes} דק' · ${w.start}–${minStr(w.t + w.minutes)}`)}"></rect>`; });
     s += `<polyline class="gl-line" points="${pts.map((p) => `${X(p.t)},${Y(p.v)}`).join(" ")}"></polyline>`;
-    if (peak.v >= GL_MID) s += `<text class="strong" x="${clamp(X(peak.t), left + 30, w - right - 30)}" y="${Math.max(top + 10, Y(peak.v) - 8)}" text-anchor="middle">שיא ${fmt(peak.v, 0)} · ${minStr(peak.t)}</text>`;
+    if (gluc.length) {
+      const GY = (v) => top + ih - (clamp((v - 60) / 140, 0, 1)) * ih;
+      [80, 120, 160, 200].forEach((v) => { s += `<text x="${w - 2}" y="${GY(v) + 4}" text-anchor="end" font-size="9" fill="var(--accent-2)">${v}</text>`; });
+      gluc.forEach((r) => { s += `<path class="gl-gluc" d="M${X(r.t)} ${GY(r.mg_dl) - 6} l6 6 l-6 6 l-6 -6 z" data-tip="${esc(`סוכר ${r.mg_dl} mg/dL · ${r.time}${r.tag ? " · " + r.tag : ""}`)}"></path><text x="${X(r.t)}" y="${GY(r.mg_dl) - 9}" text-anchor="middle" font-size="10" fill="var(--accent-2)" font-weight="700">${r.mg_dl}</text>`; });
+    }
+    if (peak.v >= thr.mid) s += `<text class="strong" x="${clamp(X(peak.t), left + 30, w - right - 30)}" y="${Math.max(top + 10, Y(peak.v) - 8)}" text-anchor="middle">שיא ${fmt(peak.v, 0)} · ${minStr(peak.t)}</text>`;
     // x labels
     const lblStep = (x1 - x0) > 18 * 60 ? 180 : 120;
     for (let t = Math.ceil(x0 / lblStep) * lblStep; t <= x1; t += lblStep) s += `<text x="${X(t)}" y="${h - 10}" text-anchor="middle">${minStr(t)}</text>`;
     s += `<line class="axis" x1="${left}" x2="${w - right}" y1="${Y(0)}" y2="${Y(0)}"></line>`;
     // meal markers on the baseline (clickable → meal detail)
     entries.forEach((e) => {
-      const lvl = glLevel(e.mealGl);
-      const tip = `${e.name} · ${e.time} · עומס ${fmt(e.gl, 0)} (GI ~${e.gi}, פחמ' נטו ${fmt(e.netC, 0)} גרם)${e.damp < 0.98 ? ` · מרוכך ${Math.round((1 - e.damp) * 100)}% ע"י חלבון/שומן בארוחה` : ""}${e.cluster.items.length > 1 ? ` · הארוחה כולה: ${fmt(e.mealGl, 0)}` : ""}`;
+      const lvl = glLevel(e.mealGl, thr);
+      const tip = `${e.name} · ${e.time} · עומס ${fmt(e.gl, 0)} (GI ~${e.gi}, פחמ' נטו ${fmt(e.netC, 0)} גרם)${e.damp < 0.98 ? ` · מרוכך ${Math.round((1 - e.damp) * 100)}% ע"י חלבון/שומן בארוחה` : ""}${e.cluster.items.length > 1 ? ` · הארוחה כולה: ${fmt(e.mealGl, 0)}` : ""}${e.amp > 1 ? " · גל בוקר ×1.15" : ""}`;
       s += `<circle class="gl-meal ${lvl}" cx="${X(e.t)}" cy="${Y(0)}" r="5.5" data-tip="${esc(tip)}" data-act="meal-detail" data-id="${e.id}"></circle>`;
     });
     if (isToday && now.min >= x0 && now.min <= x1) { s += `<line class="gl-now" x1="${X(now.min)}" x2="${X(now.min)}" y1="${top - 4}" y2="${Y(0)}"></line><text class="gl-now-label" x="${X(now.min)}" y="${top - 8}" text-anchor="middle">עכשיו</text>`; }
     s += "</svg>";
     // ---- text
-    const pill = nowV == null ? "" : `<span class="status-pill ${nowV >= GL_HIGH ? "st-bad" : nowV >= GL_MID ? "st-warn" : "st-good"}">עכשיו ${fmt(nowV, 0)} · ${GL_LEVEL_HE[glLevel(nowV)]}</span>`;
+    const pill = nowV == null ? "" : `<span class="status-pill ${nowV >= thr.hi ? "st-bad" : nowV >= thr.mid ? "st-warn" : "st-good"}">עכשיו ${fmt(nowV, 0)} · ${GL_LEVEL_HE[glLevel(nowV, thr)]}</span>`;
     const top3 = entries.slice().sort((a, b) => b.gl - a.gl).slice(0, 3);
     let advice = "";
     if (nowV != null) {
-      if (nowV >= GL_HIGH) advice = `העומס עכשיו מעל הרף — הליכה קלה של 10–15 דקות מרככת את הפיק; פחמימה נוספת עדיף${calmAt ? ` אחרי ~${minStr(calmAt)}` : " בעוד כשעתיים"}.`;
-      else if (nowV >= GL_MID) advice = `עומס בינוני עכשיו${calmAt ? ` — יורד מתחת ל-${GL_MID} בערך ב-${minStr(calmAt)}; זה זמן טוב לפחמימה הבאה` : ""}. חטיף עם חלבון (טחינה, גרעינים, טופו) לא יגביה את הגל.`;
+      if (nowV >= thr.hi) advice = `העומס עכשיו מעל הרף — הליכה קלה של 10–15 דקות מרככת את הפיק; פחמימה נוספת עדיף${calmAt ? ` אחרי ~${minStr(calmAt)}` : " בעוד כשעתיים"}.`;
+      else if (nowV >= thr.mid) advice = `עומס בינוני עכשיו${calmAt ? ` — יורד מתחת ל-${thr.mid} בערך ב-${minStr(calmAt)}; זה זמן טוב לפחמימה הבאה` : ""}. חטיף עם חלבון (טחינה, גרעינים, טופו) לא יגביה את הגל.`;
       else advice = highs ? `עכשיו רגוע. היו היום ${highs} ${highs === 1 ? "פיק" : "פיקים"} מעל הרף — בפעם הבאה לפצל את המנה או לצרף חלבון וירק.` : "עכשיו רגוע, וכל הגלים היום נשארו מתחת לרף.";
     } else advice = highs ? `${highs} ${highs === 1 ? "פיק" : "פיקים"} מעל הרף בתאריך הזה.` : "כל הגלים בתאריך הזה נשארו מתחת לרף.";
     let walkTip = "";
-    if (isToday && !readTimer() && now.h >= 6 && now.h < 21 && nowV != null && nowV >= GL_MID * 0.8 && glCurveAt(entries, now.min + 15, walks) >= nowV * 0.9 && !walks.some((w) => now.min - w.t >= 0 && now.min - w.t < 45)) {
+    if (isToday && !readTimer() && now.h >= 6 && now.h < 21 && nowV != null && nowV >= thr.mid * 0.8 && glCurveAt(entries, now.min + 15, walks) >= nowV * 0.9 && !walks.some((w) => now.min - w.t >= 0 && now.min - w.t < 45)) {
       walkTip = `<div class="note good" style="margin-top:8px"><div>הליכה בינונית של 10–15 דק' עכשיו תוריד את הפיק הזה בכ-15–20%. <button class="btn sm" data-act="walk-start" style="margin-inline-start:6px">▶ התחלתי ללכת</button></div></div>`;
     }
     return `${head}${pill}</div>
       <div class="chart">${s}</div>
-      <div class="legend"><span><i style="background:var(--accent)"></i>עומס משוער</span><span><i style="background:var(--bad)"></i>מעל הרף (${GL_HIGH})</span><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>בינוני (${GL_MID}–${GL_HIGH})</span><span>● ארוחה (לחיצה לפרטים)</span><span><i style="background:var(--accent-2)"></i>הליכה</span>${walks.length ? "<span>- - איך זה היה בלי ההליכה</span>" : ""}</div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>עומס משוער</span><span><i style="background:var(--bad)"></i>מעל הרף (${thr.hi})</span><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>בינוני (${thr.mid}–${thr.hi})</span><span>● ארוחה (לחיצה לפרטים)</span><span><i style="background:var(--accent-2)"></i>הליכה</span>${walks.length ? "<span>- - איך זה היה בלי ההליכה</span>" : ""}${(day.glucose || []).length ? "<span>◆ מדידת סוכר (mg/dL, סולם מימין)</span>" : ""}</div>
       <div class="gl-sum"><span>שיא היום: <b class="num">${fmt(peak.v, 0)}</b> ב-${minStr(peak.t)}</span><span>פיקים מעל הרף: <b class="num">${highs}</b></span>${peakRaw && peakRaw.v > 0 && peakRaw.v > peak.v ? `<span>ההליכה הורידה את השיא ב-<b class="num">${Math.round((1 - peak.v / peakRaw.v) * 100)}%</b></span>` : ""}</div>
       <div class="row between" style="margin-top:8px;gap:8px"><span class="small"><b>עומס גליקמי מצטבר ${isToday ? "היום" : ""}</b><br><span class="help">סכום כל הארוחות מול יעד אישי (קלוריות, סיבים, טרימסטר, רגישות לסוכר) · המשולש = צפוי לפי השעה</span></span>${glTotalGauge(total, isToday)}</div>
+      ${mealCarbBlock(clusters)}
       <p class="small" style="margin-top:6px">${esc(advice)}</p>
       ${walkTip}
       ${top3.length ? `<div class="chips" style="margin-top:8px">${top3.map((e) => `<button class="chip" data-act="meal-detail" data-id="${e.id}" title="לפרטי הארוחה">${esc(e.name)} · ${fmt(e.gl, 0)}</button>`).join("")}</div>` : ""}
-      <details style="margin-top:8px"><summary class="help" style="cursor:pointer">איך זה מחושב</summary><p class="help" style="margin-top:6px">עומס גליקמי לארוחה = אינדקס גליקמי × פחמימות נטו (פחמימות פחות סיבים) ÷ 100. כל פריט יוצר גל: שיא אחרי 45–70 דקות (מאוחר יותר במזון עם אינדקס נמוך) ודעיכה לאורך 2–3 שעות; גלים חופפים מצטברים. חלבון ושומן שנאכלו באותה חצי שעה מרככים את הגל עד 30%. הליכה שמתחילה עד שעתיים וחצי אחרי ארוחה מרככת את הגל שלה (1.5% לדקה בקצב קל, 2% בבינוני, עד 30–40%), והקו המנוקד מראה איך זה היה נראה בלעדיה. הרף 20 הוא הסיווג המקובל ל"ארוחה בעומס גבוה"; 10–20 בינוני; המד המצטבר מסכם את כל הארוחות מול יעד אישי: כל הפחמימות שמגיעות לך ביום (45% מיעד הקלוריות לטרימסטר, פחות יעד הסיבים) באינדקס ממוצע 50 — הסף לתזונה בעלת אינדקס נמוך שנבדקה בהריון. ברגישות לסוכר היעד יורד (תקרת פחמימות, אינדקס 45). עד היעד ירוק, עד 125% כתום, מעבר אדום. לשם השוואה, הסיווג הכללי למבוגר: עד 80 נמוך, מעל 120 גבוה. האינדקס מגיע מטבלאות כלליות, או משדה "אינדקס גליקמי" במאכלים שלך. זו הערכה — לא מדידת סוכר, ותגובת הגוף משתנה בין אנשים ובהריון.</p></details>`;
+      <details style="margin-top:8px"><summary class="help" style="cursor:pointer">איך זה מחושב</summary><p class="help" style="margin-top:6px">עומס גליקמי לפריט = אינדקס גליקמי × פחמימות נטו (פחמימות פחות סיבים) ÷ 100. כל פריט יוצר גל: שיא אחרי 40–75 דקות (מאוחר יותר במזון עם אינדקס נמוך, בארוחה גדולה ובארוחה שמנה, שגם נמשכת יותר) ודעיכה לאורך 2–4 שעות; גלים חופפים מצטברים. חלבון ושומן שנאכלו סמוך לפריט מרככים את הגל עד 30% (הריכוך יורד עם המרחק בזמן, עד שעה). הגל הראשון של היום מוגבר ב-15%. הרפים והיעד היומי מחולקים ב-1.2 משבוע 20 וב-1.4 משבוע 28, בגלל התנגודת לאינסולין של ההריון. הליכה שמתחילה עד שעתיים וחצי אחרי ארוחה מרככת את הגל שלה (1.5% לדקה בקצב קל, 2% בבינוני, עד 30–40%), והקו המנוקד מראה איך זה היה נראה בלעדיה. הרף 20 הוא הסיווג המקובל ל"ארוחה בעומס גבוה"; 10–20 בינוני; המד המצטבר מסכם את כל הארוחות מול יעד אישי: כל הפחמימות שמגיעות לך ביום (45% מיעד הקלוריות לטרימסטר, פחות יעד הסיבים) באינדקס ממוצע 50 — הסף לתזונה בעלת אינדקס נמוך שנבדקה בהריון. ברגישות לסוכר היעד יורד (תקרת פחמימות, אינדקס 45). עד היעד ירוק, עד 125% כתום, מעבר אדום. לשם השוואה, הסיווג הכללי למבוגר: עד 80 נמוך, מעל 120 גבוה. האינדקס מגיע מטבלאות כלליות, או משדה "אינדקס גליקמי" במאכלים שלך. זו הערכה — לא מדידת סוכר, ותגובת הגוף משתנה בין אנשים ובהריון.</p></details>`;
   }
 
   // ------------------------------------------------------------ walking (activity)
@@ -1068,10 +1124,10 @@
           }
           row.supp = supps.map((s) => ({ name: s.name, taken: suppTaken(day, s), doses: suppDoses(s) }));
           if (hasMeals) {
-            const entries = glEntries(day), walks = row.walks;
+            const entries = glEntries(day), walks = row.walks, thr = glThr(), clusters = glClusters(day).clusters;
             let peak = 0, highs = 0, inHigh = false;
-            for (let t = 5 * 60; t <= 27 * 60; t += 5) { const v = glCurveAt(entries, t, walks); if (v > peak) peak = v; if (v >= GL_HIGH && !inHigh) { highs++; inHigh = true; } if (v < GL_HIGH) inHigh = false; }
-            row.gl = { peak, highs, total: entries.reduce((a, e) => a + e.gl, 0), target: glDailyTarget().target };
+            for (let t = 5 * 60; t <= 27 * 60; t += 5) { const v = glCurveAt(entries, t, walks); if (v > peak) peak = v; if (v >= thr.hi && !inHigh) { highs++; inHigh = true; } if (v < thr.hi) inHigh = false; }
+            row.gl = { peak, highs, hi: thr.hi, total: entries.reduce((a, e) => a + e.gl, 0), target: glDailyTarget().target, meals: clusters.filter((c) => c.net > 0).map((c) => ({ time: minStr(c.start), kind: MEAL_KIND_HE[c.kind], net: c.net, cap: c.cap, level: c.capLevel })) };
           }
         });
         if (hasMeals) nLogged++;
@@ -1163,9 +1219,9 @@
       L.push("");
     }
     if (f.gl) {
-      L.push("## עומס גליקמי (מודל משוער, לא מדידת סוכר)"); L.push("| תאריך | שיא | פיקים מעל 20 | מצטבר | יעד יומי |"); L.push("|---|---|---|---|---|");
-      d.rows.forEach((x) => { if (!x.gl) return; L.push(`| ${repDate(x.k)} | ${fmt(x.gl.peak, 0)} | ${x.gl.highs} | ${fmt(x.gl.total, 0)} | ${x.gl.target} |`); });
-      L.push("עומס = אינדקס גליקמי × פחמימות נטו ÷ 100; חלבון/שומן באותה ארוחה והליכה אחריה מרככים. רף 20 לארוחה = גבוה.");
+      L.push("## עומס גליקמי (מודל משוער, לא מדידת סוכר)"); L.push("| תאריך | שיא | רף | פיקים מעל הרף | מצטבר | יעד יומי | ארוחות מעל רף פחמימות |"); L.push("|---|---|---|---|---|---|---|");
+      d.rows.forEach((x) => { if (!x.gl) return; const ov = x.gl.meals.filter((m) => m.level !== "ok"); L.push(`| ${repDate(x.k)} | ${fmt(x.gl.peak, 0)} | ${x.gl.hi} | ${x.gl.highs} | ${fmt(x.gl.total, 0)} | ${x.gl.target} | ${ov.length ? ov.map((m) => `${m.time} ${m.kind} ${fmt(m.net, 0)}/${m.cap}`).join("; ") : "—"} |`); });
+      L.push("עומס = אינדקס גליקמי × פחמימות נטו ÷ 100; חלבון/שומן סמוך לארוחה והליכה אחריה מרככים. הרף (20 בבסיס) והיעד היומי מחולקים ב-1.2 משבוע 20 וב-1.4 משבוע 28. רף פחמימות נטו לארוחה: בוקר 45 / עיקרית 60 / ביניים 30 גרם.");
       L.push("");
     }
     if (f.labs) {
@@ -1323,8 +1379,8 @@ ${h}
         <div class="grow"><div class="title">${full ? CHECK : ""}${esc(s.name)}</div><div class="meta">${esc(s.dose_label || "")}${s.times && s.times.length ? " · " + esc(s.times.join(", ")) : ""}${suppTaken(day, s) ? ` · <button class="btn sm ghost" data-act="supp-times" data-id="${s.id}" style="padding:0 6px;min-height:22px;font-size:.8rem" title="תיקון שעת הנטילה">נלקח ${esc(((day.supplement_times || {})[s.id] || []).slice(0, suppTaken(day, s)).join(", ") || "שעה?")} ✎</button>` : ""}</div></div>
       </div>`; });
     const glCard = glCardHtml(day, isToday), walkCard = walkCardHtml(day, isToday), sunCard = sunCardHtml(day, isToday);
-    const glucoseCard = App.state.profile.track_glucose ? `<div class="card"><div class="card-head"><h3>מדידות סוכר</h3><button class="btn sm" data-act="add-glucose">+ מדידה</button></div>
-        ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag)} · ${r.time}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
+    const glucoseCard = App.state.profile.track_glucose || (day.glucose || []).length ? `<div class="card"><div class="card-head"><h3>מדידות סוכר</h3><button class="btn sm" data-act="add-glucose">+ מדידה</button></div>
+        ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag || "")} · ${r.time}${r.meal_id && day.meals.find((x) => x.id === r.meal_id) ? " · " + esc(day.meals.find((x) => x.id === r.meal_id).name) : ""}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
     $("panel-today").innerHTML = `
       <div class="stack">
         <div class="card focus"><p class="focus-line">${esc(focus)}</p><p class="small ink2" style="margin-top:4px">${esc(headline)}</p>${overs.length ? `<div class="stack" style="gap:6px;margin-top:10px">${overs.join("")}</div>` : ""}</div>
@@ -1436,6 +1492,15 @@ ${h}
         <p style="margin-top:8px"><b>ארוחה מעמיסה הבאה: מ-${addHours(m.time, d.hours)} בערך.</b> חטיף קל (פרי, ירקות, אגוזים) אפשר גם קודם.</p>
       </div>
       <div class="note ${d.glLabel === "גבוה" ? "warn" : "info"}" style="margin-top:10px"><div><b>סוכר בדם:</b> ${esc(glNote)}${cap ? ` תקרה לארוחה לפי ההמלצות שלך: ${cap} גרם פחמימה${d.netCarbs > cap ? " — הארוחה הזו מעל התקרה." : "."}` : ""}</div></div>
+      <div class="card soft" style="margin-top:10px">
+        <div class="row between"><b>מדידת סוכר אחרי הארוחה</b><span class="help">כשיהיה גלוקומטר — לכיול המודל</span></div>
+        ${(getDay(App.date).glucose || []).filter((r) => r.meal_id === m.id).map((r) => `<div class="small" style="margin-top:4px"><span class="num">${r.mg_dl}</span> mg/dL · ${r.min_after ? r.min_after + " דק' אחרי" : r.tag || ""} · ${r.time}</div>`).join("")}
+        <div class="inline-form" style="margin-top:6px">
+          <div class="field short"><label for="mg-v">mg/dL</label><input id="mg-v" class="num" type="number" inputmode="numeric" min="30" max="400" style="min-height:36px;padding:4px 8px;width:80px"></div>
+          <div class="field short"><label for="mg-min">דקות אחרי</label><select id="mg-min" style="min-height:36px;padding:4px 8px"><option>60</option><option>90</option><option>120</option><option>30</option><option>0</option></select></div>
+          <button class="btn sm" data-act="meal-glucose-save" data-id="${m.id}">שמירת מדידה</button>
+        </div>
+      </div>
       <details style="margin-top:10px"><summary class="help" style="cursor:pointer">עוד שיקולים לרווח בין ארוחות (מעבר לסוכר)</summary>
         <ul class="small" style="padding-inline-start:18px;margin:8px 0;line-height:1.6">
           <li><b>ברזל:</b> ${(n.iron || 0) >= 2 ? "הארוחה עשירה בברזל — " : ""}להרחיק קפה/תה וסידן (חלב צמחי מועשר, טחינה בכמות גדולה) בערך שעתיים ממקור ברזל או מכדור הברזל; ויטמין C באותה ארוחה משפר ספיגה.</li>
@@ -1971,6 +2036,15 @@ ${h}
       m.qty = qty; m.unit = unit; m.time = time;
       day.meals.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
       saveDay(App.date); closeModal(); render(); toast("הארוחה עודכנה");
+    },
+    "meal-glucose-save": (el) => {
+      const v = Number($("mg-v").value); if (!v) { toast("הזיני ערך ב-mg/dL"); return; }
+      const day = getDay(App.date); const m = day.meals.find((x) => x.id === el.dataset.id); if (!m) return;
+      const minAfter = Number($("mg-min").value) || 0, t = toMin(m.time) + minAfter;
+      day.glucose = day.glucose || [];
+      day.glucose.push({ mg_dl: v, tag: minAfter ? `${minAfter} דק' אחרי ארוחה` : "לפני/בזמן הארוחה", time: minStr(Math.min(t, 24 * 60 - 1)), meal_id: m.id, min_after: minAfter });
+      day.glucose.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+      saveDay(App.date); closeModal(); render(); toast("המדידה נשמרה");
     },
     "meal-del-modal": (el) => { if (!confirm("למחוק את הארוחה מהיומן?")) return; const day = getDay(App.date); day.meals = day.meals.filter((x) => x.id !== el.dataset.id); saveDay(App.date); closeModal(); render(); },
     "supp-dose": (el) => { const day = getDay(App.date); const s = App.state.supplements.find((x) => x.id === el.dataset.id); if (!s) return; const i = Number(el.dataset.i), c = suppTaken(day, s); setSuppTaken(day, s, i < c ? i : i + 1); saveDay(App.date); render(); },
