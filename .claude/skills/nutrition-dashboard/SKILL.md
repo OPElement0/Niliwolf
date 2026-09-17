@@ -171,6 +171,14 @@ food card**, never an overwrite, so past days stay correct. Overwrite only to fi
 computed wrongly for the same recipe. Logged meals keep their snapshot, so a card fix does not change
 past days by itself — say so when reporting one.
 
+**Recipe cards from 2026-09-17 on** are computed from the ingredient list with USDA values and now
+include the new nutrients (selenium, B2, vitamin E, ALA, natural folate). Two things to state every
+time: the GI is a weighted average over each ingredient's available carbohydrate (fresh whole wheat 68
+at her medium-fine grind, lentil flour 30, honey 61, 55% chocolate 40, tahini 35), and the per-100 g
+values depend on an assumed baked mass while the **per-unit** values do not — so ask for the unit count
+or the weight of one unit rather than guessing twice. Selenium from wheat is soil-dependent: imported
+hard red wheat is high (61 mcg/100 g), local wheat can be 4-10x lower. Say so on any card that carries it.
+
 **Rewriting past records after a card fix** (done 2026-09-17 for `f_decaf_oat` and
 `f_choc_chip_cookies`): only for cards corrected because they were *wrong*, never for a card whose
 portion legitimately changed over time — the 10.9 rolls were smaller (70 g) by her explicit decision and
