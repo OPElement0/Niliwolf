@@ -164,6 +164,13 @@ Playwright is preinstalled (`/opt/pw-browsers/chromium`). Load `file://…/nutri
 seed `window.App.state`, click tabs/actions, assert no `pageerror`. Example script lives
 in the session scratchpad during work; recreate as needed (see git history of this skill).
 
+## 7b. Food cards: versioning rule (2026-09-17)
+
+A **new bake with changed ingredients** (e.g. the roll with ground lentils + vital gluten) gets a **new
+food card**, never an overwrite, so past days stay correct. Overwrite only to fix a card that was
+computed wrongly for the same recipe. Either way, logged meals keep their snapshot and do not change
+retroactively — say so when reporting a card fix.
+
 ## 8. Open items (as of 2026-09-17)
 
 - Halva label and choline label still to be sent (values are estimates, `label_notes` say so).
@@ -182,4 +189,14 @@ in the session scratchpad during work; recreate as needed (see git history of th
   meal-kind heuristic (first before 11:30 = breakfast, largest in 12–16:30 / 17:30–22:30 = main) are not yet
   validated against real glucose readings — once she has a glucometer, compare ◆ points with the curve.
 - Personal GI values changed 2026-09-17: `f_rolls` 62→70, `f_choc_chip_cookies` 55→60 (retroactive, GI is looked up at render time).
+- Nutrient coverage holes (measured over 4.9–17.9, 35 distinct foods): iodine and omega-3 have a value
+  on 1 food out of 35 (1.5% of the period's kcal), B12 on 4, vitamin D on 6, vitamin A on 15, choline on
+  15. Those "deficits" in the Today list are mostly gaps in the food table, not intake. Macros, iron,
+  calcium, sodium, potassium and magnesium have 97–100% coverage.
+- Not tracked at all (asked for in her export spec): saturated fat, ALA/EPA/DHA separately, selenium,
+  phosphorus, copper, vitamins E/K/B1/B2/B3, retinol vs beta-carotene, natural folate vs folic acid.
+  Some are on the prenatal label and live only as free text in `label_notes`.
+- Supplement cards have no `chem_form`, no `active_since` and no `form` field; the export reports them
+  as unknown rather than inferring from the brand. Supplement TIMES do exist (`day.supplement_times`).
+- `settings/targets` stores overrides with no timestamp, so "when was the iron override set" is unknowable.
 - The private context doc `settings/handoff` in the db has the fuller list — read it first.

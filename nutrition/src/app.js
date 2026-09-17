@@ -604,6 +604,9 @@
     bamba: 55, bissli: 70, dark_choc: 25, milk_choc: 43, cookie: 65, cake: 60, icecream: 51, honey: 61, sugar: 65, jam: 55, choc_spread: 33, halva: 35, ketchup: 55, mayo: 0,
   };
   const GI_BY_CAT = { grains: 65, legumes: 30, dairy: 35, meat: 0, veg: 30, fruit: 50, nuts: 20, dishes: 55, drinks: 55, snacks: 65 };
+  // One-off items whose name identifies them better than their composition does. Mung-bean starch
+  // noodles look like plain refined starch but measure around GI 40.
+  const GI_BY_NAME = [[/אטריות זכוכית|אטריות שעועית|נודלס שעועית|אטריות מש/, 40]];
   // GI of a logged item: explicit `gi` on the food → generic table → estimate from composition.
   // `nutrients` are for the portion actually eaten; the "negligible" test (< 5 g net carbs) is on the portion, not per 100 ml.
   function giOf(food, nutrients, grams, name) {
@@ -615,6 +618,8 @@
     const net = Math.max(0, carbs - fiber);
     // sweetened drink / plain sugar or honey: named so, or almost no fibre, fat and protein → behaves like sucrose (GI ~65) on the grams actually drunk.
     const label = String(name || (food && food.name) || "");
+    const named = GI_BY_NAME.find(([re]) => re.test(label));
+    if (named) return named[1];
     if (/סוכר|דבש|סירופ|ממותק|מיץ|לימונדה|משקה/.test(label) || (net >= 2 && fiber < 0.3 && fat + prot < 1)) return 65;
     if (netPortion < 5) return 20;
     // The estimate is the GI of the CARBOHYDRATE itself, so fat and protein are NOT deducted here:
