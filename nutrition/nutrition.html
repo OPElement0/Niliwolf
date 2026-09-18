@@ -392,6 +392,30 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .ulg.gl-total { min-width: 250px; }
 @media (max-width: 480px) { .ulg.gl-total { min-width: 250px; } }
 
+/* ---------- symptoms ("איך אני מרגישה") ---------- */
+.card.feel { border-color: var(--accent-2); border-width: 1.5px; }
+.sym-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.sym-row:first-child { border-top: 0; }
+.sym-scale { display: inline-flex; gap: 4px; }
+.sym-scale button { width: 38px; height: 38px; border-radius: 10px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 700; padding: 0; font-variant-numeric: tabular-nums; }
+.sym-scale button:hover { border-color: var(--accent); }
+.sym-scale button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.sym-ends { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+.sym-sub { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; padding: 4px 0 2px; }
+.sym-sub .lbl { font-size: 0.8rem; color: var(--ink-2); min-width: 56px; }
+.sym-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.sym-item:first-child { border-top: 0; }
+.sym-item:hover { background: var(--surface-2); margin-inline: -8px; padding-inline: 8px; border-radius: var(--radius-sm); }
+.sym-item .time { font-weight: 700; min-width: 46px; font-variant-numeric: tabular-nums; padding-top: 3px; }
+.chip.sym { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.chip.sev-1, .chip.sev-1:hover { background: var(--good-soft); border-color: transparent; color: var(--ink); }
+.chip.sev-2, .chip.sev-2:hover { background: var(--yellow-soft); border-color: transparent; color: var(--ink); }
+.chip.sev-3, .chip.sev-3:hover { background: var(--warn-soft); border-color: transparent; color: var(--ink); }
+.chip.sev-4, .chip.sev-4:hover { background: var(--bad-soft); border-color: transparent; color: var(--ink); }
+.chart .gl-sym { fill: var(--purple); stroke: var(--surface); stroke-width: 1.5; cursor: pointer; }
+.chart .cell[data-act] { cursor: pointer; }
+@media (max-width: 380px) { .sym-scale button { width: 34px; height: 34px; } }
+
 </style>
 
 <div id="lock" class="lock" hidden>
@@ -734,6 +758,21 @@ window.DIAGNOSES = [
   { key: "constipation",he: "עצירות" },
 ];
 
+// Symptom questionnaire ("איך אני מרגישה") — generic definitions only, no personal data.
+// Every symptom is a 1–5 scale; `low` / `high` label the two ends. `bad` names the unpleasant end,
+// used for colouring and for "worst of the day": energy 1 = drained (bad = "low"), the rest 5 = severe.
+window.SYMPTOMS = [
+  { key: "energy",    he: "אנרגיה",   low: "מרוקנת", high: "מלאת אנרגיה", bad: "low" },
+  { key: "nausea",    he: "בחילה",    low: "קלה",    high: "חזקה",        bad: "high" },
+  { key: "dizziness", he: "סחרחורת",  low: "קלה",    high: "חזקה",        bad: "high" },
+  { key: "pain",      he: "כאבי בטן", low: "קל",     high: "חזק",         bad: "high", detail: true },
+  { key: "hunger",    he: "רעב",      low: "שובע",   high: "רעב חזק",     bad: "high" },
+];
+// Abdominal-pain details (type and position are multi-select, duration is single-select).
+window.PAIN_TYPES = [["stretch", "מתיחה"], ["kick", "בעיטה"], ["heaviness", "כבדות"], ["spot", "אזור ספציפי"], ["cramp", "התכווצות"]];
+window.PAIN_DURATION = [["short", "קצר ופתאומי"], ["long", "ארוך"]];
+window.PAIN_POSITIONS = [["lying", "שכיבה"], ["sitting", "ישיבה"], ["standing", "עמידה"], ["moving", "תנועה"], ["transition", "מעבר בין תנוחות"]];
+
 // Declarative rule engine — adjusts targets and produces notes from the pregnancy context.
 // ctx = { week, trimester, weightKg, prepregWeightKg, heightCm, bmi, gainKg, gainRange,
 //         labs: {marker: {value, date, week}}, diagnoses: Set, dietType, hour }
@@ -893,7 +932,7 @@ window.Charts = (function () {
     return "var(--seq-5)";
   }
 
-  // Heatmap: rows = nutrients, cols = days. cells[r][c] = {p: 0..1+ or null, tip}
+  // Heatmap: rows = nutrients, cols = days. cells[r][c] = {p: 0..1+ or null, tip, attrs?} (attrs = extra rect attributes, pre-escaped)
   function heatmap({ rows, cols, cells }) {
     const cw = 22, ch = 22, left = 132, top = 42, gap = 2;
     const w = left + cols.length * (cw + gap) + 8;
@@ -910,7 +949,7 @@ window.Charts = (function () {
         const x = w - 8 - (ci + 1) * (cw + gap) + gap;
         const cell = cells[ri][ci];
         const p = cell ? cell.p : null;
-        s += `<rect class="cell" x="${x}" y="${y}" width="${cw}" height="${ch}" fill="${seqColor(p)}" data-tip="${esc(cell ? cell.tip : "אין נתונים")}"></rect>`;
+        s += `<rect class="cell" x="${x}" y="${y}" width="${cw}" height="${ch}" fill="${seqColor(p)}" data-tip="${esc(cell ? cell.tip : "אין נתונים")}"${cell && cell.attrs ? " " + cell.attrs : ""}></rect>`;
       });
     });
     s += "</svg>";
@@ -1076,6 +1115,7 @@ window.NutriChat = (function () {
     else lines.push("עדיין לא נרשם אוכל היום.");
     const walks = (day.walks || []); if (walks.length) lines.push("הליכה היום: " + walks.map((w) => `${w.start} ${w.minutes} דק' (${w.pace === "light" ? "קלה" : "בינונית"}${w.outdoors ? ", בחוץ" : ""})`).join("; ") + ". הנחיות: הליכה מותרת, אסור מאמץ גבוה ועמידה ממושכת (צוואר רחם קצר).");
     if (day.sit && (day.sit.breaks || day.sit.longest)) lines.push(`ישיבה בעבודה היום: ${day.sit.breaks || 0} הפסקות קימה, הרצף הארוך ביותר ${day.sit.longest || 0} דק' (תזכורת כל ${day.sit.every || 45} דק').`);
+    const syms = app.daySymptoms ? app.daySymptoms(day) : []; if (syms.length) lines.push("איך היא מרגישה היום (סולם 1–5; אנרגיה 5 = הרבה, השאר 5 = חזק): " + syms.map((e) => app.symText(e)).join("; ") + ".");
     const sunLogs = (day.sun || []); if (sunLogs.length) lines.push("חשיפה לשמש היום: " + sunLogs.map((x) => `${x.start} ${x.minutes} דק' (UV ~${x.uvi})`).join("; ") + ".");
     const supps = (d.supplements || []).filter((s) => s.active !== false);
     if (supps.length) lines.push("תוספים קבועים (נלקח/יחידות ליום): " + supps.map((s) => `${s.name} ${app.suppTaken(day, s)}/${app.suppDoses(s)}`).join(", ") + ".");
@@ -2018,6 +2058,9 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       [80, 120, 160, 200].forEach((v) => { s += `<text x="${w - 2}" y="${GY(v) + 4}" text-anchor="end" font-size="9" fill="var(--accent-2)">${v}</text>`; });
       gluc.forEach((r) => { s += `<path class="gl-gluc" d="M${X(r.t)} ${GY(r.mg_dl) - 6} l6 6 l-6 6 l-6 -6 z" data-tip="${esc(`סוכר ${r.mg_dl} mg/dL · ${r.time}${r.tag ? " · " + r.tag : ""}`)}"></path><text x="${X(r.t)}" y="${GY(r.mg_dl) - 9}" text-anchor="middle" font-size="10" fill="var(--accent-2)" font-weight="700">${r.mg_dl}</text>`; });
     }
+    // symptom reports (▼ at the top; click = edit) — lets nausea/dizziness be read against the curve
+    const syms = daySymptoms(day).map((e) => Object.assign({}, e, { t: toMin(e.time) })).filter((e) => e.time && e.t >= x0 && e.t <= x1);
+    syms.forEach((e) => { s += `<path class="gl-sym" d="M${X(e.t) - 6} ${top + 1} l12 0 l-6 10 z" data-tip="${esc(`${e.time} · ${symLine(e)}`)}" data-act="sym-edit" data-id="${e.id}" data-date="${App.date}"></path>`; });
     if (peak.v >= thr.mid) s += `<text class="strong" x="${clamp(X(peak.t), left + 30, w - right - 30)}" y="${Math.max(top + 10, Y(peak.v) - 8)}" text-anchor="middle">שיא ${fmt(peak.v, 0)} · ${minStr(peak.t)}</text>`;
     // x labels
     const lblStep = (x1 - x0) > 18 * 60 ? 180 : 120;
@@ -2046,7 +2089,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     }
     return `${head}${pill}</div>
       <div class="chart">${s}</div>
-      <div class="legend"><span><i style="background:var(--accent)"></i>עומס משוער</span><span><i style="background:var(--bad)"></i>מעל הרף (${thr.hi})</span><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>בינוני (${thr.mid}–${thr.hi})</span><span>● ארוחה (לחיצה לפרטים)</span><span><i style="background:var(--accent-2)"></i>הליכה</span>${walks.length ? "<span>- - איך זה היה בלי ההליכה</span>" : ""}${(day.glucose || []).length ? "<span>◆ מדידת סוכר (mg/dL, סולם מימין)</span>" : ""}</div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>עומס משוער</span><span><i style="background:var(--bad)"></i>מעל הרף (${thr.hi})</span><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>בינוני (${thr.mid}–${thr.hi})</span><span>● ארוחה (לחיצה לפרטים)</span><span><i style="background:var(--accent-2)"></i>הליכה</span>${walks.length ? "<span>- - איך זה היה בלי ההליכה</span>" : ""}${(day.glucose || []).length ? "<span>◆ מדידת סוכר (mg/dL, סולם מימין)</span>" : ""}${syms.length ? `<span><i style="background:var(--purple)"></i>▼ דיווח תסמינים (לחיצה לעריכה)</span>` : ""}</div>
       <div class="gl-sum"><span>שיא היום: <b class="num">${fmt(peak.v, 0)}</b> ב-${minStr(peak.t)}</span><span>זמן מעל הרף: <b class="num">${durStr(minsHigh)}</b></span><span>בתחום הבינוני: <b class="num">${durStr(minsMid)}</b></span>${peakRaw && peakRaw.v > 0 && peak.v / peakRaw.v < 0.995 ? `<span>ההליכה הורידה את השיא ב-<b class="num">${Math.round((1 - peak.v / peakRaw.v) * 100)}%</b></span>` : ""}</div>
       <div class="row between" style="margin-top:8px;gap:8px"><span class="small"><b>עומס גליקמי מצטבר ${isToday ? "היום" : ""}</b><br><span class="help">סכום כל הארוחות מול יעד אישי (קלוריות, סיבים, טרימסטר, רגישות לסוכר) · המשולש = צפוי לפי השעה</span></span>${glTotalGauge(total, isToday)}</div>
       ${mealCarbBlock(clusters)}
@@ -2249,15 +2292,109 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
   }
 
   // ------------------------------------------------------------ report export (read-only)
+  // ------------------------------------------------------------ symptoms ("איך אני מרגישה")
+  // day.symptoms[] = {id, time, energy, nausea, dizziness, hunger, pain: {level, types[], duration, positions[]} | null, note}.
+  // A missing level means "not reported in that questionnaire" — deliberately different from a low level.
+  const SYM = window.SYMPTOMS, SYM_BY = Object.fromEntries(SYM.map((s) => [s.key, s]));
+  const PAIN_HE = { types: Object.fromEntries(window.PAIN_TYPES), duration: Object.fromEntries(window.PAIN_DURATION), positions: Object.fromEntries(window.PAIN_POSITIONS) };
+  function daySymptoms(day) { return ((day && day.symptoms) || []).slice().sort((a, b) => (a.time || "").localeCompare(b.time || "")); }
+  function symLevel(e, key) { const v = key === "pain" ? (e.pain ? e.pain.level : null) : e[key]; return v == null || v === "" ? null : Number(v); }
+  // 0..1 "how unpleasant" — energy is inverted (1 = drained is the worst end).
+  function symSeverity(key, lvl) { if (lvl == null) return null; return SYM_BY[key].bad === "low" ? (5 - lvl) / 4 : (lvl - 1) / 4; }
+  function symSevClass(key, lvl) { const s = symSeverity(key, lvl); return s == null ? "" : s >= 0.75 ? "sev-4" : s >= 0.5 ? "sev-3" : s >= 0.25 ? "sev-2" : "sev-1"; }
+  function painText(p) { if (!p) return ""; const parts = []; if (p.types && p.types.length) parts.push(p.types.map((t) => PAIN_HE.types[t] || t).join(", ")); if (p.duration) parts.push(PAIN_HE.duration[p.duration] || p.duration); if (p.positions && p.positions.length) parts.push("ב" + p.positions.map((t) => PAIN_HE.positions[t] || t).join("/")); return parts.join(" · "); }
+  function symParts(e) { return SYM.filter((s) => symLevel(e, s.key) != null).map((s) => ({ key: s.key, he: s.he, lvl: symLevel(e, s.key), detail: s.key === "pain" ? painText(e.pain) : "" })); }
+  function symLine(e) { const p = symParts(e).map((x) => `${x.he} ${x.lvl}${x.detail ? ` (${x.detail})` : ""}`); if (e.note && e.note.trim()) p.push(`הערה: ${e.note.trim()}`); return p.join(" · ") || "בלי תסמינים"; }
+  function symText(e) { return `${e.time || ""} ${symLine(e)}`.trim(); }
+  App.symText = symText; App.daySymptoms = daySymptoms;
+  function symChips(e) { return symParts(e).map((x) => `<span class="chip static sym ${symSevClass(x.key, x.lvl)}" title="1 = ${esc(SYM_BY[x.key].low)} · 5 = ${esc(SYM_BY[x.key].high)}">${x.he} <b class="num">${x.lvl}</b>${x.detail ? `<span class="small ink2">· ${esc(x.detail)}</span>` : ""}</span>`).join(""); }
+  function symItemHtml(e, dateKey) { return `<div class="sym-item" data-act="sym-edit" data-id="${e.id}" data-date="${dateKey}" title="לחיצה לעריכה או מחיקה"><span class="time num">${esc(e.time || "")}</span><div class="grow"><div class="chips">${symChips(e) || `<span class="small ink2">בלי תסמינים</span>`}</div>${e.note && e.note.trim() ? `<div class="small ink2" style="margin-top:4px">${esc(e.note.trim())}</div>` : ""}</div></div>`; }
+  function symTopCardHtml(day, isToday) {
+    const list = daySymptoms(day), last = list[list.length - 1];
+    return `<div class="card feel"><div class="card-head"><h2>איך אני מרגישה</h2><button class="btn sm primary" data-act="sym-open">+ הוספת תסמינים</button></div>
+      ${last ? `<div class="small"><span class="ink2">דיווח אחרון ${esc(last.time || "")}:</span> ${esc(symLine(last))}</div>${list.length > 1 ? `<div class="help" style="margin-top:2px">${list.length} דיווחים ${isToday ? "היום" : "בתאריך זה"} — כולם בתחתית הדף, לפי שעות.</div>` : ""}` : `<p class="help">עדיין לא דיווחת ${isToday ? "היום" : "בתאריך זה"}. אפשר למלא גם בדיעבד — בשאלון בוחרים תאריך ושעה.</p>`}
+    </div>`;
+  }
+  function symListCardHtml(day, isToday, dateKey) {
+    const list = daySymptoms(day);
+    return `<div class="card" id="sym-list"><div class="card-head"><h2>תסמינים ${isToday ? "היום" : "בתאריך זה"} <span class="small ink2">(${list.length})</span></h2><button class="btn sm" data-act="sym-open">+ הוספה</button></div>
+      ${list.length ? `<div class="list">${list.map((e) => symItemHtml(e, dateKey)).join("")}</div><p class="help" style="margin-top:6px">לחיצה על דיווח: עריכה או מחיקה. הכול נכנס למעקב לאורך זמן ולדוח.</p>` : `<p class="help">אין דיווחים ${isToday ? "היום" : "בתאריך זה"}.</p>`}
+    </div>`;
+  }
+  // questionnaire modal — draft in window._editSym = {date, origDate, isNew, entry}
+  function symOpen(entry, dateKey) {
+    const e = entry ? JSON.parse(JSON.stringify(entry)) : { id: uid("sy"), time: nowTime(), note: "" };
+    e.pain = e.pain || null;
+    window._editSym = { date: dateKey || App.date, origDate: dateKey || App.date, isNew: !entry, entry: e };
+    symModal();
+  }
+  function symDraftFromDom() {
+    const d = window._editSym; if (!d) return;
+    if ($("sym-date") && $("sym-date").value) d.date = $("sym-date").value;
+    if ($("sym-time") && $("sym-time").value) d.entry.time = $("sym-time").value;
+    if ($("sym-note")) d.entry.note = $("sym-note").value;
+  }
+  function symModal() {
+    const d = window._editSym, e = d.entry;
+    const prev = document.querySelector(".modal"), scrollTop = prev ? prev.scrollTop : 0;
+    const scale = (key) => { const cur = symLevel(e, key), m = SYM_BY[key]; return `<div><div class="sym-scale" role="group" aria-label="${esc(m.he)}">${[1, 2, 3, 4, 5].map((v) => `<button type="button" class="${cur === v ? "on" : ""}" data-act="sym-level" data-key="${key}" data-v="${v}" aria-pressed="${cur === v}">${v}</button>`).join("")}</div><div class="sym-ends"><span>${esc(m.low)}</span><span>${esc(m.high)}</span></div></div>`; };
+    const multi = (k, opts, arr) => `<div class="chips">${opts.map(([v, he]) => `<button type="button" class="chip ${(arr || []).includes(v) ? "on" : ""}" data-act="sym-pain-multi" data-k="${k}" data-v="${v}">${esc(he)}</button>`).join("")}</div>`;
+    const single = (opts, cur) => `<div class="chips">${opts.map(([v, he]) => `<button type="button" class="chip ${cur === v ? "on" : ""}" data-act="sym-pain-single" data-v="${v}">${esc(he)}</button>`).join("")}</div>`;
+    const painSub = e.pain && e.pain.level ? `<div class="sym-sub">
+        <div class="row" style="gap:6px"><span class="lbl">סוג</span>${multi("types", window.PAIN_TYPES, e.pain.types)}</div>
+        <div class="row" style="gap:6px"><span class="lbl">אורך</span>${single(window.PAIN_DURATION, e.pain.duration)}</div>
+        <div class="row" style="gap:6px"><span class="lbl">פוזיציה</span>${multi("positions", window.PAIN_POSITIONS, e.pain.positions)}</div>
+      </div>` : "";
+    openModal(`<h2>${d.isNew ? "הוספת תסמינים" : "עריכת דיווח"}</h2>
+      <p class="help">סמני רק מה שרלוונטי — שורה שלא נגעת בה לא נרשמת. לחיצה חוזרת על מספר מבטלת אותו.</p>
+      <div class="inline-form" style="margin-top:8px"><div class="field short"><label for="sym-date">תאריך</label><input id="sym-date" type="date" value="${esc(d.date)}" style="min-height:36px;padding:4px 8px"></div><div class="field short"><label for="sym-time">שעה</label><input id="sym-time" type="time" value="${esc(e.time || nowTime())}" style="min-height:36px;padding:4px 8px"></div></div>
+      <div style="margin-top:8px">${SYM.map((m) => `<div class="sym-row"><div><b>${esc(m.he)}</b>${m.key === "pain" && e.pain && e.pain.level ? `<div class="help">${esc(painText(e.pain) || "פרטי למטה: סוג, אורך, פוזיציה")}</div>` : ""}</div>${scale(m.key)}${m.key === "pain" ? painSub : ""}</div>`).join("")}</div>
+      <div class="field" style="margin-top:10px"><label for="sym-note">הערה חופשית</label><textarea id="sym-note" placeholder="מה קדם לזה, מה עזר, משהו חריג…">${esc(e.note || "")}</textarea></div>
+      <div class="actions">${d.isNew ? "" : `<button class="btn danger" data-act="sym-del">מחיקה</button>`}<button class="btn" data-act="modal-close">ביטול</button><button class="btn primary" data-act="sym-save">שמירה</button></div>`);
+    const cur = document.querySelector(".modal"); if (cur && scrollTop) cur.scrollTop = scrollTop;
+  }
+  function symSave() {
+    const d = window._editSym; if (!d) return; symDraftFromDom();
+    const e = d.entry;
+    if (e.pain && !e.pain.level) e.pain = null;
+    if (e.pain) { e.pain.types = e.pain.types || []; e.pain.positions = e.pain.positions || []; if (!e.pain.duration) delete e.pain.duration; }
+    e.note = (e.note || "").trim(); e.time = e.time || nowTime();
+    if (!SYM.some((s) => symLevel(e, s.key) != null) && !e.note) { toast("סמני לפחות תסמין אחד או כתבי הערה"); return; }
+    const key = d.date || App.date;
+    if (d.origDate !== key) { const od = getDay(d.origDate); od.symptoms = (od.symptoms || []).filter((x) => x.id !== e.id); saveDay(d.origDate); }
+    const day = getDay(key); day.symptoms = day.symptoms || [];
+    const i = day.symptoms.findIndex((x) => x.id === e.id); if (i >= 0) day.symptoms[i] = e; else day.symptoms.push(e);
+    day.symptoms.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    saveDay(key); window._editSym = null; closeModal(); render();
+    toast(key === App.date ? (d.isNew ? "הדיווח נרשם" : "הדיווח עודכן") : `נרשם לתאריך ${fmtDate(key)}`);
+  }
+  function symDelete() {
+    const d = window._editSym; if (!d || d.isNew) { closeModal(); return; }
+    if (!confirm("למחוק את הדיווח?")) return;
+    const od = getDay(d.origDate); od.symptoms = (od.symptoms || []).filter((x) => x.id !== d.entry.id); saveDay(d.origDate);
+    window._editSym = null; closeModal(); render(); toast("הדיווח נמחק");
+  }
+  function symDayModal(key) {
+    const list = daySymptoms(App.state.days[key]);
+    openModal(`<h2>תסמינים · ${esc(fmtDateLong(key))}</h2>${list.length ? `<div class="list">${list.map((e) => symItemHtml(e, key)).join("")}</div>` : `<p class="help">אין דיווחים בתאריך זה.</p>`}<div class="actions"><button class="btn" data-act="sym-open" data-date="${key}">+ הוספה לתאריך זה</button><button class="btn" data-act="modal-close">סגירה</button></div>`);
+  }
+  // per-day aggregate for history/report: {key: {n, mean, worst, sev}}; worst = the unpleasant end of the day.
+  function symDayStats(day) {
+    const list = daySymptoms(day), out = {};
+    SYM.forEach((s) => { const v = list.map((e) => symLevel(e, s.key)).filter((x) => x != null); if (!v.length) return; const worst = s.bad === "low" ? Math.min(...v) : Math.max(...v); out[s.key] = { n: v.length, mean: v.reduce((a, b) => a + b, 0) / v.length, worst, sev: symSeverity(s.key, worst) }; });
+    return out;
+  }
+
+  // ------------------------------------------------------------ report export
   const REP_FIELDS = [
     ["preg", "פרטי הריון (שבוע, משקל, אבחנות)"], ["targets", "היעדים היומיים ומאיפה הם"], ["daily", "סיכום יומי של הרכיבים"],
     ["meals", "פירוט ארוחות (שעה, מאכל, כמות)"], ["mealNut", "ערכים לכל ארוחה"], ["supps", "תוספים — מה סומן בכל יום"],
     ["activity", "הליכה ושמש"], ["gl", "עומס גליקמי (מודל משוער)"], ["labs", "בדיקות מעבדה ומדידות סוכר"],
-    ["notes", "הערות יומיות"], ["averages", "ממוצעים לתקופה מול היעדים"], ["sources", "מקורות עיקריים לכל רכיב מרכזי"], ["accuracy", "הערת דיוק — מקור הערכים"],
+    ["notes", "הערות יומיות"], ["symptoms", "תסמינים (איך הרגשתי)"], ["averages", "ממוצעים לתקופה מול היעדים"], ["sources", "מקורות עיקריים לכל רכיב מרכזי"], ["accuracy", "הערת דיוק — מקור הערכים"],
   ];
   const REP_PRESETS = {
-    claude: { fields: { preg: 1, targets: 1, daily: 1, meals: 1, mealNut: 1, supps: 1, activity: 1, gl: 1, labs: 1, notes: 1, averages: 1, sources: 1, accuracy: 1 }, nutMode: "all", name: "" },
-    nurse: { fields: { preg: 1, targets: 1, daily: 1, meals: 0, mealNut: 0, supps: 1, activity: 1, gl: 0, labs: 1, notes: 0, averages: 1, sources: 1, accuracy: 1 }, nutMode: "main", name: "" },
+    claude: { fields: { preg: 1, targets: 1, daily: 1, meals: 1, mealNut: 1, supps: 1, activity: 1, gl: 1, labs: 1, notes: 1, symptoms: 1, averages: 1, sources: 1, accuracy: 1 }, nutMode: "all", name: "" },
+    nurse: { fields: { preg: 1, targets: 1, daily: 1, meals: 0, mealNut: 0, supps: 1, activity: 1, gl: 0, labs: 1, notes: 0, symptoms: 1, averages: 1, sources: 1, accuracy: 1 }, nutMode: "main", name: "" },
   };
   const REP_MAIN = ["kcal", "protein", "carbs", "fiber", "fat", "iron", "calcium", "sodium"];
   function repState() {
@@ -2284,7 +2421,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     if (opts && opts.today) { r.from = r.to = dateKeyOf(new Date()); }
     if (opts && opts.audience) repApplyAudience(opts.audience);
     const days = []; for (let k = r.from; k <= r.to && days.length < 366; k = addDays(k, 1)) days.push(k);
-    const logged = days.filter((k) => App.state.days[k] && ((App.state.days[k].meals || []).length || (App.state.days[k].walks || []).length || App.state.days[k].weight_kg));
+    const logged = days.filter((k) => App.state.days[k] && ((App.state.days[k].meals || []).length || (App.state.days[k].walks || []).length || (App.state.days[k].symptoms || []).length || App.state.days[k].weight_kg));
     const canShare = typeof navigator !== "undefined" && !!navigator.share;
     openModal(`<h2>דוח תזונה לייצוא</h2>
       <p class="help">הדוח קורא בלבד ולא משנה כלום. הוא כולל רק את הטווח והשדות שסימנת. היסטוריית הצ'אט והסיסמה לעולם לא מיוצאות.</p>
@@ -2338,7 +2475,7 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
     days.forEach((k) => {
       const day = App.state.days[k];
       const hasMeals = !!(day && (day.meals || []).length);
-      const row = { k, hasMeals, day, tot: null, food: null, fromSupp: null, targets: null, supp: [], walks: dayWalks(day), sun: (day && day.sun) || [], weight: day && day.weight_kg, notes: day && day.notes, glucose: (day && day.glucose) || [], gl: null, week: null, nMeals: hasMeals ? day.meals.length : 0, full: false, retinol: 0, top: {} };
+      const row = { k, hasMeals, day, tot: null, food: null, fromSupp: null, targets: null, supp: [], walks: dayWalks(day), sun: (day && day.sun) || [], weight: day && day.weight_kg, notes: day && day.notes, glucose: (day && day.glucose) || [], symptoms: daySymptoms(day), gl: null, week: null, nMeals: hasMeals ? day.meals.length : 0, full: false, retinol: 0, top: {} };
       row.week = withDate(k, () => pregCtx().week);
       if (day) {
         withDate(k, () => {
@@ -2461,6 +2598,17 @@ ${image ? "מצורפת תמונה של הארוחה: זהי את הפריטים
       const gl = d.rows.filter((x) => x.glucose.length); if (gl.length) { L.push("מדידות סוכר:"); gl.forEach((x) => x.glucose.forEach((g) => L.push(`- ${repDate(x.k)} ${g.time}: ${g.mg_dl} mg/dL (${g.tag})`))); }
       L.push("");
     }
+    if (f.symptoms) {
+      const sd = d.rows.filter((x) => x.symptoms.length);
+      L.push("## תסמינים — איך הרגשתי (סולם 1–5; אנרגיה: 1 = מרוקנת, 5 = מלאת אנרגיה; השאר: 1 = קל, 5 = חזק)");
+      if (!sd.length) L.push("לא דווחו תסמינים בטווח.");
+      sd.forEach((x) => { L.push(`### ${repDate(x.k)}`); x.symptoms.forEach((e) => L.push(`- ${e.time || ""}: ${symLine(e)}`)); });
+      if (sd.length) {
+        L.push(""); L.push("| תסמין | דיווחים | ימים | ממוצע | הכי חמור |"); L.push("|---|---|---|---|---|");
+        SYM.forEach((s) => { const vals = sd.flatMap((x) => x.symptoms.map((e) => symLevel(e, s.key)).filter((v) => v != null)); if (!vals.length) return; const nd = sd.filter((x) => x.symptoms.some((e) => symLevel(e, s.key) != null)).length; L.push(`| ${s.he} | ${vals.length} | ${nd} | ${fmt(vals.reduce((a, b) => a + b, 0) / vals.length, 1)} | ${s.bad === "low" ? Math.min(...vals) : Math.max(...vals)} |`); });
+      }
+      L.push("");
+    }
     if (f.notes) { const ns = d.rows.filter((x) => x.notes && x.notes.trim()); if (ns.length) { L.push("## הערות יומיות"); ns.forEach((x) => L.push(`- ${repDate(x.k)}: ${x.notes.trim()}`)); L.push(""); } }
     if (f.accuracy) {
       L.push("## הערת דיוק");
@@ -2496,8 +2644,8 @@ ${h}
   }
   function reportCsv(d) {
     const keys = d.nutKeys;
-    const rows = [["תאריך", "שבוע הריון", "ארוחות", "יום מלא", ...keys.map((n) => `${NUT_BY[n].he} ממזון (${NUT_BY[n].unit})`), ...d.suppKeys.map((n) => `${NUT_BY[n].he} מתוספים`), ...keys.map((n) => `יעד ${NUT_BY[n].he}`), "תוספים שסומנו", "הליכה (דק')", "משקל"]];
-    d.rows.forEach((x) => { rows.push([x.k, x.week != null ? x.week : "", x.nMeals, x.hasMeals ? (x.full ? "כן" : "חלקי") : "אין רישום", ...keys.map((n) => x.hasMeals ? Math.round((x.food[n] || 0) * 10) / 10 : ""), ...d.suppKeys.map((n) => x.day ? Math.round((x.fromSupp[n] || 0) * 100) / 100 : ""), ...keys.map((n) => x.targets && x.targets[n] != null ? x.targets[n] : ""), x.day ? x.supp.map((s) => `${s.name} ${s.taken}/${s.doses}`).join("; ") : "", x.walks.reduce((a, w) => a + w.minutes, 0) || "", x.weight || ""]); });
+    const rows = [["תאריך", "שבוע הריון", "ארוחות", "יום מלא", ...keys.map((n) => `${NUT_BY[n].he} ממזון (${NUT_BY[n].unit})`), ...d.suppKeys.map((n) => `${NUT_BY[n].he} מתוספים`), ...keys.map((n) => `יעד ${NUT_BY[n].he}`), "תוספים שסומנו", "הליכה (דק')", "משקל", ...SYM.map((s) => `${s.he} (${s.bad === "low" ? "הכי נמוך" : "הכי גבוה"} ביום)`), "דיווחי תסמינים"]];
+    d.rows.forEach((x) => { rows.push([x.k, x.week != null ? x.week : "", x.nMeals, x.hasMeals ? (x.full ? "כן" : "חלקי") : "אין רישום", ...keys.map((n) => x.hasMeals ? Math.round((x.food[n] || 0) * 10) / 10 : ""), ...d.suppKeys.map((n) => x.day ? Math.round((x.fromSupp[n] || 0) * 100) / 100 : ""), ...keys.map((n) => x.targets && x.targets[n] != null ? x.targets[n] : ""), x.day ? x.supp.map((s) => `${s.name} ${s.taken}/${s.doses}`).join("; ") : "", x.walks.reduce((a, w) => a + w.minutes, 0) || "", x.weight || "", ...SYM.map((s) => { const st = symDayStats(x.day)[s.key]; return st ? st.worst : ""; }), x.symptoms.length || ""]); });
     return "﻿" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
   }
   async function saveText(name, text, mime) {
@@ -2616,6 +2764,7 @@ ${h}
         ${(day.glucose || []).length ? `<div class="list">${day.glucose.map((r, i) => `<div class="item"><div class="grow"><span class="num">${r.mg_dl}</span> mg/dL <span class="meta">· ${esc(r.tag || "")} · ${r.time}${r.meal_id && day.meals.find((x) => x.id === r.meal_id) ? " · " + esc(day.meals.find((x) => x.id === r.meal_id).name) : ""}</span></div><button class="iconbtn" data-act="del-glucose" data-i="${i}" aria-label="מחיקה">✕</button></div>`).join("")}</div>` : `<p class="help">אין מדידות ${isToday ? "היום" : "בתאריך זה"}.</p>`}</div>` : "";
     $("panel-today").innerHTML = `
       <div class="stack">
+        ${symTopCardHtml(day, isToday)}
         <div class="card focus"><p class="focus-line">${esc(focus)}</p><p class="small ink2" style="margin-top:4px">${esc(headline)}</p>${overs.length ? `<div class="stack" style="gap:6px;margin-top:10px">${overs.join("")}</div>` : ""}</div>
         ${isToday ? `<div class="card now" id="now-card">${nowCardHtml()}</div>` : ""}
         <div class="hero">${heroTiles}</div>
@@ -2645,6 +2794,7 @@ ${h}
             </div>
           </div>
         </div>
+        ${symListCardHtml(day, isToday, App.date)}
       </div>`;
   }
   // One bold sentence: the main food focus for the rest of the day.
@@ -3113,10 +3263,10 @@ ${h}
   }
 
   // ---- History
-  let histRange = 30, histKey = "protein", histLab = "ferritin";
+  let histRange = 30, histKey = "protein", histLab = "ferritin", histSym = "nausea";
   function renderHistory() {
     const todayK = dateKeyOf(new Date());
-    const allKeys = Object.keys(App.state.days).filter((k) => (App.state.days[k].meals || []).length).sort();
+    const allKeys = Object.keys(App.state.days).filter((k) => (App.state.days[k].meals || []).length || (App.state.days[k].symptoms || []).length).sort();
     if (!allKeys.length) { $("panel-history").innerHTML = `<div class="empty">עדיין אין ימים עם רישום. אחרי כמה ימי מעקב תראי כאן מפת חום, מגמות וחוסרים קבועים.</div>`; return; }
     const n = histRange === 0 ? Math.max(7, Math.round((parseKey(todayK) - parseKey(allKeys[0])) / 86400000) + 1) : histRange;
     const keys = []; for (let i = n - 1; i >= 0; i--) keys.push(addDays(todayK, -i));
@@ -3167,6 +3317,39 @@ ${h}
     // walking minutes per day
     const walkPts = keys.map((k) => ({ label: fmtDate(k), y: dayWalks(App.state.days[k]).reduce((a, w) => a + w.minutes, 0) }));
     const walkSvg = walkPts.some((p) => p.y > 0) ? window.Charts.line({ points: walkPts, unit: "דק'", yLabel: "הליכה", height: 170 }) : "";
+    // symptoms ("איך אני מרגישה"): heatmap of the day's worst level, trend per symptom, what repeats in abdominal pain
+    const symStats = Object.fromEntries(keys.map((k) => [k, symDayStats(App.state.days[k])]));
+    const symDays = keys.filter((k) => Object.keys(symStats[k]).length);
+    let symHtml = "";
+    if (symDays.length) {
+      const dayAttrs = (k) => `data-act="sym-day" data-date="${k}"`;
+      const heatS = window.Charts.heatmap({ rows: SYM.map((s) => s.he), cols: keys.map((k) => ({ label: n <= 31 ? fmtDate(k) : (parseKey(k).getDay() === 0 ? fmtDate(k) : "") })), cells: SYM.map((s) => keys.map((k) => { const st = symStats[k][s.key]; if (!st) return Object.keys(symStats[k]).length ? { p: null, tip: `${fmtDate(k)} · ${s.he}: לא דווח · לחיצה לפרטי היום`, attrs: dayAttrs(k) } : null; return { p: 0.13 + st.sev * 0.87, tip: `${fmtDate(k)} · ${s.he}: ${s.bad === "low" ? "הכי נמוך" : "הכי גבוה"} ${st.worst}, ממוצע ${fmt(st.mean, 1)} (${st.n} ${st.n === 1 ? "דיווח" : "דיווחים"}) · לחיצה לפרטי היום`, attrs: dayAttrs(k) }; })) });
+      const sm = SYM_BY[histSym] || SYM[0];
+      const sp = keys.map((k) => { const st = symStats[k][sm.key]; return { label: fmtDate(k), y: st ? Math.round(st.mean * 10) / 10 : null }; });
+      const sAvg = sp.map((p, i) => { const win = sp.slice(Math.max(0, i - 6), i + 1).map((q) => q.y).filter((v) => v != null); return win.length >= 3 ? win.reduce((a, b) => a + b, 0) / win.length : null; });
+      const symTrendSvg = window.Charts.line({ points: sp, avg: sAvg, yMin: 1, yMax: 5, unit: "", yLabel: sm.he, height: 180 });
+      const summary = SYM.map((s) => { const ds = symDays.filter((k) => symStats[k][s.key]); if (!ds.length) return `<div><span>${s.he}</span><span class="ink2">לא דווח</span></div>`; const all = ds.flatMap((k) => daySymptoms(App.state.days[k]).map((e) => symLevel(e, s.key)).filter((v) => v != null)); const worst = s.bad === "low" ? Math.min(...all) : Math.max(...all); return `<div><span>${s.he}</span><span class="num">${ds.length} ימים · ממוצע ${fmt(all.reduce((a, b) => a + b, 0) / all.length, 1)} · ${s.bad === "low" ? "הכי נמוך" : "הכי גבוה"} ${worst}</span></div>`; }).join("");
+      const pains = symDays.flatMap((k) => daySymptoms(App.state.days[k]).filter((e) => e.pain && e.pain.level).map((e) => Object.assign({ k }, e)));
+      const countChips = (arr, he) => { const c = {}; arr.forEach((v) => { c[v] = (c[v] || 0) + 1; }); const ent = Object.entries(c).sort((a, b) => b[1] - a[1]); return ent.length ? ent.map(([v, cnt]) => `<span class="chip static">${esc(he[v] || v)} <b class="num">${cnt}</b></span>`).join("") : `<span class="help">לא צוין</span>`; };
+      const hourBucket = (t) => { const h = toMin(t) / 60; return h < 6 || h >= 22 ? "לילה (22–06)" : h < 12 ? "בוקר (06–12)" : h < 17 ? "צהריים (12–17)" : "ערב (17–22)"; };
+      const painHtml = pains.length ? `<div class="stack" style="gap:8px">
+          <div class="small">${pains.length} ${pains.length === 1 ? "אפיזודה" : "אפיזודות"} ב-${new Set(pains.map((e) => e.k)).size} ימים · עוצמה ממוצעת <b class="num">${fmt(pains.reduce((a, e) => a + Number(e.pain.level), 0) / pains.length, 1)}</b> · הכי גבוה <b class="num">${Math.max(...pains.map((e) => Number(e.pain.level)))}</b></div>
+          <div class="row" style="gap:6px"><span class="small ink2" style="min-width:56px">סוג</span><span class="chips">${countChips(pains.flatMap((e) => e.pain.types || []), PAIN_HE.types)}</span></div>
+          <div class="row" style="gap:6px"><span class="small ink2" style="min-width:56px">אורך</span><span class="chips">${countChips(pains.map((e) => e.pain.duration).filter(Boolean), PAIN_HE.duration)}</span></div>
+          <div class="row" style="gap:6px"><span class="small ink2" style="min-width:56px">פוזיציה</span><span class="chips">${countChips(pains.flatMap((e) => e.pain.positions || []), PAIN_HE.positions)}</span></div>
+          <div class="row" style="gap:6px"><span class="small ink2" style="min-width:56px">שעות</span><span class="chips">${countChips(pains.filter((e) => e.time).map((e) => hourBucket(e.time)), {})}</span></div>
+        </div>` : `<p class="help">לא דווחו כאבי בטן בטווח.</p>`;
+      symHtml = `<div class="card"><div class="card-head"><h3>תסמינים — איך הרגשתי לאורך זמן</h3><span class="help">${symDays.length} ימים עם דיווח מתוך ${n}</span></div>
+        <div class="chart">${heatS}</div>
+        <div class="legend"><span><i style="background:var(--seq-1)"></i>1</span><span><i style="background:var(--seq-2)"></i>2</span><span><i style="background:var(--seq-3)"></i>3</span><span><i style="background:var(--seq-4)"></i>4</span><span><i style="background:var(--seq-5)"></i>5 (הכי חמור ביום)</span><span><i style="background:var(--surface-2)"></i>לא דווח</span></div>
+        <p class="help" style="margin-top:4px">באנרגיה הצבע הפוך: כהה = מרוקנת. לחיצה על תא פותחת את הדיווחים של אותו יום.</p>
+        <div class="mini-list" style="margin-top:10px">${summary}</div>
+        <div class="grid equal" style="margin-top:12px">
+          <div><div class="card-head"><h3>מגמה</h3><select id="hist-sym" data-act="hist-sym" style="width:auto;min-height:34px;padding:4px 8px">${SYM.map((s) => `<option value="${s.key}" ${s.key === sm.key ? "selected" : ""}>${s.he}</option>`).join("")}</select></div><div class="chart">${symTrendSvg}</div><div class="legend"><span><i style="background:var(--accent)"></i>ממוצע יומי</span><span><i style="background:var(--accent-2)"></i>ממוצע נע 7 ימים</span></div></div>
+          <div><div class="card-head"><h3>כאבי בטן — מה חוזר</h3></div>${painHtml}</div>
+        </div>
+      </div>`;
+    } else symHtml = `<div class="card"><div class="card-head"><h3>תסמינים — איך הרגשתי לאורך זמן</h3></div><p class="help">אין דיווחי תסמינים בטווח. מדווחים מכרטיס "איך אני מרגישה" בראש טאב היום.</p></div>`;
     // summary tiles
     const avgOf = (key) => { const vals = logged.map((k) => totals[k][key] || 0); return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0; };
     const suppDays = calKeys.filter((k) => { const d = App.state.days[k]; return d && act.length && act.every((s) => suppTaken(d, s) >= suppDoses(s)); }).length;
@@ -3178,6 +3361,7 @@ ${h}
         <div class="tile"><div class="name">תוספים — 28 יום</div><div class="big num">${act.length ? Math.round((suppDays / 28) * 100) + "%" : "–"}</div><div class="sub"><span>ימים שבהם כל התוספים סומנו</span></div></div>
       </div>
       <div class="card"><div class="card-head"><h3>מפת חום — % מהיעד לכל רכיב ויום</h3></div><div class="chart">${heat}</div><div class="legend"><span><i style="background:var(--seq-1)"></i>0–25%</span><span><i style="background:var(--seq-2)"></i>25–50%</span><span><i style="background:var(--seq-3)"></i>50–75%</span><span><i style="background:var(--seq-4)"></i>75–100%</span><span><i style="background:var(--seq-5)"></i>100%+</span><span><i style="background:var(--surface-2)"></i>אין רישום</span></div></div>
+      ${symHtml}
       <div class="grid equal">
         <div class="card"><div class="card-head"><h3>מגמה</h3><select id="hist-key" data-act="hist-key" style="width:auto;min-height:34px;padding:4px 8px">${NUT.filter((x) => t[x.key]).map((x) => `<option value="${x.key}" ${x.key === histKey ? "selected" : ""}>${x.he}</option>`).join("")}</select></div><div class="chart">${lineSvg}</div><div class="legend"><span><i style="background:var(--accent)"></i>יומי</span><span><i style="background:var(--accent-2)"></i>ממוצע נע 7 ימים</span><span>- - יעד</span></div></div>
         <div class="card"><div class="card-head"><h3>החוסרים הקבועים שלי</h3><span class="help">ממוצע % מהיעד בימים עם רישום</span></div><div class="chart">${barsSvg}</div></div>
@@ -3366,6 +3550,15 @@ ${h}
     "diag-toggle": (el) => { const code = el.dataset.code; const ex = App.state.diagnoses.find((d) => d.code === code); if (ex) { App.state.diagnoses = App.state.diagnoses.filter((d) => d.code !== code); Store.del("diagnoses", ex.id); } else { const d = { id: uid("d"), code, since: App.date }; App.state.diagnoses.push(d); saveDiag(d); } render(); },
     "lab-add": () => { const v = $("lab-value").value; if (v === "") { toast("חסר ערך"); return; } const marker = $("lab-marker").value; const m = window.LAB_MARKERS.find((x) => x.key === marker); const l = { id: uid("l"), marker, value: Number(v), date: $("lab-date").value || App.date, unit: $("lab-unit").value.trim() || m.unit }; App.state.labs.push(l); saveLab(l); render(); toast("הבדיקה נשמרה"); },
     "lab-del": (el) => { App.state.labs = App.state.labs.filter((l) => l.id !== el.dataset.id); Store.del("labs", el.dataset.id); render(); },
+    // symptoms
+    "sym-open": (el) => symOpen(null, el.dataset.date || App.date),
+    "sym-edit": (el) => { const day = App.state.days[el.dataset.date]; const e = day && (day.symptoms || []).find((x) => x.id === el.dataset.id); if (e) symOpen(e, el.dataset.date); },
+    "sym-level": (el) => { symDraftFromDom(); const e = window._editSym.entry, k = el.dataset.key, v = Number(el.dataset.v); const nv = symLevel(e, k) === v ? null : v; if (k === "pain") e.pain = nv == null ? null : Object.assign({ types: [], positions: [] }, e.pain || {}, { level: nv }); else if (nv == null) delete e[k]; else e[k] = nv; symModal(); },
+    "sym-pain-multi": (el) => { symDraftFromDom(); const e = window._editSym.entry; if (!e.pain) return; const arr = e.pain[el.dataset.k] = e.pain[el.dataset.k] || []; const i = arr.indexOf(el.dataset.v); if (i >= 0) arr.splice(i, 1); else arr.push(el.dataset.v); symModal(); },
+    "sym-pain-single": (el) => { symDraftFromDom(); const e = window._editSym.entry; if (!e.pain) return; e.pain.duration = e.pain.duration === el.dataset.v ? null : el.dataset.v; symModal(); },
+    "sym-save": () => symSave(),
+    "sym-del": () => symDelete(),
+    "sym-day": (el) => symDayModal(el.dataset.date),
     // history
     "hist-range": (el) => { histRange = Number(el.dataset.v); renderHistory(); },
     // settings
@@ -3426,6 +3619,7 @@ ${h}
     if (act === "sun-loc") { App.state.profile.sun = Object.assign({}, App.state.profile.sun || {}, { [el.dataset.k]: Number(el.value) }); saveProfile(); render(); }
     if (act === "hist-key") { histKey = el.value; renderHistory(); }
     if (act === "hist-lab") { histLab = el.value; renderHistory(); }
+    if (act === "hist-sym") { histSym = el.value; renderHistory(); }
     if (act === "import-file" && el.files[0]) importData(el.files[0]);
     if (el.id === "ai-photo") { const n = $("ai-photo-name"); if (n) n.textContent = el.files[0] ? el.files[0].name : ""; }
     if (act === "ing-grams") { const f = window._editFood; f.ingredients[Number(el.dataset.i)].grams = Number(el.value) || 0; f.name = $("ff-name").value; f.servings = Number($("ff-servings").value) || 1; recipeModal(f, false); }

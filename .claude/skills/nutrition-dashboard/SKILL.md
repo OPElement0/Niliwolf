@@ -7,9 +7,10 @@ description: Work on Nili's private pregnancy-nutrition dashboard (nutrition/ fo
 
 Private personal tool for Nili (Hebrew, RTL, vegan diet, pregnancy). Lives in
 `nutrition/` of the `OPElement0/Niliwolf` repo. **Current branch:
-`claude/pregnancy-nutrition-dashboard-access-a7uch1`** (supersedes
-`claude/pregnancy-nutrition-dashboard-qsr5lg`, which stops at the 2026-09-10
-state). It is **unrelated to the wolf project** in the rest of the repo.
+`claude/pregnancy-nutrition-dashboard-gcdxwj`** (2026-09-18, symptom tracker; supersedes
+`claude/pregnancy-nutrition-dashboard-access-a7uch1` = 2026-09-17 state, which superseded
+`claude/pregnancy-nutrition-dashboard-qsr5lg` = 2026-09-10 state). It is **unrelated to the
+wolf project** in the rest of the repo.
 
 **Source of truth = `src/` on that branch.** On 2026-09-17 the published page
 (versions 18–24, edited directly as HTML from conversations without repo
@@ -60,11 +61,11 @@ Tell her to refresh the page after publishing.
 |---|---|
 | `src/page.html` | shell: title, lock screen, header, 9 tabs, `__STYLES__/__DATA__/__CHARTS__/__CHAT__/__APP__` placeholders |
 | `src/styles.css` | tokens for light/dark (`:root`, `prefers-color-scheme`, `[data-theme]`), all components |
-| `src/app.js` | everything: Store (db↔localStorage), lock, calculations, all tab renderers, actions. Sections added 2026-09-11..17: glycemic-load timeline (`GI_GENERIC`, `glEntries`, `glCurveAt`, `glCardInner`, `glDailyTarget`, `glTotalGauge`), walk timer (`walk_timer_v1`, `walkCardInner`, `walkFactor`), sitting breaks (`sit_timer_v1`, `sitBlockHtml`), sun / vitamin D (`solarElevation`, `uviAt`, `sunCardInner`), report export (`reportData/reportText/reportHtml/reportCsv/repDeliver`) |
+| `src/app.js` | everything: Store (db↔localStorage), lock, calculations, all tab renderers, actions. Sections added 2026-09-11..17: glycemic-load timeline (`GI_GENERIC`, `glEntries`, `glCurveAt`, `glCardInner`, `glDailyTarget`, `glTotalGauge`), walk timer (`walk_timer_v1`, `walkCardInner`, `walkFactor`), sitting breaks (`sit_timer_v1`, `sitBlockHtml`), sun / vitamin D (`solarElevation`, `uviAt`, `sunCardInner`), report export (`reportData/reportText/reportHtml/reportCsv/repDeliver`); 2026-09-18: symptom tracker (`SYM`, `daySymptoms`, `symLevel/symSeverity`, `symModal/symSave/symDelete`, `symTopCardHtml/symListCardHtml`, `symDayStats`, history block, `sym-*` actions) |
 | `src/chat.js` | `NutriChat`: consultation chat (`sample`), free-text/photo meal parser (`sample.json`) |
 | `src/charts.js` | SVG heatmap / line / bars / calendar (`direction="ltr"` on every svg root) |
 | `src/data/foods.js` | ~155 generic Israeli foods per 100 g: `[id, name, aliases, cat, portions[[label,g]], per100]`; ids become `g_<id>` |
-| `src/data/targets.js` | `NUTRIENTS` (key, he, unit, ul, ulSoft, ulNote, urgency daily/stored, info), `TARGETS_BY_TRIMESTER`, IOM weight gain, `LAB_MARKERS`, `DIAGNOSES` |
+| `src/data/targets.js` | `NUTRIENTS` (key, he, unit, ul, ulSoft, ulNote, urgency daily/stored, info), `TARGETS_BY_TRIMESTER`, IOM weight gain, `LAB_MARKERS`, `DIAGNOSES`, `SYMPTOMS` + `PAIN_TYPES/PAIN_DURATION/PAIN_POSITIONS` (symptom questionnaire) |
 | `src/data/rules.js` | declarative rules `{id, when(ctx), adjust(t), note(ctx), level}` |
 | `tools/nutri.js` | CLI to compute meal entries / recipes from the food table (see §5) |
 | `build_nutrition.py` | concatenates src → `nutrition.html` (Artifact page format, no doctype) |
@@ -79,6 +80,7 @@ Collections → documents (all plain JSON; arrays replace wholesale on `update`)
 - `supplements/<id>` `{name, dose_label, doses (units/day), times[], nutrients{key: per FULL daily dose}, active, label_notes}`
 - `foods/<id>` `{name, aliases[], kind:"product"|"recipe", per100{}, portions[{label,g}], favorite, ingredients?, servings?, label_notes}`
 - `days/<YYYY-MM-DD>` `{meals[{id,time,food_id,name,qty,unit,grams,nutrients{}}], supplements_taken[ids fully taken], supplement_doses{id:count}, supplement_times{id:[HH:MM]}, weight_kg?, glucose[]?, notes, walks[{id,start,minutes,pace:"light"|"moderate",outdoors}], sun[{id,start,minutes,cover,uvi,walk_id}], sun_cloud?, sit?{breaks,longest,every}}`
+- `days/<date>.symptoms[]` (2026-09-18) `{id, time, energy, nausea, dizziness, hunger, pain:{level, types[], duration, positions[]}|null, note}` — levels 1–5, a missing key = not reported in that questionnaire (never 0). Energy 1 = drained, 5 = full; the others 1 = mild, 5 = severe; hunger 5 = very hungry. `pain.types` ∈ stretch/kick/heaviness/spot/cramp, `duration` ∈ short/long, `positions` ∈ lying/sitting/standing/moving/transition. Retroactive entries are written to the doc of the chosen date.
 - `settings/profile` also holds `sun{lat,lon,skin}` and `report_prefs{audience:{fields,nutMode,name}}`; personal foods may carry `gi` (glycemic index) used by the GL timeline.
 - `labs/<id>` `{marker, value, unit, date, week, note}` — markers per `LAB_MARKERS`; **B12 stored in pg/mL** (pmol/L × 1.355)
 - `diagnoses/<id>` `{code, since}`; `chat/history` `{turns[]}`
@@ -153,6 +155,17 @@ will eat again. Lab PDFs from Clalit are scanned: `pip install pymupdf` then
   the sit timer, overdue → red note in the card + in the "now" card + toast/vibrate; per-day
   summary saved to `day.sit`) → "שמש — ויטמין D" card (UV from solar elevation × manual cloud,
   no API; IU estimate is informational only).
+- **Symptom tracker (2026-09-18, page version 30), approved by her:** card "איך אני מרגישה" is the FIRST card of Today
+  (above the focus sentence) with "+ הוספת תסמינים" and the last report of the day; the questionnaire modal has date +
+  time (retroactive OK), five 1–5 rows (energy, nausea, dizziness, abdominal pain, hunger — a row not touched is not
+  recorded, clicking the chosen number again clears it), pain opens type (multi) / duration (single) / position (multi)
+  chips, and a free-text note (she asked for it explicitly). Card "תסמינים היום" is the LAST card of Today, by hour;
+  click = edit/delete. Chips are coloured by severity (green→yellow→orange→red; energy inverted). Reports also appear
+  as ▼ markers on the GL chart (click = edit). History: heatmap of the day's worst level per symptom (click a cell =
+  that day's reports), trend per symptom (daily mean + 7-day rolling), "כאבי בטן — מה חוזר" (counts by type/duration/
+  position/time-of-day). Report export: field "תסמינים" (on in both presets): per-day list + summary table; CSV gets a
+  worst-of-day column per symptom. Chat context gets today's reports. Days with symptoms but no meals count as logged
+  days for the history range.
 - Her medical constraints (short cervix): walking allowed, no strenuous effort, no prolonged
   standing, no lifting >5 kg, no bed rest. Keep all activity wording soft and non-judgmental.
 - Report export (מעקב לאורך זמן → "דוח לייצוא"; Today → "שתפי את היום"): audiences nurse/claude,
@@ -207,7 +220,11 @@ Built from her `dashboard_code_updates.md`. Do not undo any of it without her:
   `doses`) and `active_since`. `partialDose` says what is missing when fewer units than the serving
   were ticked ("1 of 2 — missing 275 mg choline").
 
-## 8. Open items (as of 2026-09-17)
+## 8. Open items (as of 2026-09-18)
+
+- Symptom tracker is new (2026-09-18): no real reports yet. Nothing correlates symptoms with food/GL automatically
+  beyond the ▼ markers on the GL chart — if she asks for analysis, read `days/*.symptoms` and do it in the conversation
+  first; build a chart only if a pattern is worth showing. Level-1 cells in the symptom heatmap are deliberately faint.
 
 - Halva label and choline label still to be sent (values are estimates, `label_notes` say so).
 - Chocolate-chip cookie weight (assumed 44 g) and chocolate type; roll weight now ~160 g

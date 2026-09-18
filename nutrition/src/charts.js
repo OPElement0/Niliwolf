@@ -13,7 +13,7 @@ window.Charts = (function () {
     return "var(--seq-5)";
   }
 
-  // Heatmap: rows = nutrients, cols = days. cells[r][c] = {p: 0..1+ or null, tip}
+  // Heatmap: rows = nutrients, cols = days. cells[r][c] = {p: 0..1+ or null, tip, attrs?} (attrs = extra rect attributes, pre-escaped)
   function heatmap({ rows, cols, cells }) {
     const cw = 22, ch = 22, left = 132, top = 42, gap = 2;
     const w = left + cols.length * (cw + gap) + 8;
@@ -30,7 +30,7 @@ window.Charts = (function () {
         const x = w - 8 - (ci + 1) * (cw + gap) + gap;
         const cell = cells[ri][ci];
         const p = cell ? cell.p : null;
-        s += `<rect class="cell" x="${x}" y="${y}" width="${cw}" height="${ch}" fill="${seqColor(p)}" data-tip="${esc(cell ? cell.tip : "אין נתונים")}"></rect>`;
+        s += `<rect class="cell" x="${x}" y="${y}" width="${cw}" height="${ch}" fill="${seqColor(p)}" data-tip="${esc(cell ? cell.tip : "אין נתונים")}"${cell && cell.attrs ? " " + cell.attrs : ""}></rect>`;
       });
     });
     s += "</svg>";
