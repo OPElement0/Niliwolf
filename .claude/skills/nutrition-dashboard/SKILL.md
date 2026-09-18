@@ -80,7 +80,7 @@ Collections → documents (all plain JSON; arrays replace wholesale on `update`)
 - `foods/<id>` `{name, aliases[], kind:"product"|"recipe", per100{}, portions[{label,g}], favorite, ingredients?, servings?, label_notes}`
 - `days/<YYYY-MM-DD>` `{meals[{id,time,food_id,name,qty,unit,grams,nutrients{}}], supplements_taken[ids fully taken], supplement_doses{id:count}, supplement_times{id:[HH:MM]}, weight_kg?, glucose[]?, notes, walks[{id,start,minutes,pace:"light"|"moderate",outdoors}], sun[{id,start,minutes,cover,uvi,walk_id}], sun_cloud?, sit?{breaks,longest,every}}`
 - `settings/profile` also holds `sun{lat,lon,skin}` and `report_prefs{audience:{fields,nutMode,name}}`; personal foods may carry `gi` (glycemic index) used by the GL timeline.
-- `days/<date>.symptoms[]` — `{id, time, energy, nausea, dizziness, pain, hunger (each 1–5 or null), note, pain_types[], pain_duration, pain_positions[]}`; definitions in `src/data/targets.js` (`SYMPTOMS`, `PAIN_*`). Added 2026-09-18 by a **second session that published the page directly** (page version 30) — re-synced into `src/` here the same day.
+- `days/<date>.symptoms[]` — `{id, time, energy, nausea, dizziness, hunger (1–5; a missing key = not reported, not 0), pain: {level, types[], duration, positions[]} | null, note}`; definitions in `src/data/targets.js` (`SYMPTOMS`, `PAIN_*`). Added 2026-09-18 by a **second session that published the page directly** (page version 30) — re-synced into `src/` here the same day.
 - `labs/<id>` `{marker, value, unit, date, week, note}` — markers per `LAB_MARKERS`; **B12 stored in pg/mL** (pmol/L × 1.355)
 - `diagnoses/<id>` `{code, since}`; `chat/history` `{turns[]}`
 
