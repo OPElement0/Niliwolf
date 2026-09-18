@@ -57,6 +57,7 @@ window.NutriChat = (function () {
     else lines.push("עדיין לא נרשם אוכל היום.");
     const walks = (day.walks || []); if (walks.length) lines.push("הליכה היום: " + walks.map((w) => `${w.start} ${w.minutes} דק' (${w.pace === "light" ? "קלה" : "בינונית"}${w.outdoors ? ", בחוץ" : ""})`).join("; ") + ". הנחיות: הליכה מותרת, אסור מאמץ גבוה ועמידה ממושכת (צוואר רחם קצר).");
     if (day.sit && (day.sit.breaks || day.sit.longest)) lines.push(`ישיבה בעבודה היום: ${day.sit.breaks || 0} הפסקות קימה, הרצף הארוך ביותר ${day.sit.longest || 0} דק' (תזכורת כל ${day.sit.every || 45} דק').`);
+    const syms = app.daySymptoms ? app.daySymptoms(day) : []; if (syms.length) lines.push("איך היא מרגישה היום (סולם 1–5; אנרגיה 5 = הרבה, השאר 5 = חזק): " + syms.map((e) => app.symText(e)).join("; ") + ".");
     const sunLogs = (day.sun || []); if (sunLogs.length) lines.push("חשיפה לשמש היום: " + sunLogs.map((x) => `${x.start} ${x.minutes} דק' (UV ~${x.uvi})`).join("; ") + ".");
     const supps = (d.supplements || []).filter((s) => s.active !== false);
     if (supps.length) lines.push("תוספים קבועים (נלקח/יחידות ליום): " + supps.map((s) => `${s.name} ${app.suppTaken(day, s)}/${app.suppDoses(s)}`).join(", ") + ".");

@@ -80,6 +80,7 @@ Collections → documents (all plain JSON; arrays replace wholesale on `update`)
 - `foods/<id>` `{name, aliases[], kind:"product"|"recipe", per100{}, portions[{label,g}], favorite, ingredients?, servings?, label_notes}`
 - `days/<YYYY-MM-DD>` `{meals[{id,time,food_id,name,qty,unit,grams,nutrients{}}], supplements_taken[ids fully taken], supplement_doses{id:count}, supplement_times{id:[HH:MM]}, weight_kg?, glucose[]?, notes, walks[{id,start,minutes,pace:"light"|"moderate",outdoors}], sun[{id,start,minutes,cover,uvi,walk_id}], sun_cloud?, sit?{breaks,longest,every}}`
 - `settings/profile` also holds `sun{lat,lon,skin}` and `report_prefs{audience:{fields,nutMode,name}}`; personal foods may carry `gi` (glycemic index) used by the GL timeline.
+- `days/<date>.symptoms[]` — `{id, time, energy, nausea, dizziness, pain, hunger (each 1–5 or null), note, pain_types[], pain_duration, pain_positions[]}`; definitions in `src/data/targets.js` (`SYMPTOMS`, `PAIN_*`). Added 2026-09-18 by a **second session that published the page directly** (page version 30) — re-synced into `src/` here the same day.
 - `labs/<id>` `{marker, value, unit, date, week, note}` — markers per `LAB_MARKERS`; **B12 stored in pg/mL** (pmol/L × 1.355)
 - `diagnoses/<id>` `{code, since}`; `chat/history` `{turns[]}`
 
@@ -107,7 +108,9 @@ will eat again. Lab PDFs from Clalit are scanned: `pip install pymupdf` then
 
 ## 6. UI logic that she approved (do not silently change)
 
-- **Today tab order:** focus sentence card (bold, above the clock) → "now" card
+- **Today tab order:** focus sentence card (bold, above the clock) → "איך אני מרגישה" symptom card
+  (1–5 scales: energy, nausea, dizziness, abdominal pain with type/duration/position, hunger; entries
+  listed under it, also drawn on the GL chart and the history heatmap) → "now" card
   (Israel clock, refresh 60 s, eat/avoid notes: digestion, carb load, iron↔calcium/coffee 2 h,
   evening, pending supplements) → hero tiles **protein + iron only** → "מה עוד חסר"
   (ALL incomplete nutrients incl. carbs) → "הושלם" list → supplements → meals.
@@ -186,6 +189,15 @@ must not be recomputed against the 160 g card. For each affected meal recompute 
 does: `grams = qty × portion` (the count she reported is the truth, not the stored grams), then
 `nutrients = per100 × grams / 100`. Write the whole day doc back with `if_version`, and report the
 per-day delta for every nutrient that moved.
+
+## 7b2. Two sessions, one page (2026-09-18)
+
+A second conversation published the symptom card straight to the artifact without committing. Before
+**every** publish from here: `Artifact read` the live page and `cmp` it (minus the first line and the
+trailing `</body></html>`) against `nutrition/nutrition.html`. If they differ, split the live page back
+into `src/` first (template = `src/page.html`, split `__DATA__` on the first lines of `targets.js` and
+`rules.js`), rebuild, confirm byte equality, commit — and only then apply the new change. Publishing an
+older build silently deletes the other session's work.
 
 ## 7c. Nutrient model v2 (2026-09-17, page version 29)
 

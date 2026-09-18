@@ -388,3 +388,27 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .thin-flag { font-size: 0.72rem; font-weight: 600; color: var(--ink-2); background: var(--surface-2); border-radius: 999px; padding: 1px 7px; margin-inline-start: 5px; cursor: help; white-space: nowrap; }
 .ulg.gl-total { min-width: 250px; }
 @media (max-width: 480px) { .ulg.gl-total { min-width: 250px; } }
+
+/* ---------- symptoms ("איך אני מרגישה") ---------- */
+.card.feel { border-color: var(--accent-2); border-width: 1.5px; }
+.sym-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.sym-row:first-child { border-top: 0; }
+.sym-scale { display: inline-flex; gap: 4px; }
+.sym-scale button { width: 38px; height: 38px; border-radius: 10px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 700; padding: 0; font-variant-numeric: tabular-nums; }
+.sym-scale button:hover { border-color: var(--accent); }
+.sym-scale button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.sym-ends { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+.sym-sub { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; padding: 4px 0 2px; }
+.sym-sub .lbl { font-size: 0.8rem; color: var(--ink-2); min-width: 56px; }
+.sym-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.sym-item:first-child { border-top: 0; }
+.sym-item:hover { background: var(--surface-2); margin-inline: -8px; padding-inline: 8px; border-radius: var(--radius-sm); }
+.sym-item .time { font-weight: 700; min-width: 46px; font-variant-numeric: tabular-nums; padding-top: 3px; }
+.chip.sym { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.chip.sev-1, .chip.sev-1:hover { background: var(--good-soft); border-color: transparent; color: var(--ink); }
+.chip.sev-2, .chip.sev-2:hover { background: var(--yellow-soft); border-color: transparent; color: var(--ink); }
+.chip.sev-3, .chip.sev-3:hover { background: var(--warn-soft); border-color: transparent; color: var(--ink); }
+.chip.sev-4, .chip.sev-4:hover { background: var(--bad-soft); border-color: transparent; color: var(--ink); }
+.chart .gl-sym { fill: var(--purple); stroke: var(--surface); stroke-width: 1.5; cursor: pointer; }
+.chart .cell[data-act] { cursor: pointer; }
+@media (max-width: 380px) { .sym-scale button { width: 34px; height: 34px; } }

@@ -106,3 +106,18 @@ window.DIAGNOSES = [
   { key: "hypertension",he: "לחץ דם גבוה" },
   { key: "constipation",he: "עצירות" },
 ];
+
+// Symptom questionnaire ("איך אני מרגישה") — generic definitions only, no personal data.
+// Every symptom is a 1–5 scale; `low` / `high` label the two ends. `bad` names the unpleasant end,
+// used for colouring and for "worst of the day": energy 1 = drained (bad = "low"), the rest 5 = severe.
+window.SYMPTOMS = [
+  { key: "energy",    he: "אנרגיה",   low: "מרוקנת", high: "מלאת אנרגיה", bad: "low" },
+  { key: "nausea",    he: "בחילה",    low: "קלה",    high: "חזקה",        bad: "high" },
+  { key: "dizziness", he: "סחרחורת",  low: "קלה",    high: "חזקה",        bad: "high" },
+  { key: "pain",      he: "כאבי בטן", low: "קל",     high: "חזק",         bad: "high", detail: true },
+  { key: "hunger",    he: "רעב",      low: "שובע",   high: "רעב חזק",     bad: "high" },
+];
+// Abdominal-pain details (type and position are multi-select, duration is single-select).
+window.PAIN_TYPES = [["stretch", "מתיחה"], ["kick", "בעיטה"], ["heaviness", "כבדות"], ["spot", "אזור ספציפי"], ["cramp", "התכווצות"]];
+window.PAIN_DURATION = [["short", "קצר ופתאומי"], ["long", "ארוך"]];
+window.PAIN_POSITIONS = [["lying", "שכיבה"], ["sitting", "ישיבה"], ["standing", "עמידה"], ["moving", "תנועה"], ["transition", "מעבר בין תנוחות"]];
