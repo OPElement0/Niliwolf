@@ -2481,7 +2481,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <div class="status-filter-bar" id="status-filter-bar">
   <span class="label">Filter by Region Status (Any of 9 Regions):</span>
-  <span class="status-chip" data-status="unambiguous"   style="--c:#43A047;"><span class="dot" style="background:#43A047;"></span>Full <span class="count" id="cnt-unambiguous">0</span></span>
+  <!-- "All" replaces the former "Full" chip (Nili 2026-11-09): "Full" matched 88 of
+       the 89 wolves and confused readers about the pool size. "All" = no status
+       filter; it is active whenever no other status chip is selected. -->
+  <span class="status-chip active" data-status="__all__" style="--c:#455A64; background:#455A64; border-color:#455A64;">All <span class="count" id="cnt-all">0</span></span>
   <span class="status-chip" data-status="asymmetric"    style="--c:#1E88E5;"><span class="dot" style="background:#1E88E5;"></span>Asymmetric <span class="count" id="cnt-asymmetric">0</span></span>
   <span class="status-chip" data-status="partial_ambiguous" style="--c:#9E9E9E;"><span class="dot" style="background:#9E9E9E;"></span>Partial <span class="count" id="cnt-partial_ambiguous">0</span></span>
   <span class="status-chip" data-status="P"             style="--c:#EF9A9A;"><span class="dot" style="background:#EF9A9A;"></span>P (Unclear) <span class="count" id="cnt-P">0</span></span>
@@ -2921,6 +2924,9 @@ function applyFilters() {
     }
     return true;
   });
+  // Keep the "All" chip's count in step with the base visibility rules (e.g. an
+  // admin toggling photographer-source wolves on/off).
+  if (typeof refreshStatusChipCounts === "function") refreshStatusChipCounts();
 }
 
 function refreshStats() {
@@ -3335,6 +3341,22 @@ function refreshStatusChipCounts() {
     const el = document.getElementById("cnt-" + k);
     if (el) el.textContent = counts[k];
   }
+  // "All" chip: every wolf the table shows when no status filter is applied
+  // (same base rules as applyFilters: coded rows only; photographer-source rows
+  // only when an admin has switched them on). Public viewer → the 89-wolf pool.
+  const elAll = document.getElementById("cnt-all");
+  if (elAll) {
+    const showEmpty = isAdmin || ($("show-empty-code") && $("show-empty-code").checked);
+    const showPhotographer = isAdmin && $("show-photographer") && $("show-photographer").checked;
+    let nAll = 0;
+    for (const row of data) {
+      const code = row["code"];
+      if (!showEmpty && (code === undefined || code === null || code === "")) continue;
+      if (!showPhotographer && row["_source"] === "photographer") continue;
+      nAll++;
+    }
+    elAll.textContent = nAll;
+  }
   return counts;
 }
 
@@ -3446,8 +3468,31 @@ function setupSmartFilters() {
   if (clr) clr.addEventListener("click", clearSmartFilters);
 }
 
+// "All" chip (replaced the old "Full" chip, 2026-11-09): it is lit exactly when no
+// status filter is active, i.e. when the table shows every wolf in the pool.
+function _syncAllStatusChip() {
+  const all = document.querySelector('.status-chip[data-status="__all__"]');
+  if (!all) return;
+  const on = !window._activeStatuses || window._activeStatuses.size === 0;
+  all.classList.toggle("active", on);
+  all.style.background  = on ? all.style.getPropertyValue("--c") : "";
+  all.style.borderColor = on ? all.style.getPropertyValue("--c") : "transparent";
+}
+
 function setupStatusChips() {
-  const chips = document.querySelectorAll(".status-chip");
+  const chips = document.querySelectorAll('.status-chip:not([data-status="__all__"])');
+  const clearStatusFilter = () => {
+    window._activeStatuses.clear();
+    chips.forEach(c => {
+      c.classList.remove("active");
+      c.style.background = "";
+      c.style.borderColor = "transparent";
+    });
+    _syncAllStatusChip();
+    applyFilters();
+  };
+  const allChip = document.querySelector('.status-chip[data-status="__all__"]');
+  if (allChip) allChip.addEventListener("click", clearStatusFilter);
   chips.forEach(chip => {
     chip.addEventListener("click", () => {
       const s = chip.dataset.status;
@@ -3462,18 +3507,11 @@ function setupStatusChips() {
         chip.style.background = chip.style.getPropertyValue("--c");
         chip.style.borderColor = chip.style.getPropertyValue("--c");
       }
+      _syncAllStatusChip();
       applyFilters();
     });
   });
-  $("status-clear").addEventListener("click", () => {
-    window._activeStatuses.clear();
-    chips.forEach(c => {
-      c.classList.remove("active");
-      c.style.background = "";
-      c.style.borderColor = "transparent";
-    });
-    applyFilters();
-  });
+  $("status-clear").addEventListener("click", clearStatusFilter);
 }
 
 function setupStatusBarsToggle() {
